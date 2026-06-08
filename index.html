@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mega City Tycoon — 3D</title>
+  <link rel="stylesheet" href="./src/styles.css" />
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body>
+  <div id="loading">Loading Mega City Tycoon…</div>
+
+  <!-- Top HUD -->
+  <header id="hud">
+    <div class="stat">
+      <span class="stat-label">💰 Cash</span>
+      <span class="stat-value" id="cash">$0</span>
+    </div>
+    <div class="stat">
+      <span class="stat-label">📈 Income</span>
+      <span class="stat-value" id="income">$0/s</span>
+    </div>
+    <div class="stat">
+      <span class="stat-label">🏙️ Buildings</span>
+      <span class="stat-value" id="buildings">0</span>
+    </div>
+    <div class="stat">
+      <span class="stat-label">👥 Population</span>
+      <span class="stat-value" id="population">0</span>
+    </div>
+    <div class="hud-spacer"></div>
+    <button id="save-btn" class="ghost-btn" title="Save game">💾 Save</button>
+    <button id="reset-btn" class="ghost-btn" title="Reset game">♻️ Reset</button>
+  </header>
+
+  <!-- Build toolbar -->
+  <aside id="toolbar">
+    <h2>Build</h2>
+    <div id="tool-list"></div>
+    <div class="tool-divider"></div>
+    <button class="tool" id="tool-bulldoze" data-tool="bulldoze">
+      <span class="tool-icon">🚧</span>
+      <span class="tool-info">
+        <span class="tool-name">Bulldoze</span>
+        <span class="tool-sub">Sell for 50%</span>
+      </span>
+    </button>
+    <p class="hint">Click a tile to build. Drag to orbit, scroll to zoom.</p>
+  </aside>
+
+  <!-- Floating message -->
+  <div id="toast"></div>
+
+  <canvas id="scene"></canvas>
+
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>

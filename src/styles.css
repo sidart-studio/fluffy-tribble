@@ -1,0 +1,167 @@
+:root {
+  --panel: rgba(18, 22, 33, 0.82);
+  --panel-solid: #141826;
+  --accent: #4ade80;
+  --accent-dim: #22633c;
+  --text: #e8ecf4;
+  --text-dim: #9aa3b5;
+  --danger: #f87171;
+  --gold: #fbbf24;
+  --radius: 12px;
+  --font: "Segoe UI", system-ui, -apple-system, Roboto, sans-serif;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #0a0d16;
+  color: var(--text);
+  font-family: var(--font);
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+#scene {
+  position: fixed;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+#loading {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.3rem;
+  letter-spacing: 0.5px;
+  color: var(--text-dim);
+  background: #0a0d16;
+  z-index: 50;
+  transition: opacity 0.5s ease;
+}
+#loading.hidden { opacity: 0; pointer-events: none; }
+
+/* ---------- HUD ---------- */
+#hud {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  padding: 12px 18px;
+  background: linear-gradient(180deg, rgba(10,13,22,0.92), rgba(10,13,22,0.45) 80%, transparent);
+  z-index: 10;
+  backdrop-filter: blur(2px);
+}
+
+.stat { display: flex; flex-direction: column; line-height: 1.2; }
+.stat-label { font-size: 0.7rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; }
+.stat-value { font-size: 1.35rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+#cash { color: var(--gold); }
+#income { color: var(--accent); }
+
+.hud-spacer { flex: 1; }
+
+.ghost-btn {
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.12);
+  color: var(--text);
+  padding: 8px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition: background 0.15s, border-color 0.15s;
+}
+.ghost-btn:hover { background: rgba(255,255,255,0.14); border-color: rgba(255,255,255,0.25); }
+
+/* ---------- Toolbar ---------- */
+#toolbar {
+  position: fixed;
+  top: 84px;
+  left: 14px;
+  width: 232px;
+  background: var(--panel);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: var(--radius);
+  padding: 14px;
+  z-index: 10;
+  backdrop-filter: blur(8px);
+  max-height: calc(100vh - 110px);
+  overflow-y: auto;
+}
+#toolbar h2 {
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: var(--text-dim);
+  margin-bottom: 10px;
+}
+
+.tool {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid transparent;
+  border-radius: 10px;
+  padding: 9px 10px;
+  margin-bottom: 7px;
+  cursor: pointer;
+  color: var(--text);
+  transition: background 0.12s, border-color 0.12s, transform 0.06s;
+}
+.tool:hover { background: rgba(255,255,255,0.09); }
+.tool:active { transform: scale(0.98); }
+.tool.selected { border-color: var(--accent); background: rgba(74,222,128,0.12); }
+.tool.locked { opacity: 0.45; cursor: not-allowed; }
+.tool.unaffordable .tool-cost { color: var(--danger); }
+
+.tool-icon { font-size: 1.5rem; width: 30px; text-align: center; }
+.tool-info { display: flex; flex-direction: column; flex: 1; line-height: 1.25; }
+.tool-name { font-weight: 600; font-size: 0.92rem; }
+.tool-sub { font-size: 0.72rem; color: var(--text-dim); }
+.tool-cost { font-size: 0.82rem; font-weight: 700; color: var(--gold); }
+
+.tool-divider { height: 1px; background: rgba(255,255,255,0.1); margin: 6px 0 10px; }
+
+#tool-bulldoze .tool-icon { font-size: 1.4rem; }
+#tool-bulldoze.selected { border-color: var(--danger); background: rgba(248,113,113,0.12); }
+
+.hint {
+  font-size: 0.72rem;
+  color: var(--text-dim);
+  margin-top: 12px;
+  line-height: 1.45;
+}
+
+/* ---------- Toast ---------- */
+#toast {
+  position: fixed;
+  bottom: 30px;
+  left: 50%;
+  transform: translateX(-50%) translateY(20px);
+  background: var(--panel-solid);
+  border: 1px solid rgba(255,255,255,0.12);
+  padding: 10px 18px;
+  border-radius: 10px;
+  font-size: 0.9rem;
+  z-index: 20;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s, transform 0.25s;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+}
+#toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+#toast.error { border-color: var(--danger); color: #fecaca; }
+
+/* Scrollbar */
+#toolbar::-webkit-scrollbar { width: 6px; }
+#toolbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 3px; }
