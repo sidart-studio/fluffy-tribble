@@ -159,7 +159,7 @@
   <div id="boot">
     <div id="welcome">
       <h1>🧊 CubeWorld</h1>
-      <p>You are <b>CUBEY</b>, the creator of Cube World, seeing the island through your own eyes. Build it into your tycoon empire.</p>
+      <p>You are <b>CUBEY</b>, the creator of Cube World. Watch him from behind as he explores — build the island into your tycoon empire.</p>
       <div class="row">
         <span class="key">W</span><span class="key">A</span><span class="key">S</span><span class="key">D</span><span class="key">move</span>
       </div>
@@ -224,7 +224,6 @@
   const SPOT_CELL  = { gx: 0, gz: 0 };
   const LAND_Y     = CELL;    // top surface height of land
   const PLAYER_SPEED = 6.4;
-  const EYE_HEIGHT = 0.66;    // camera height above player's feet, first-person
   const REACH      = 14;      // max build/demolish distance, measured along the ground
   const MIN_REACH  = 1.7;     // can't build/demolish literally at your own feet
 
@@ -308,14 +307,15 @@
   scene.add(sky);
 
   // ═══════════════════════════════════════════════
-  //  CAMERA — first-person, lives inside CUBEY's head
+  //  CAMERA — GTA-style chase cam, orbiting behind CUBEY
   // ═══════════════════════════════════════════════
-  const camera = new THREE.PerspectiveCamera(70, innerWidth / innerHeight, 0.05, 400);
-  camera.rotation.order = 'YXZ';
+  const camera = new THREE.PerspectiveCamera(65, innerWidth / innerHeight, 0.05, 400);
 
-  let yaw = 0;   // camera's default forward is -Z, which is toward the build spot from spawn
-  let pitch = -0.28; // look somewhat down by default, so nearby ground is in reach right away
-  const PITCH_LIMIT = Math.PI / 2 - 0.05;
+  let yaw = 0;   // orbit angle around CUBEY; yaw 0 faces -Z, toward the build spot from spawn
+  let pitch = -0.28; // orbit tilt: negative looks down at CUBEY from above, positive looks up from below
+  const PITCH_LIMIT = Math.PI / 2 - 0.15;
+  const CAM_DISTANCE = 6.5;   // how far the camera orbits behind CUBEY
+  const LOOK_HEIGHT  = 1.1;   // camera orbits/aims around a point near CUBEY's head, not his feet
 
   // ═══════════════════════════════════════════════
   //  LIGHTS
@@ -537,7 +537,7 @@
   markerGroup.add(signSprite);
 
   // ═══════════════════════════════════════════════
-  //  CUBEY — the player (first-person: body hidden, feet visible when you look down)
+  //  CUBEY — the player, fully visible in third person
   // ═══════════════════════════════════════════════
   const player = new THREE.Group();
   const body = new THREE.Mesh(
@@ -546,7 +546,6 @@
   );
   body.position.y = 0.5;
   body.castShadow = true;
-  body.visible = false; // first-person: don't render your own head
   player.add(body);
 
   const eyeMat = new THREE.MeshStandardMaterial({ color: 0xFFFFFF });
@@ -554,10 +553,8 @@
   [-0.22, 0.22].forEach(ex => {
     const eye = new THREE.Mesh(new THREE.SphereGeometry(0.13, 10, 10), eyeMat);
     eye.position.set(ex, 0.62, 0.49);
-    eye.visible = false;
     const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.06, 8, 8), pupilMat);
     pupil.position.set(ex, 0.62, 0.58);
-    pupil.visible = false;
     player.add(eye, pupil);
   });
 
@@ -572,7 +569,7 @@
   player.position.set(SPAWN_CELL.gx * CELL, LAND_Y, SPAWN_CELL.gz * CELL);
   scene.add(player);
 
-  // Soft contact shadow blob so CUBEY still reads as grounded in first person
+  // Soft contact shadow blob so CUBEY reads as grounded even under flat directional light
   const shadowBlob = new THREE.Mesh(
     new THREE.CircleGeometry(0.55, 16),
     new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.28, depthWrite: false })
@@ -582,6 +579,7 @@
 
   let walkCycle = 0;
   let moving = false;
+  let facing = 0; // smoothed body-facing angle; only turns while actually moving, independent of camera orbit
 
   // ═══════════════════════════════════════════════
   //  BUILDINGS
@@ -1044,7 +1042,7 @@
     moving = Math.hypot(ix, iz) > 0.05;
 
     if (moving) {
-      // Movement is relative to look direction (yaw only) — standard FPS control.
+      // Movement is relative to camera yaw (like GTA: W runs toward wherever the camera faces).
       const forward = new THREE.Vector3(-Math.sin(yaw), 0, -Math.cos(yaw));
       const right   = new THREE.Vector3(Math.cos(yaw), 0, -Math.sin(yaw));
       const dir = forward.multiplyScalar(iz).add(right.multiplyScalar(ix));
@@ -1056,21 +1054,38 @@
       if (isLand(nx, player.position.z)) player.position.x = nx;
       if (isLand(player.position.x, nz)) player.position.z = nz;
 
+      // CUBEY's body turns to face the direction he's actually running, not the raw camera
+      // orbit — so you can orbit the camera around him while he stands still, GTA-style.
+      const targetFacing = Math.atan2(dir.x, dir.z);
+      let diff = targetFacing - facing;
+      diff = Math.atan2(Math.sin(diff), Math.cos(diff));
+      facing += diff * Math.min(1, delta * 10);
+
       walkCycle += delta * 9;
     } else {
       walkCycle *= 0.9;
     }
 
-    player.rotation.y = yaw;
+    player.rotation.y = facing;
     footL.position.y = 0.11 + Math.max(0, Math.sin(walkCycle)) * 0.08;
     footR.position.y = 0.11 + Math.max(0, -Math.sin(walkCycle)) * 0.08;
     shadowBlob.position.set(player.position.x, LAND_Y + 0.02, player.position.z);
   }
 
-  function updateCamera(t) {
-    camera.rotation.set(pitch, yaw, 0, 'YXZ');
-    const bob = moving ? Math.sin(walkCycle * 2) * 0.045 : Math.sin(t * 1.1) * 0.006;
-    camera.position.set(player.position.x, player.position.y + EYE_HEIGHT + bob, player.position.z);
+  const lookTarget = new THREE.Vector3();
+  function updateCamera() {
+    // Classic chase cam: orbit a point near CUBEY's head at a fixed distance, driven by
+    // mouse yaw/pitch, then look back at him — camera position is derived, never rotated directly.
+    lookTarget.set(player.position.x, player.position.y + LOOK_HEIGHT, player.position.z);
+    const horiz = Math.cos(pitch) * CAM_DISTANCE;
+    camera.position.set(
+      lookTarget.x + Math.sin(yaw) * horiz,
+      lookTarget.y - Math.sin(pitch) * CAM_DISTANCE,
+      lookTarget.z + Math.cos(yaw) * horiz
+    );
+    // Never let the chase cam dip through the ground when looking up steeply.
+    camera.position.y = Math.max(camera.position.y, LAND_Y + 0.35);
+    camera.lookAt(lookTarget);
   }
 
   function loop() {
@@ -1079,7 +1094,7 @@
     const t = clock.elapsedTime;
 
     updatePlayer(delta);
-    updateCamera(t);
+    updateCamera();
     updateOcean(t);
     if (locked) updateCrosshairTarget();
 
