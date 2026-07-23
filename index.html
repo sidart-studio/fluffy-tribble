@@ -2,118 +2,168 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>City Tycoon 3D</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>CubeWorld</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🧊</text></svg>" />
   <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { overflow: hidden; background: #1a1a2e; font-family: 'Segoe UI', Tahoma, sans-serif; }
+    * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body { overflow: hidden; background: #7cc9f0; font-family: 'Baloo 2', 'Segoe UI', Tahoma, sans-serif; height: 100%; touch-action: none; }
     canvas { display: block; }
+
+    /* ── BOOT / WELCOME ─────────────────────── */
+    #boot {
+      position: fixed; inset: 0; z-index: 500;
+      background: radial-gradient(circle at 50% 40%, #8fd6ff 0%, #4fa3d8 100%);
+      display: flex; align-items: center; justify-content: center;
+      transition: opacity .5s ease;
+    }
+    #boot.hidden { opacity: 0; pointer-events: none; }
+    #welcome {
+      background: rgba(255,255,255,.96); border-radius: 22px; padding: 30px 34px;
+      max-width: 380px; text-align: center; box-shadow: 0 20px 60px rgba(0,0,0,.35);
+      border: 4px solid #FFB300;
+    }
+    #welcome h1 { font-size: 28px; color: #2d3436; margin-bottom: 6px; }
+    #welcome h1 span { display:inline-block; }
+    #welcome p { font-size: 14px; color: #555; margin: 10px 0; line-height: 1.5; }
+    #welcome .keys { display:flex; gap:8px; justify-content:center; margin: 14px 0; }
+    #welcome .key { background:#2d3436; color:#fff; border-radius:8px; padding:6px 10px; font-size:12px; font-weight:700; }
+    #welcome button {
+      margin-top: 8px; padding: 12px 26px; border: none; border-radius: 14px;
+      background: linear-gradient(180deg,#FFCA28,#FF9800); color:#3e2200; font-weight: 800;
+      font-size: 16px; cursor: pointer; box-shadow: 0 6px 0 #C66900; transition: transform .1s;
+    }
+    #welcome button:active { transform: translateY(4px); box-shadow: 0 2px 0 #C66900; }
 
     /* ── HUD ─────────────────────────────── */
     #hud {
       position: fixed; top: 0; left: 0; right: 0;
-      padding: 12px 20px;
+      padding: 10px 16px;
       display: flex; justify-content: space-between; align-items: center;
-      background: rgba(0,0,0,.55);
-      backdrop-filter: blur(12px);
-      border-bottom: 1px solid rgba(255,255,255,.12);
-      z-index: 100;
+      background: linear-gradient(180deg, rgba(0,0,0,.45), rgba(0,0,0,0));
+      z-index: 100; pointer-events: none;
     }
-    .stat { display: flex; align-items: center; gap: 10px; color: #fff; }
-    .stat-icon { font-size: 22px; }
-    .stat-value { font-size: 22px; font-weight: 700; color: #FFD700; }
-    .stat-label { font-size: 11px; color: rgba(255,255,255,.55); }
-    #game-title { color: #fff; text-align: center; }
-    #game-title h1 { font-size: 20px; letter-spacing: 1px; }
-    #game-title p  { font-size: 11px; color: rgba(255,255,255,.45); margin-top: 2px; }
+    .stat { display: flex; align-items: center; gap: 8px; color: #fff; pointer-events: none; }
+    .stat-pill { background: rgba(0,0,0,.4); border-radius: 14px; padding: 6px 14px; display:flex; align-items:center; gap:8px; border: 1.5px solid rgba(255,255,255,.25); }
+    .stat-icon { font-size: 18px; }
+    .stat-value { font-size: 16px; font-weight: 800; color: #FFD54F; }
+    .stat-label { font-size: 9px; color: rgba(255,255,255,.6); text-transform: uppercase; letter-spacing: .5px; }
+    #game-title { color: #fff; text-align: center; text-shadow: 0 2px 6px rgba(0,0,0,.5); }
+    #game-title h1 { font-size: 19px; letter-spacing: .5px; }
+    #game-title p  { font-size: 10px; color: rgba(255,255,255,.75); margin-top: 1px; }
 
-    /* ── TOOLBAR ─────────────────────────── */
-    #toolbar {
-      position: fixed; top: 68px; left: 50%; transform: translateX(-50%);
-      display: flex; gap: 8px; z-index: 100;
+    /* ── BUILD PROMPT (world trigger) ───────── */
+    #build-prompt {
+      position: fixed; bottom: 130px; left: 50%; transform: translateX(-50%) scale(.9);
+      background: rgba(0,0,0,.65); color: #fff; padding: 10px 18px; border-radius: 30px;
+      font-size: 14px; font-weight: 700; z-index: 150; border: 2px solid #FFD54F;
+      display: none; align-items: center; gap: 8px; opacity: 0; transition: opacity .2s, transform .2s;
+      cursor: pointer; pointer-events: auto;
     }
-    .tool-btn {
-      padding: 7px 14px; border-radius: 8px; border: 1.5px solid rgba(255,255,255,.2);
-      background: rgba(0,0,0,.45); backdrop-filter: blur(8px);
-      color: #fff; font-size: 13px; cursor: pointer; user-select: none;
-      transition: all .18s;
-    }
-    .tool-btn:hover { background: rgba(255,255,255,.15); }
-    .tool-btn.active { border-color: #FF5722; background: rgba(255,87,34,.25); color: #FF8A65; }
+    #build-prompt.show { display: flex; opacity: 1; transform: translateX(-50%) scale(1); }
+    #build-prompt .k { background:#FFD54F; color:#3e2200; border-radius:6px; padding:2px 8px; font-size:12px; }
 
-    /* ── BUILDING PANEL ───────────────────── */
-    #building-panel {
+    /* ── PERSISTENT BUILD BUTTON ────────────── */
+    #build-fab {
+      position: fixed; right: 18px; bottom: 130px; z-index: 120;
+      width: 58px; height: 58px; border-radius: 50%;
+      background: linear-gradient(180deg,#FFCA28,#FF9800); border: 3px solid #fff;
+      font-size: 24px; display:flex; align-items:center; justify-content:center;
+      box-shadow: 0 6px 14px rgba(0,0,0,.35); cursor: pointer; opacity: 0; pointer-events: none;
+      transition: opacity .3s, transform .15s;
+    }
+    #build-fab.active { opacity: 1; pointer-events: auto; }
+    #build-fab:active { transform: scale(.9); }
+
+    /* ── BUILD PANEL ─────────────────────────── */
+    #build-panel {
       position: fixed; bottom: 0; left: 0; right: 0;
-      padding: 12px 16px;
-      display: flex; gap: 10px; justify-content: center;
-      overflow-x: auto;
-      background: rgba(0,0,0,.55);
-      backdrop-filter: blur(12px);
-      border-top: 1px solid rgba(255,255,255,.12);
-      z-index: 100;
+      padding: 10px 12px 14px; z-index: 140;
+      background: rgba(20,20,30,.88);
+      border-top: 2px solid rgba(255,255,255,.18);
+      transform: translateY(100%); transition: transform .25s ease;
     }
+    #build-panel.open { transform: translateY(0); }
+    #panel-head { display:flex; justify-content:space-between; align-items:center; padding: 0 4px 8px; }
+    #panel-head span { color:#fff; font-weight:700; font-size:13px; }
+    #panel-head .actions { display:flex; gap:8px; }
+    .panel-btn { border: none; border-radius: 8px; padding: 6px 12px; font-size: 12px; font-weight:700; cursor:pointer; }
+    #btn-bulldoze { background:#455A64; color:#fff; }
+    #btn-bulldoze.active { background:#FF5722; }
+    #btn-done { background:#66BB6A; color:#08320f; }
+    #bld-list { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 2px; }
     .bld-btn {
+      flex: 0 0 auto;
       display: flex; flex-direction: column; align-items: center;
-      padding: 9px 13px; border-radius: 12px; min-width: 85px;
+      padding: 8px 12px; border-radius: 12px; min-width: 78px;
       border: 2px solid rgba(255,255,255,.18);
-      background: rgba(255,255,255,.06);
+      background: rgba(255,255,255,.07);
       color: #fff; cursor: pointer; user-select: none;
-      transition: all .18s;
+      transition: all .15s;
     }
-    .bld-btn:hover { background: rgba(255,255,255,.15); transform: translateY(-3px); }
-    .bld-btn.selected { border-color: #FFD700; background: rgba(255,215,0,.18); }
-    .bld-btn.cant-afford { opacity: .4; }
-    .bld-icon  { font-size: 26px; margin-bottom: 3px; }
+    .bld-btn:active { transform: scale(.94); }
+    .bld-btn.selected { border-color: #FFD54F; background: rgba(255,213,79,.2); }
+    .bld-btn.cant-afford { opacity: .35; }
+    .bld-icon  { font-size: 24px; margin-bottom: 2px; }
     .bld-name  { font-size: 10px; font-weight: 700; }
-    .bld-cost  { font-size: 10px; color: #FFD700; }
+    .bld-cost  { font-size: 10px; color: #FFD54F; }
     .bld-inc   { font-size: 10px; color: #69F0AE; }
-
-    /* ── INFO CARD ───────────────────────── */
-    #info-card {
-      position: fixed; top: 115px; right: 18px;
-      width: 195px; padding: 14px;
-      background: rgba(0,0,0,.6); backdrop-filter: blur(12px);
-      border: 1px solid rgba(255,255,255,.12); border-radius: 14px;
-      color: #fff; z-index: 100; display: none;
-    }
-    #info-card h3 { font-size: 14px; margin-bottom: 6px; }
-    #info-card p  { font-size: 12px; color: rgba(255,255,255,.65); margin: 3px 0; }
-    #info-card .highlight { color: #FFD700; font-weight: 700; }
-
-    /* ── STATS CARD ──────────────────────── */
-    #stats-card {
-      position: fixed; top: 115px; left: 18px;
-      width: 165px; padding: 14px;
-      background: rgba(0,0,0,.6); backdrop-filter: blur(12px);
-      border: 1px solid rgba(255,255,255,.12); border-radius: 14px;
-      color: #fff; z-index: 100;
-    }
-    #stats-card h3 { font-size: 12px; color: rgba(255,255,255,.55); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 1px; }
-    .stat-row { display: flex; justify-content: space-between; font-size: 12px; margin: 4px 0; }
-    .stat-row span:last-child { color: #FFD700; font-weight: 700; }
+    #panel-hint { text-align:center; font-size:11px; color: rgba(255,255,255,.55); margin-top: 6px; }
 
     /* ── TOAST ───────────────────────────── */
     #toast {
-      position: fixed; top: 78px; left: 50%; transform: translateX(-50%);
-      padding: 9px 20px; border-radius: 9px; font-size: 13px; font-weight: 600;
+      position: fixed; top: 64px; left: 50%; transform: translateX(-50%);
+      padding: 9px 20px; border-radius: 9px; font-size: 13px; font-weight: 700;
       color: #fff; z-index: 200; opacity: 0;
       transition: opacity .3s; pointer-events: none; white-space: nowrap;
     }
+
+    /* ── TOUCH JOYSTICK (mobile) ─────────────── */
+    #joy-zone {
+      position: fixed; left: 16px; bottom: 24px; width: 120px; height: 120px;
+      border-radius: 50%; background: rgba(255,255,255,.12); border: 2px solid rgba(255,255,255,.3);
+      z-index: 110; touch-action: none; display: none;
+    }
+    #joy-knob {
+      position: absolute; left: 50%; top: 50%; width: 52px; height: 52px; margin: -26px;
+      border-radius: 50%; background: rgba(255,255,255,.55); border: 2px solid rgba(255,255,255,.8);
+    }
+    body.touch #joy-zone { display: block; }
+
+    #controls-hint {
+      position: fixed; left: 16px; top: 64px; z-index: 90; color: rgba(255,255,255,.85);
+      font-size: 11px; background: rgba(0,0,0,.35); padding: 6px 10px; border-radius: 8px;
+      pointer-events: none; transition: opacity .4s;
+    }
+    body.touch #controls-hint { display: none; }
   </style>
 </head>
 <body>
   <canvas id="c"></canvas>
 
+  <div id="boot">
+    <div id="welcome">
+      <h1>🧊 CubeWorld</h1>
+      <p>You are <b>CUBEY</b>, the creator of Cube World. A tiny island floats in an endless ocean — build it into your own tycoon empire.</p>
+      <div class="keys">
+        <span class="key">W</span><span class="key">A</span><span class="key">S</span><span class="key">D</span>
+        <span class="key">or Arrows</span>
+      </div>
+      <p>Walk to the glowing arrow and start building!</p>
+      <button id="btn-start">Let's go! 🚀</button>
+    </div>
+  </div>
+
   <div id="hud">
-    <div class="stat">
+    <div class="stat stat-pill">
       <span class="stat-icon">💰</span>
       <div>
-        <div class="stat-value" id="money">$1,000</div>
+        <div class="stat-value" id="money">$50</div>
         <div class="stat-label">Balance</div>
       </div>
     </div>
-    <div id="game-title"><h1>🏙️ City Tycoon 3D</h1><p>Build your empire</p></div>
-    <div class="stat">
+    <div id="game-title"><h1>🧊 CubeWorld</h1><p>CUBEY's Island Tycoon</p></div>
+    <div class="stat stat-pill">
       <span class="stat-icon">📈</span>
       <div>
         <div class="stat-value" id="income">$0/s</div>
@@ -122,71 +172,68 @@
     </div>
   </div>
 
-  <div id="toolbar">
-    <button class="tool-btn" id="btn-bulldoze">🔨 Bulldoze</button>
-    <button class="tool-btn" id="btn-clear">🧹 Clear All</button>
+  <div id="controls-hint">WASD / Arrows — move CUBEY</div>
+
+  <div id="build-prompt"><span class="k">E</span> Build Building</div>
+  <div id="build-fab">🔨</div>
+
+  <div id="build-panel">
+    <div id="panel-head">
+      <span>🔨 Build Menu</span>
+      <div class="actions">
+        <button class="panel-btn" id="btn-bulldoze">Bulldoze</button>
+        <button class="panel-btn" id="btn-done">Done ✓</button>
+      </div>
+    </div>
+    <div id="bld-list"></div>
+    <div id="panel-hint">Tap a building, then tap a glowing tile on the island to place it.</div>
   </div>
 
-  <div id="stats-card">
-    <h3>City Stats</h3>
-    <div class="stat-row"><span>Buildings</span><span id="s-buildings">0</span></div>
-    <div class="stat-row"><span>Earned total</span><span id="s-earned">$0</span></div>
-    <div class="stat-row"><span>Time played</span><span id="s-time">0s</span></div>
-  </div>
-
-  <div id="info-card">
-    <h3 id="ic-name">Building</h3>
-    <p id="ic-desc">Description</p>
-    <p>Cost: <span class="highlight" id="ic-cost">$0</span></p>
-    <p>Income: <span class="highlight" id="ic-income">+$0/s</span></p>
-    <p>ROI: <span class="highlight" id="ic-roi">—</span></p>
-  </div>
-
-  <div id="building-panel"></div>
   <div id="toast"></div>
 
-  <script type="importmap">
-  { "imports": {
-      "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
-      "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
-  } }
-  </script>
+  <div id="joy-zone"><div id="joy-knob"></div></div>
 
   <script type="module">
-  import * as THREE from 'three';
-  import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+  import * as THREE from './vendor/three/three.module.min.js';
 
   // ═══════════════════════════════════════════════
   //  CONFIG
   // ═══════════════════════════════════════════════
-  const GRID  = 14;
-  const CELL  = 3;
-  const HALF  = (GRID * CELL) / 2;
+  const CELL       = 2;      // world size of one voxel/grid cell
+  const ISLAND_R   = 10;      // island radius in cells (outer, noisy coastline)
+  const CORE_R     = 7;       // guaranteed-land radius in cells (no noise)
+  const BUILD_R    = 6;       // buildable zone radius in cells
+  const SPAWN_CELL = { gx: 0, gz: 7 };
+  const SPOT_CELL  = { gx: 0, gz: 0 };
+  const LAND_Y     = CELL;    // top surface height of land
+  const PLAYER_SPEED = 7.2;
 
+  // ═══════════════════════════════════════════════
+  //  BUILDING DEFINITIONS
+  // ═══════════════════════════════════════════════
   const DEFS = {
-    house:      { name:'House',       icon:'🏠', cost:100,    income:1,    color:0x66BB6A, accent:0xE53935, h:1.4, desc:'A cozy home for your citizens.' },
-    shop:       { name:'Shop',        icon:'🏪', cost:500,    income:6,    color:0x42A5F5, accent:0xFB8C00, h:2.0, desc:'Local retail, brings steady trade.' },
-    park:       { name:'Park',        icon:'🌳', cost:200,    income:2,    color:0x26A69A, accent:0x1B5E20, h:0.3, desc:'Green space boosts city morale.' },
-    factory:    { name:'Factory',     icon:'🏭', cost:2000,   income:25,   color:0x8D6E63, accent:0x546E7A, h:2.5, desc:'Industrial engine of growth.' },
-    hotel:      { name:'Hotel',       icon:'🏨', cost:8000,   income:100,  color:0xAB47BC, accent:0x6A1B9A, h:4.5, desc:'Luxury lodging attracts tourists.' },
-    bank:       { name:'Bank',        icon:'🏦', cost:25000,  income:300,  color:0xFFB300, accent:0xE65100, h:3.2, desc:'The city\'s financial heart.' },
-    tower:      { name:'Skyscraper',  icon:'🏢', cost:80000,  income:1000, color:0x26C6DA, accent:0x006064, h:9.0, desc:'A towering downtown landmark.' },
-    stadium:    { name:'Stadium',     icon:'🏟️', cost:250000, income:3000, color:0xEF5350, accent:0x880E4F, h:2.2, desc:'Sports & entertainment colosseum.' },
-    casino:     { name:'Casino',      icon:'🎰', cost:800000, income:10000,color:0xFFD700, accent:0xF57F17, h:5.5, desc:'High-stakes luxury destination.' },
+    table:  { name:'Table',  icon:'🪵', cost:20,    income:0.5, color:0x8D6E63, accent:0x5D4037, h:0.55, desc:'A little table to sell your first goods.' },
+    stall:  { name:'Stall',  icon:'🏪', cost:100,   income:3,   color:0xEFEBE9, accent:0xE53935, h:1.4,  desc:'A market stall for curious visitors.' },
+    hut:    { name:'Hut',    icon:'🏠', cost:400,   income:10,  color:0xFFCC80, accent:0x6D4C41, h:1.8,  desc:'A cozy cube-hut for your first settlers.' },
+    shop:   { name:'Shop',   icon:'🏬', cost:1500,  income:35,  color:0x4FC3F7, accent:0xFB8C00, h:2.4,  desc:'A proper shop brings steady trade.' },
+    tower:  { name:'Tower',  icon:'🗼', cost:6000,  income:120, color:0xBA68C8, accent:0x4A148C, h:5.5,  desc:'A tall cube-tower overlooking the sea.' },
+    castle: { name:'Castle', icon:'🏰', cost:20000, income:450, color:0x90A4AE, accent:0xB71C1C, h:4.2,  desc:'A blocky fortress fit for a creator.' },
+    portal: { name:'Portal', icon:'🌀', cost:60000, income:1500,color:0x26C6DA, accent:0x7C4DFF, h:3.4,  desc:'A glowing cube-portal to new worlds.' },
   };
 
   // ═══════════════════════════════════════════════
   //  STATE
   // ═══════════════════════════════════════════════
   const state = {
-    money:      1000,
-    income:     0,
-    earned:     0,
-    seconds:    0,
-    buildings:  0,
-    selected:   'house',
-    bulldoze:   false,
-    grid:       {},   // "gx,gz" → THREE.Group
+    money: 50, income: 0, earned: 0, seconds: 0, buildings: 0,
+    selected: null, bulldoze: false,
+    grid: {},          // "gx,gz" -> mesh
+    landSet: new Set(),
+    buildableSet: new Set(),
+    panelOpen: false,
+    tutorialDone: false,
+    move: { x: 0, z: 0 },     // keyboard input vector
+    touchMove: { x: 0, z: 0 },// touch joystick vector
   };
 
   // ═══════════════════════════════════════════════
@@ -198,349 +245,426 @@
   renderer.setSize(innerWidth, innerHeight);
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type    = THREE.PCFSoftShadowMap;
-  renderer.setClearColor(0x87CEEB);
 
   const scene = new THREE.Scene();
-  scene.fog   = new THREE.Fog(0x87CEEB, 80, 160);
 
-  const camera = new THREE.PerspectiveCamera(42, innerWidth / innerHeight, 0.1, 500);
-  camera.position.set(38, 50, 38);
-  camera.lookAt(0, 0, 0);
+  // ── Sky gradient dome ──
+  const sky = new THREE.Mesh(
+    new THREE.SphereGeometry(300, 20, 20),
+    new THREE.ShaderMaterial({
+      uniforms: {
+        topColor:    { value: new THREE.Color(0x5EA8E0) },
+        bottomColor: { value: new THREE.Color(0xDFF3FF) },
+        offset:      { value: 10 },
+        exponent:    { value: 0.7 },
+      },
+      vertexShader: `
+        varying vec3 vWorldPosition;
+        void main() {
+          vec4 wp = modelMatrix * vec4(position, 1.0);
+          vWorldPosition = wp.xyz;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }`,
+      fragmentShader: `
+        uniform vec3 topColor;
+        uniform vec3 bottomColor;
+        uniform float offset;
+        uniform float exponent;
+        varying vec3 vWorldPosition;
+        void main() {
+          float h = normalize(vWorldPosition + vec3(0.0, offset, 0.0)).y;
+          gl_FragColor = vec4(mix(bottomColor, topColor, max(pow(max(h, 0.0), exponent), 0.0)), 1.0);
+        }`,
+      side: THREE.BackSide,
+    })
+  );
+  scene.add(sky);
 
-  const controls = new OrbitControls(camera, canvas);
-  controls.enableDamping  = true;
-  controls.dampingFactor  = 0.06;
-  controls.maxPolarAngle  = Math.PI / 2.15;
-  controls.minDistance    = 15;
-  controls.maxDistance    = 90;
+  // ═══════════════════════════════════════════════
+  //  CAMERA — fixed isometric, follows player
+  // ═══════════════════════════════════════════════
+  let viewSize = 22;
+  const isoDir = new THREE.Vector3(1, 1, 1).normalize();
+  const CAM_DIST = 46;
+  const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 500);
+
+  function updateCameraFrustum() {
+    const aspect = innerWidth / innerHeight;
+    camera.left   = -viewSize * aspect;
+    camera.right  =  viewSize * aspect;
+    camera.top    =  viewSize;
+    camera.bottom = -viewSize;
+    camera.updateProjectionMatrix();
+  }
+  updateCameraFrustum();
+
+  const camTarget = new THREE.Vector3(0, 0, SPAWN_CELL.gz * CELL);
+
+  // "Forward"/"right" on screen, derived from the fixed iso camera azimuth,
+  // so WASD moves the character intuitively relative to what's drawn.
+  const flatForward = new THREE.Vector3(-isoDir.x, 0, -isoDir.z).normalize();
+  const flatRight   = new THREE.Vector3().crossVectors(flatForward, new THREE.Vector3(0, 1, 0)).normalize();
 
   // ═══════════════════════════════════════════════
   //  LIGHTS
   // ═══════════════════════════════════════════════
-  scene.add(new THREE.AmbientLight(0xffffff, 0.65));
+  scene.add(new THREE.AmbientLight(0xffffff, 0.7));
 
-  const sun = new THREE.DirectionalLight(0xFFF8DC, 1.3);
-  sun.position.set(25, 45, 20);
+  const sun = new THREE.DirectionalLight(0xFFF6DF, 1.25);
+  sun.position.set(30, 45, 20);
   sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048);
-  const sc = sun.shadow.camera;
-  Object.assign(sc, { near:0.5, far:200, left:-50, right:50, top:50, bottom:-50 });
+  Object.assign(sun.shadow.camera, { near: 1, far: 150, left: -35, right: 35, top: 35, bottom: -35 });
   scene.add(sun);
 
-  // Fill from opposite side
-  const fill = new THREE.DirectionalLight(0xB3E5FC, 0.35);
-  fill.position.set(-20, 20, -15);
+  const fill = new THREE.DirectionalLight(0xBBDEFB, 0.35);
+  fill.position.set(-20, 15, -25);
   scene.add(fill);
 
   // ═══════════════════════════════════════════════
-  //  GROUND & GRID
+  //  OCEAN — flat-shaded low-poly waves
   // ═══════════════════════════════════════════════
-  const groundMat = new THREE.MeshLambertMaterial({ color: 0x4a7c59 });
-  const ground    = new THREE.Mesh(new THREE.PlaneGeometry(200, 200), groundMat);
-  ground.rotation.x = -Math.PI / 2;
-  ground.receiveShadow = true;
-  scene.add(ground);
+  const oceanGeo = new THREE.PlaneGeometry(400, 400, 46, 46);
+  oceanGeo.rotateX(-Math.PI / 2);
+  const oceanBase = oceanGeo.attributes.position.array.slice();
+  const oceanMat = new THREE.MeshStandardMaterial({
+    color: 0x2FA7D6, flatShading: true, roughness: 0.65, metalness: 0.05,
+  });
+  const ocean = new THREE.Mesh(oceanGeo, oceanMat);
+  ocean.position.y = 0.35;
+  ocean.receiveShadow = true;
+  scene.add(ocean);
 
-  // City plot (slightly lighter)
-  const plotMat = new THREE.MeshLambertMaterial({ color: 0x5a8a68 });
-  const plot    = new THREE.Mesh(new THREE.PlaneGeometry(GRID * CELL, GRID * CELL), plotMat);
-  plot.rotation.x = -Math.PI / 2;
-  plot.position.y  = 0.01;
-  plot.receiveShadow = true;
-  scene.add(plot);
-
-  // Road grid overlay
-  const gridHelper = new THREE.GridHelper(GRID * CELL, GRID, 0x000000, 0x000000);
-  gridHelper.position.y = 0.03;
-  gridHelper.material.opacity     = 0.12;
-  gridHelper.material.transparent = true;
-  scene.add(gridHelper);
-
-  // Hover tile
-  const hoverMesh = new THREE.Mesh(
-    new THREE.PlaneGeometry(CELL - 0.15, CELL - 0.15),
-    new THREE.MeshBasicMaterial({ color: 0xFFD700, transparent: true, opacity: 0.45, depthWrite: false })
-  );
-  hoverMesh.rotation.x = -Math.PI / 2;
-  hoverMesh.position.y = 0.06;
-  hoverMesh.visible    = false;
-  scene.add(hoverMesh);
-
-  // ═══════════════════════════════════════════════
-  //  ENVIRONMENT DECOR
-  // ═══════════════════════════════════════════════
-
-  // Mountains
-  for (let i = 0; i < 10; i++) {
-    const a = (i / 10) * Math.PI * 2;
-    const r = 65 + Math.random() * 20;
-    const h = 12 + Math.random() * 18;
-    const m = new THREE.Mesh(
-      new THREE.ConeGeometry(9 + Math.random() * 6, h, 7),
-      new THREE.MeshLambertMaterial({ color: 0x455A64 })
-    );
-    m.position.set(Math.cos(a) * r, h / 2 - 2, Math.sin(a) * r);
-    scene.add(m);
-    // Snow cap
-    const snow = new THREE.Mesh(
-      new THREE.ConeGeometry(3, h * 0.25, 7),
-      new THREE.MeshLambertMaterial({ color: 0xECEFF1 })
-    );
-    snow.position.set(Math.cos(a) * r, h - h * 0.1, Math.sin(a) * r);
-    scene.add(snow);
+  function updateOcean(t) {
+    const pos = oceanGeo.attributes.position;
+    for (let i = 0; i < pos.count; i++) {
+      const x = oceanBase[i * 3], z = oceanBase[i * 3 + 2];
+      pos.array[i * 3 + 1] = Math.sin(x * 0.18 + t * 1.4) * 0.28 + Math.cos(z * 0.22 + t * 1.1) * 0.22;
+    }
+    pos.needsUpdate = true;
   }
 
-  // Perimeter trees
-  for (let i = 0; i < 40; i++) {
-    const a = Math.random() * Math.PI * 2;
-    const r = HALF + 5 + Math.random() * 12;
-    const x = Math.cos(a) * r, z = Math.sin(a) * r;
-    const h = 1.8 + Math.random() * 2.5;
-    const trunk = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.15, 0.22, 0.9, 6),
-      new THREE.MeshLambertMaterial({ color: 0x5D4037 })
-    );
-    trunk.position.set(x, 0.45, z);
-    const leaves = new THREE.Mesh(
-      new THREE.ConeGeometry(0.9, h, 7),
-      new THREE.MeshLambertMaterial({ color: 0x1B5E20 + (Math.random() * 0x0A1010 | 0) })
-    );
-    leaves.position.set(x, 0.9 + h / 2, z);
-    scene.add(trunk, leaves);
+  // ═══════════════════════════════════════════════
+  //  ISLAND — voxel cubes (grass core / sand coast)
+  // ═══════════════════════════════════════════════
+  const cubeGeo = new THREE.BoxGeometry(CELL * 0.98, CELL, CELL * 0.98);
+  const grassMat = new THREE.MeshStandardMaterial({ color: 0x7CC576, flatShading: true, roughness: 0.9 });
+  const sandMat  = new THREE.MeshStandardMaterial({ color: 0xE8D18C, flatShading: true, roughness: 0.9 });
+
+  function cellWorld(gx, gz) { return { x: gx * CELL, z: gz * CELL }; }
+
+  const landCells = [];
+  for (let gx = -ISLAND_R; gx <= ISLAND_R; gx++) {
+    for (let gz = -ISLAND_R; gz <= ISLAND_R; gz++) {
+      const dist = Math.sqrt(gx * gx + gz * gz);
+      if (dist > ISLAND_R) continue;
+      let land;
+      if (dist <= CORE_R) land = true;
+      else land = (dist + (Math.random() - 0.5) * 2.2) <= ISLAND_R;
+      if (!land) continue;
+      const buildable = dist <= BUILD_R;
+      landCells.push({ gx, gz, dist, buildable, sand: dist > BUILD_R + 1.5 });
+      const key = `${gx},${gz}`;
+      state.landSet.add(key);
+      if (buildable) state.buildableSet.add(key);
+    }
   }
 
-  // Clouds
-  const cloudGroup = new THREE.Group();
-  scene.add(cloudGroup);
+  const grassCells = landCells.filter(c => !c.sand);
+  const sandCells  = landCells.filter(c => c.sand);
 
-  function makeCloud(x, y, z, scale = 1) {
-    const g  = new THREE.Group();
-    const m  = new THREE.MeshLambertMaterial({ color: 0xFFFFFF });
-    [[0,0,0,1],[1.3,.3,0,.8],[-.9,.35,0,.7],[.5,.55,0,.65],[-.4,.5,.4,.6]].forEach(([px,py,pz,s]) => {
-      const sphere = new THREE.Mesh(new THREE.SphereGeometry((0.9 + Math.random() * .3) * scale, 8, 8), m);
-      sphere.position.set(px * scale, py * scale, pz * scale);
-      g.add(sphere);
+  function buildVoxelMesh(cells, mat) {
+    const mesh = new THREE.InstancedMesh(cubeGeo, mat, Math.max(cells.length, 1));
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    const m = new THREE.Matrix4();
+    cells.forEach((c, i) => {
+      const { x, z } = cellWorld(c.gx, c.gz);
+      m.setPosition(x, LAND_Y / 2, z);
+      mesh.setMatrixAt(i, m);
     });
-    g.position.set(x, y, z);
-    cloudGroup.add(g);
+    mesh.instanceMatrix.needsUpdate = true;
+    scene.add(mesh);
+    return mesh;
+  }
+  buildVoxelMesh(grassCells, grassMat);
+  buildVoxelMesh(sandCells, sandMat);
+
+  // ═══════════════════════════════════════════════
+  //  DECORATION — trees & rocks on non-buildable land
+  // ═══════════════════════════════════════════════
+  function makeTree() {
+    const g = new THREE.Group();
+    const trunk = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.14, 0.2, 0.8, 6),
+      new THREE.MeshStandardMaterial({ color: 0x6D4C41, flatShading: true })
+    );
+    trunk.position.y = 0.4;
+    trunk.castShadow = true;
+    const leaves = new THREE.Mesh(
+      new THREE.ConeGeometry(0.75, 1.5, 7),
+      new THREE.MeshStandardMaterial({ color: 0x2E7D32, flatShading: true })
+    );
+    leaves.position.y = 1.35;
+    leaves.castShadow = true;
+    g.add(trunk, leaves);
     return g;
   }
-
-  const clouds = [];
-  for (let i = 0; i < 8; i++) {
-    clouds.push({
-      mesh: makeCloud((Math.random() - .5) * 100, 22 + Math.random() * 14, (Math.random() - .5) * 100, .8 + Math.random() * .6),
-      speed: (0.008 + Math.random() * 0.012) * (Math.random() < .5 ? 1 : -1)
-    });
+  function makeRock() {
+    const rock = new THREE.Mesh(
+      new THREE.DodecahedronGeometry(0.35 + Math.random() * 0.25, 0),
+      new THREE.MeshStandardMaterial({ color: 0x9E9E9E, flatShading: true })
+    );
+    rock.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, 0);
+    rock.castShadow = true;
+    return rock;
   }
 
+  const decorGroup = new THREE.Group();
+  scene.add(decorGroup);
+  landCells.forEach(c => {
+    if (c.buildable) return;
+    if (Math.abs(c.gx - SPAWN_CELL.gx) <= 1 && Math.abs(c.gz - SPAWN_CELL.gz) <= 1) return;
+    if (Math.random() > (c.sand ? 0.12 : 0.32)) return;
+    const { x, z } = cellWorld(c.gx, c.gz);
+    const deco = (c.sand || Math.random() < 0.25) ? makeRock() : makeTree();
+    deco.position.set(x + (Math.random() - 0.5) * 0.6, LAND_Y, z + (Math.random() - 0.5) * 0.6);
+    decorGroup.add(deco);
+  });
+
   // ═══════════════════════════════════════════════
-  //  BUILDING FACTORY
+  //  BUILD SPOT MARKER — glow pad + floating arrow + sign
   // ═══════════════════════════════════════════════
-  function makeBuilding(type, gx, gz) {
-    const d   = DEFS[type];
+  const spotWorld = cellWorld(SPOT_CELL.gx, SPOT_CELL.gz);
+
+  const glowPad = new THREE.Mesh(
+    new THREE.CylinderGeometry(1.3, 1.3, 0.06, 20),
+    new THREE.MeshBasicMaterial({ color: 0xFFD54F, transparent: true, opacity: 0.55 })
+  );
+  glowPad.position.set(spotWorld.x, LAND_Y + 0.03, spotWorld.z);
+  scene.add(glowPad);
+
+  const markerGroup = new THREE.Group();
+  markerGroup.position.set(spotWorld.x, LAND_Y, spotWorld.z);
+  scene.add(markerGroup);
+
+  const arrowGroup = new THREE.Group();
+  const arrowHead = new THREE.Mesh(
+    new THREE.ConeGeometry(0.55, 1.1, 6),
+    new THREE.MeshStandardMaterial({ color: 0xFF7043, flatShading: true })
+  );
+  arrowHead.rotation.x = Math.PI; // point downward
+  const arrowShaft = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.22, 0.22, 1.4, 6),
+    new THREE.MeshStandardMaterial({ color: 0xFF7043, flatShading: true })
+  );
+  arrowShaft.position.y = 1.05;
+  arrowHead.castShadow = true; arrowShaft.castShadow = true;
+  arrowGroup.add(arrowHead, arrowShaft);
+  arrowGroup.position.y = 3.4;
+  markerGroup.add(arrowGroup);
+
+  function makeTextSprite(text, opts = {}) {
+    const { fontsize = 46, color = '#ffffff', bg = 'rgba(20,20,20,.75)' } = opts;
+    const cvs = document.createElement('canvas');
+    const ctx = cvs.getContext('2d');
+    ctx.font = `800 ${fontsize}px 'Segoe UI', Arial, sans-serif`;
+    const w = ctx.measureText(text).width + 48;
+    const h = fontsize + 40;
+    cvs.width = w; cvs.height = h;
+    ctx.font = `800 ${fontsize}px 'Segoe UI', Arial, sans-serif`;
+    ctx.fillStyle = bg;
+    const r = 18;
+    ctx.beginPath();
+    ctx.moveTo(r, 0); ctx.arcTo(w, 0, w, h, r); ctx.arcTo(w, h, 0, h, r);
+    ctx.arcTo(0, h, 0, 0, r); ctx.arcTo(0, 0, w, 0, r); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = color;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(text, w / 2, h / 2 + 3);
+    const tex = new THREE.CanvasTexture(cvs);
+    const mat = new THREE.SpriteMaterial({ map: tex, depthTest: false });
+    const sprite = new THREE.Sprite(mat);
+    const s = 0.012;
+    sprite.scale.set(w * s, h * s, 1);
+    return sprite;
+  }
+
+  const signSprite = makeTextSprite('Build Building!', { color: '#FFD54F' });
+  signSprite.position.y = 5.3;
+  markerGroup.add(signSprite);
+
+  // ═══════════════════════════════════════════════
+  //  CUBEY — the player character
+  // ═══════════════════════════════════════════════
+  const player = new THREE.Group();
+  const body = new THREE.Mesh(
+    new THREE.BoxGeometry(1, 1, 1),
+    new THREE.MeshStandardMaterial({ color: 0xFFB74D, flatShading: true, roughness: 0.7 })
+  );
+  body.position.y = 0.5;
+  body.castShadow = true;
+  player.add(body);
+
+  const eyeMat = new THREE.MeshStandardMaterial({ color: 0xFFFFFF });
+  const pupilMat = new THREE.MeshStandardMaterial({ color: 0x2d2d2d });
+  [-0.22, 0.22].forEach(ex => {
+    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.13, 10, 10), eyeMat);
+    eye.position.set(ex, 0.62, 0.49);
+    const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.06, 8, 8), pupilMat);
+    pupil.position.set(ex, 0.62, 0.58);
+    player.add(eye, pupil);
+  });
+
+  const footMat = new THREE.MeshStandardMaterial({ color: 0x6D4C41, flatShading: true });
+  const footL = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.22, 0.36), footMat);
+  const footR = footL.clone();
+  footL.position.set(-0.25, 0.11, 0);
+  footR.position.set(0.25, 0.11, 0);
+  player.add(footL, footR);
+
+  player.position.set(SPAWN_CELL.gx * CELL, LAND_Y, SPAWN_CELL.gz * CELL);
+  scene.add(player);
+
+  let walkCycle = 0;
+  let facing = Math.PI; // radians, facing toward -isoDir "screen up" initially
+
+  // ═══════════════════════════════════════════════
+  //  BUILDINGS
+  // ═══════════════════════════════════════════════
+  function makeBuildingMesh(type) {
+    const d = DEFS[type];
     const grp = new THREE.Group();
-    const bw  = CELL * 0.78;
+    const bw = CELL * 0.78;
+    const mat = new THREE.MeshStandardMaterial({ color: d.color, flatShading: true, roughness: 0.75 });
+    const accentMat = new THREE.MeshStandardMaterial({ color: d.accent, flatShading: true, roughness: 0.75 });
 
-    // Main body
-    const body = new THREE.Mesh(
-      new THREE.BoxGeometry(bw, d.h, bw),
-      new THREE.MeshPhongMaterial({ color: d.color, shininess: 40 })
-    );
-    body.position.y   = d.h / 2;
-    body.castShadow   = true;
-    body.receiveShadow = true;
-    grp.add(body);
-
-    // Type-specific details
-    if (type === 'house') {
-      const roof = new THREE.Mesh(
-        new THREE.ConeGeometry(bw * 0.78, 1.1, 4),
-        new THREE.MeshPhongMaterial({ color: d.accent })
-      );
-      roof.position.y   = d.h + 0.55;
-      roof.rotation.y   = Math.PI / 4;
-      roof.castShadow   = true;
-      grp.add(roof);
-
-      // Door
-      const door = new THREE.Mesh(
-        new THREE.BoxGeometry(0.3, 0.55, 0.05),
-        new THREE.MeshPhongMaterial({ color: 0x5D4037 })
-      );
-      door.position.set(0, 0.27, bw / 2 + 0.03);
-      grp.add(door);
-
-    } else if (type === 'park') {
-      // Trees on the park tile
-      grp.remove(body);
-      const base = new THREE.Mesh(
-        new THREE.BoxGeometry(bw, 0.2, bw),
-        new THREE.MeshPhongMaterial({ color: 0x388E3C })
-      );
-      base.position.y = 0.1;
-      base.receiveShadow = true;
-      grp.add(base);
-      const positions = [[-0.6,0,.6],[.6,0,.6],[0,0,-.7],[-.5,0,-.2],[.5,0,-.3]];
-      positions.forEach(([px,,pz]) => {
-        const th = 0.9 + Math.random() * .5;
-        const tr = new THREE.Mesh(new THREE.CylinderGeometry(.1,.14,.6,6), new THREE.MeshPhongMaterial({ color:0x5D4037 }));
-        tr.position.set(px, .3, pz);
-        const lv = new THREE.Mesh(new THREE.ConeGeometry(.45, th, 7), new THREE.MeshPhongMaterial({ color:0x2E7D32 }));
-        lv.position.set(px, .6 + th / 2, pz);
-        grp.add(tr, lv);
+    if (type === 'table') {
+      const top = new THREE.Mesh(new THREE.BoxGeometry(bw, 0.12, bw), mat);
+      top.position.y = 0.5; top.castShadow = true;
+      grp.add(top);
+      [[-1,-1],[1,-1],[-1,1],[1,1]].forEach(([sx, sz]) => {
+        const leg = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.5, 0.1), accentMat);
+        leg.position.set(sx * bw * 0.38, 0.25, sz * bw * 0.38);
+        leg.castShadow = true;
+        grp.add(leg);
       });
-
-    } else if (type === 'factory') {
-      const roof = new THREE.Mesh(
-        new THREE.BoxGeometry(bw + 0.08, 0.12, bw + 0.08),
-        new THREE.MeshPhongMaterial({ color: d.accent })
+    } else if (type === 'stall') {
+      const base = new THREE.Mesh(new THREE.BoxGeometry(bw, 0.9, bw), mat);
+      base.position.y = 0.45; base.castShadow = true; base.receiveShadow = true;
+      const roof = new THREE.Mesh(new THREE.ConeGeometry(bw * 0.85, 0.8, 4), accentMat);
+      roof.position.y = 1.3; roof.rotation.y = Math.PI / 4; roof.castShadow = true;
+      grp.add(base, roof);
+    } else if (type === 'hut') {
+      const bodyM = new THREE.Mesh(new THREE.BoxGeometry(bw, d.h, bw), mat);
+      bodyM.position.y = d.h / 2; bodyM.castShadow = true; bodyM.receiveShadow = true;
+      const roof = new THREE.Mesh(new THREE.ConeGeometry(bw * 0.8, 1, 4), accentMat);
+      roof.position.y = d.h + 0.5; roof.rotation.y = Math.PI / 4; roof.castShadow = true;
+      grp.add(bodyM, roof);
+    } else if (type === 'shop') {
+      const bodyM = new THREE.Mesh(new THREE.BoxGeometry(bw, d.h, bw), mat);
+      bodyM.position.y = d.h / 2; bodyM.castShadow = true; bodyM.receiveShadow = true;
+      const roof = new THREE.Mesh(new THREE.BoxGeometry(bw + 0.14, 0.18, bw + 0.14), accentMat);
+      roof.position.y = d.h + 0.09; roof.castShadow = true;
+      const awning = new THREE.Mesh(new THREE.BoxGeometry(bw + 0.2, 0.1, 0.4), accentMat);
+      awning.position.set(0, d.h * 0.6, bw / 2 + 0.15); awning.castShadow = true;
+      grp.add(bodyM, roof, awning);
+    } else if (type === 'tower') {
+      const bodyM = new THREE.Mesh(new THREE.BoxGeometry(bw * 0.75, d.h, bw * 0.75), mat);
+      bodyM.position.y = d.h / 2; bodyM.castShadow = true; bodyM.receiveShadow = true;
+      const roofCone = new THREE.Mesh(new THREE.ConeGeometry(bw * 0.55, 1.4, 8), accentMat);
+      roofCone.position.y = d.h + 0.7; roofCone.castShadow = true;
+      grp.add(bodyM, roofCone);
+    } else if (type === 'castle') {
+      const bodyM = new THREE.Mesh(new THREE.BoxGeometry(bw, d.h, bw), mat);
+      bodyM.position.y = d.h / 2; bodyM.castShadow = true; bodyM.receiveShadow = true;
+      grp.add(bodyM);
+      [[-1,-1],[1,-1],[-1,1],[1,1]].forEach(([sx, sz]) => {
+        const turret = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.28, d.h + 0.6, 8), accentMat);
+        turret.position.set(sx * bw * 0.42, (d.h + 0.6) / 2, sz * bw * 0.42);
+        turret.castShadow = true;
+        grp.add(turret);
+      });
+    } else if (type === 'portal') {
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(bw * 0.5, 0.18, 10, 20), accentMat);
+      ring.position.y = d.h * 0.55;
+      const core = new THREE.Mesh(
+        new THREE.CircleGeometry(bw * 0.42, 20),
+        new THREE.MeshBasicMaterial({ color: d.color, transparent: true, opacity: 0.85 })
       );
-      roof.position.y = d.h + 0.06;
-      grp.add(roof);
-      // Chimneys
-      for (let i = 0; i < 3; i++) {
-        const cx = (i - 1) * 0.7;
-        const ch = new THREE.Mesh(
-          new THREE.CylinderGeometry(.18, .2, 1.6, 8),
-          new THREE.MeshPhongMaterial({ color: 0x795548 })
-        );
-        ch.position.set(cx, d.h + 0.8, 0);
-        ch.castShadow = true;
-        grp.add(ch);
-        // Smoke ring
-        const ring = new THREE.Mesh(
-          new THREE.TorusGeometry(.25, .06, 6, 12),
-          new THREE.MeshBasicMaterial({ color: 0xBBBBBB, transparent: true, opacity: .5 })
-        );
-        ring.position.set(cx, d.h + 1.7, 0);
-        ring.rotation.x = Math.PI / 2;
-        grp.add(ring);
-      }
-
-    } else if (type === 'tower' || type === 'hotel' || type === 'casino') {
-      // Antenna
-      const ant = new THREE.Mesh(
-        new THREE.CylinderGeometry(.04, .04, 2, 6),
-        new THREE.MeshPhongMaterial({ color: 0xCFD8DC })
-      );
-      ant.position.y = d.h + 1;
-      grp.add(ant);
-      const tip = new THREE.Mesh(
-        new THREE.SphereGeometry(.16, 8, 8),
-        new THREE.MeshBasicMaterial({ color: 0xFF1744 })
-      );
-      tip.position.y = d.h + 2.1;
-      grp.add(tip);
-      // Flat roof
-      const rf = new THREE.Mesh(
-        new THREE.BoxGeometry(bw + 0.12, 0.14, bw + 0.12),
-        new THREE.MeshPhongMaterial({ color: d.accent })
-      );
-      rf.position.y = d.h + 0.07;
-      grp.add(rf);
-
-    } else if (type === 'stadium') {
-      // Ring/oval structure
-      const ring = new THREE.Mesh(
-        new THREE.TorusGeometry(bw * 0.58, bw * 0.18, 8, 24),
-        new THREE.MeshPhongMaterial({ color: d.accent })
-      );
-      ring.position.y = d.h + 0.1;
-      ring.rotation.x = Math.PI / 2;
-      grp.add(ring);
-      const rf = new THREE.Mesh(
-        new THREE.BoxGeometry(bw + 0.1, 0.12, bw + 0.1),
-        new THREE.MeshPhongMaterial({ color: d.accent })
-      );
-      rf.position.y = d.h + 0.06;
-      grp.add(rf);
-
+      core.position.y = d.h * 0.55;
+      ring.castShadow = true;
+      grp.add(ring, core);
+      grp.userData.spin = core;
     } else {
-      // Generic flat roof
-      const rf = new THREE.Mesh(
-        new THREE.BoxGeometry(bw + 0.1, 0.12, bw + 0.1),
-        new THREE.MeshPhongMaterial({ color: d.accent })
-      );
-      rf.position.y = d.h + 0.06;
-      grp.add(rf);
+      const bodyM = new THREE.Mesh(new THREE.BoxGeometry(bw, d.h, bw), mat);
+      bodyM.position.y = d.h / 2; bodyM.castShadow = true; bodyM.receiveShadow = true;
+      grp.add(bodyM);
     }
 
-    // Windows (glowing panels for tall buildings)
-    if (d.h >= 2 && type !== 'park' && type !== 'factory') {
-      const winMat = new THREE.MeshBasicMaterial({ color: 0xFFFDE7 });
-      const floors = Math.max(1, Math.floor(d.h / 1.1));
-      for (let f = 0; f < floors; f++) {
-        for (let side = 0; side < 4; side++) {
-          const angle = (side * Math.PI) / 2;
-          for (let col = -1; col <= 1; col += 2) {
-            const win = new THREE.Mesh(new THREE.PlaneGeometry(.24, .28), winMat);
-            win.position.set(
-              Math.sin(angle) * (bw / 2 + 0.01) + Math.cos(angle) * col * 0.38,
-              f * 1.05 + 0.65,
-              Math.cos(angle) * (bw / 2 + 0.01) + Math.sin(angle) * col * 0.38
-            );
-            win.rotation.y = angle;
-            grp.add(win);
-          }
-        }
-      }
-    }
-
-    // Position on grid
-    const { x, z } = cellWorld(gx, gz);
-    grp.position.set(x, 0, z);
-    grp.userData = { type, gx, gz };
-    grp.scale.y  = 0;   // start flat for pop-in
-    scene.add(grp);
-    popIn(grp);
+    grp.scale.y = 0.001;
     return grp;
   }
 
+  const spinningBuildings = [];
+
   function popIn(grp) {
-    const t0 = Date.now();
+    const t0 = performance.now();
     (function tick() {
-      const t = Math.min((Date.now() - t0) / 320, 1);
+      const t = Math.min((performance.now() - t0) / 320, 1);
       grp.scale.y = 1 - Math.pow(1 - t, 3);
       if (t < 1) requestAnimationFrame(tick);
     })();
   }
-
   function popOut(grp, cb) {
-    const t0 = Date.now();
+    const t0 = performance.now();
     (function tick() {
-      const t = Math.min((Date.now() - t0) / 200, 1);
+      const t = Math.min((performance.now() - t0) / 200, 1);
       grp.scale.y = 1 - t;
-      if (t < 1) requestAnimationFrame(tick);
-      else cb();
+      if (t < 1) requestAnimationFrame(tick); else cb();
     })();
   }
 
-  // ═══════════════════════════════════════════════
-  //  ACTIONS
-  // ═══════════════════════════════════════════════
   function placeBuilding(gx, gz) {
     const key = `${gx},${gz}`;
-    if (state.grid[key])          { toast('Already occupied!', false); return; }
+    if (!state.buildableSet.has(key)) { toast('You can only build here!', false); return; }
+    if (state.grid[key]) { toast('Already occupied!', false); return; }
     const d = DEFS[state.selected];
-    if (state.money < d.cost)     { toast('Not enough money!', false); return; }
+    if (!d) return;
+    if (state.money < d.cost) { toast('Not enough money!', false); return; }
 
-    state.money     -= d.cost;
-    state.income    += d.income;
+    state.money -= d.cost;
+    state.income += d.income;
     state.buildings += 1;
-    state.grid[key]  = makeBuilding(state.selected, gx, gz);
+
+    const grp = makeBuildingMesh(state.selected);
+    const { x, z } = cellWorld(gx, gz);
+    grp.position.set(x, LAND_Y, z);
+    grp.userData.type = state.selected;
+    scene.add(grp);
+    popIn(grp);
+    if (grp.userData.spin) spinningBuildings.push(grp.userData.spin);
+    state.grid[key] = grp;
+
+    if (!state.tutorialDone) {
+      state.tutorialDone = true;
+      markerGroup.visible = false;
+      glowPad.visible = false;
+      document.getElementById('build-fab').classList.add('active');
+      toast('First building placed! Keep growing your island.', true);
+    } else {
+      toast(`Built ${d.name}! +${fmt(d.income)}/s`, true);
+    }
     refreshUI();
-    toast(`Built ${d.name}! +${fmt(d.income)}/s`, true);
   }
 
   function demolishAt(gx, gz) {
-    const key  = `${gx},${gz}`;
-    const grp  = state.grid[key];
+    const key = `${gx},${gz}`;
+    const grp = state.grid[key];
     if (!grp) return;
-    const d    = DEFS[grp.userData.type];
-    const ref  = Math.floor(d.cost * 0.5);
-    state.money     += ref;
-    state.income    -= d.income;
+    const d = DEFS[grp.userData.type];
+    const ref = Math.floor(d.cost * 0.5);
+    state.money += ref;
+    state.income -= d.income;
     state.buildings -= 1;
     delete state.grid[key];
     popOut(grp, () => scene.remove(grp));
@@ -548,96 +672,134 @@
     toast(`Demolished. Refunded ${fmt(ref)}`, true);
   }
 
-  function clearAll() {
-    Object.keys(state.grid).forEach(key => {
-      const grp = state.grid[key];
-      const d   = DEFS[grp.userData.type];
-      state.income    -= d.income;
-      state.buildings -= 1;
-      popOut(grp, () => scene.remove(grp));
-    });
-    state.grid = {};
-    refreshUI();
-    toast('City cleared!', true);
-  }
-
   // ═══════════════════════════════════════════════
-  //  RAYCASTING HELPERS
+  //  RAYCASTING — placement targeting
   // ═══════════════════════════════════════════════
-  const rc    = new THREE.Raycaster();
+  const rc = new THREE.Raycaster();
   const mouse = new THREE.Vector2();
-  const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
-  const hit   = new THREE.Vector3();
+  const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -LAND_Y);
+  const hitPoint = new THREE.Vector3();
 
-  function cellWorld(gx, gz) {
-    return {
-      x: gx * CELL - HALF + CELL / 2,
-      z: gz * CELL - HALF + CELL / 2
-    };
-  }
+  const hoverMesh = new THREE.Mesh(
+    new THREE.PlaneGeometry(CELL - 0.1, CELL - 0.1),
+    new THREE.MeshBasicMaterial({ color: 0xFFD54F, transparent: true, opacity: 0.5, depthWrite: false })
+  );
+  hoverMesh.rotation.x = -Math.PI / 2;
+  hoverMesh.position.y = LAND_Y + 0.02;
+  hoverMesh.visible = false;
+  scene.add(hoverMesh);
 
-  function getCell(e) {
+  function screenToCell(clientX, clientY) {
     const r = canvas.getBoundingClientRect();
-    mouse.set(
-      ((e.clientX - r.left) / r.width)  * 2 - 1,
-      -((e.clientY - r.top)  / r.height) * 2 + 1
-    );
+    mouse.set(((clientX - r.left) / r.width) * 2 - 1, -((clientY - r.top) / r.height) * 2 + 1);
     rc.setFromCamera(mouse, camera);
-    if (!rc.ray.intersectPlane(plane, hit)) return null;
-    const gx = Math.floor((hit.x + HALF) / CELL);
-    const gz = Math.floor((hit.z + HALF) / CELL);
-    if (gx < 0 || gx >= GRID || gz < 0 || gz >= GRID) return null;
+    if (!rc.ray.intersectPlane(groundPlane, hitPoint)) return null;
+    const gx = Math.round(hitPoint.x / CELL);
+    const gz = Math.round(hitPoint.z / CELL);
     return { gx, gz };
   }
 
-  // ═══════════════════════════════════════════════
-  //  MOUSE EVENTS
-  // ═══════════════════════════════════════════════
-  let hoverCell = null, didDrag = false, downPos = { x:0, y:0 };
-
+  let hoverCell = null;
   canvas.addEventListener('mousemove', e => {
-    if (Math.hypot(e.clientX - downPos.x, e.clientY - downPos.y) > 4) didDrag = true;
-    const cell = getCell(e);
-    hoverCell  = cell;
+    if (!state.panelOpen) { hoverMesh.visible = false; return; }
+    const cell = screenToCell(e.clientX, e.clientY);
+    hoverCell = cell;
     if (cell) {
+      const key = `${cell.gx},${cell.gz}`;
       const { x, z } = cellWorld(cell.gx, cell.gz);
-      hoverMesh.position.set(x, 0.06, z);
+      hoverMesh.position.set(x, LAND_Y + 0.02, z);
       hoverMesh.visible = true;
-      hoverMesh.material.color.setHex(state.bulldoze ? 0xFF5722 : 0xFFD700);
+      const valid = state.bulldoze ? !!state.grid[key] : (state.buildableSet.has(key) && !state.grid[key]);
+      hoverMesh.material.color.setHex(state.bulldoze ? (valid ? 0xFF5722 : 0x777777) : (valid ? 0xFFD54F : 0xFF5252));
     } else {
       hoverMesh.visible = false;
     }
   });
 
-  canvas.addEventListener('mousedown', e => { downPos = { x:e.clientX, y:e.clientY }; didDrag = false; });
-  canvas.addEventListener('mouseup',   () => {
-    if (!didDrag && hoverCell) {
-      state.bulldoze ? demolishAt(hoverCell.gx, hoverCell.gz)
-                     : placeBuilding(hoverCell.gx, hoverCell.gz);
-    }
-  });
-  canvas.addEventListener('mouseleave', () => { hoverMesh.visible = false; hoverCell = null; });
-
-  // ═══════════════════════════════════════════════
-  //  TOOLBAR
-  // ═══════════════════════════════════════════════
-  document.getElementById('btn-bulldoze').addEventListener('click', () => {
-    state.bulldoze = !state.bulldoze;
-    document.getElementById('btn-bulldoze').classList.toggle('active', state.bulldoze);
-  });
-
-  document.getElementById('btn-clear').addEventListener('click', () => {
-    if (confirm('Clear all buildings? You\'ll receive 50% refund.')) clearAll();
+  canvas.addEventListener('click', e => {
+    if (!state.panelOpen) return;
+    const cell = screenToCell(e.clientX, e.clientY);
+    if (!cell) return;
+    state.bulldoze ? demolishAt(cell.gx, cell.gz) : placeBuilding(cell.gx, cell.gz);
   });
 
   // ═══════════════════════════════════════════════
-  //  BUILDING BUTTONS
+  //  INPUT — keyboard, touch joystick, mouse wheel zoom
   // ═══════════════════════════════════════════════
-  const panel = document.getElementById('building-panel');
+  const keys = new Set();
+  window.addEventListener('keydown', e => {
+    keys.add(e.key.toLowerCase());
+    if (e.key.toLowerCase() === 'e') tryOpenBuildFromProximity();
+    if (e.key === 'Escape') closeBuildPanel();
+  });
+  window.addEventListener('keyup', e => keys.delete(e.key.toLowerCase()));
+
+  function readKeyboardVector() {
+    let x = 0, z = 0;
+    if (keys.has('w') || keys.has('arrowup'))    z += 1;
+    if (keys.has('s') || keys.has('arrowdown'))  z -= 1;
+    if (keys.has('a') || keys.has('arrowleft'))  x -= 1;
+    if (keys.has('d') || keys.has('arrowright')) x += 1;
+    return { x, z };
+  }
+
+  // Touch joystick
+  if ('ontouchstart' in window) document.body.classList.add('touch');
+  const joyZone = document.getElementById('joy-zone');
+  const joyKnob = document.getElementById('joy-knob');
+  let joyActive = false, joyId = null, joyCenter = { x: 0, y: 0 };
+  const JOY_RADIUS = 50;
+
+  function joyStart(e) {
+    const t = e.changedTouches ? e.changedTouches[0] : e;
+    joyId = t.identifier ?? 'mouse';
+    const r = joyZone.getBoundingClientRect();
+    joyCenter = { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+    joyActive = true;
+    joyMove(e);
+  }
+  function joyMove(e) {
+    if (!joyActive) return;
+    const list = e.changedTouches || [e];
+    let t = null;
+    for (const cand of list) { if ((cand.identifier ?? 'mouse') === joyId) t = cand; }
+    if (!t) return;
+    let dx = t.clientX - joyCenter.x, dy = t.clientY - joyCenter.y;
+    const len = Math.hypot(dx, dy) || 1;
+    const clamped = Math.min(len, JOY_RADIUS);
+    dx = (dx / len) * clamped; dy = (dy / len) * clamped;
+    joyKnob.style.left = `calc(50% + ${dx}px)`;
+    joyKnob.style.top  = `calc(50% + ${dy}px)`;
+    state.touchMove.x = dx / JOY_RADIUS;
+    state.touchMove.z = -dy / JOY_RADIUS;
+  }
+  function joyEnd() {
+    joyActive = false; joyId = null;
+    state.touchMove.x = 0; state.touchMove.z = 0;
+    joyKnob.style.left = '50%'; joyKnob.style.top = '50%';
+  }
+  joyZone.addEventListener('touchstart', joyStart, { passive: true });
+  joyZone.addEventListener('touchmove', joyMove, { passive: true });
+  joyZone.addEventListener('touchend', joyEnd);
+  joyZone.addEventListener('touchcancel', joyEnd);
+
+  canvas.addEventListener('wheel', e => {
+    viewSize = THREE.MathUtils.clamp(viewSize + Math.sign(e.deltaY) * 1.5, 12, 34);
+    updateCameraFrustum();
+  }, { passive: true });
+
+  // ═══════════════════════════════════════════════
+  //  BUILD PANEL UI
+  // ═══════════════════════════════════════════════
+  const buildPrompt = document.getElementById('build-prompt');
+  const buildFab = document.getElementById('build-fab');
+  const buildPanel = document.getElementById('build-panel');
+  const bldList = document.getElementById('bld-list');
+
   Object.entries(DEFS).forEach(([key, d]) => {
     const btn = document.createElement('div');
-    btn.className = 'bld-btn' + (key === state.selected ? ' selected' : '');
-    btn.id        = `b-${key}`;
+    btn.className = 'bld-btn';
+    btn.id = `b-${key}`;
     btn.innerHTML = `
       <div class="bld-icon">${d.icon}</div>
       <div class="bld-name">${d.name}</div>
@@ -645,33 +807,60 @@
       <div class="bld-inc">+${fmt(d.income)}/s</div>
     `;
     btn.addEventListener('click', () => {
-      state.selected  = key;
-      state.bulldoze  = false;
+      state.selected = key;
+      state.bulldoze = false;
       document.getElementById('btn-bulldoze').classList.remove('active');
       document.querySelectorAll('.bld-btn').forEach(b => b.classList.remove('selected'));
       btn.classList.add('selected');
-      // Update info card
-      const ic = document.getElementById('info-card');
-      ic.style.display = 'block';
-      document.getElementById('ic-name').textContent   = `${d.icon} ${d.name}`;
-      document.getElementById('ic-desc').textContent   = d.desc;
-      document.getElementById('ic-cost').textContent   = fmt(d.cost);
-      document.getElementById('ic-income').textContent = `+${fmt(d.income)}/s`;
-      const roi = Math.ceil(d.cost / d.income);
-      document.getElementById('ic-roi').textContent    = `${roi}s payback`;
     });
-    panel.appendChild(btn);
+    bldList.appendChild(btn);
   });
+
+  function openBuildPanel() {
+    state.panelOpen = true;
+    buildPanel.classList.add('open');
+    buildPrompt.classList.remove('show');
+    if (!state.selected) {
+      const first = Object.keys(DEFS)[0];
+      state.selected = first;
+      document.getElementById(`b-${first}`).classList.add('selected');
+    }
+  }
+  function closeBuildPanel() {
+    state.panelOpen = false;
+    buildPanel.classList.remove('open');
+    hoverMesh.visible = false;
+  }
+
+  document.getElementById('btn-done').addEventListener('click', closeBuildPanel);
+  document.getElementById('btn-bulldoze').addEventListener('click', () => {
+    state.bulldoze = !state.bulldoze;
+    document.getElementById('btn-bulldoze').classList.toggle('active', state.bulldoze);
+  });
+  buildPrompt.addEventListener('click', openBuildPanel);
+  buildFab.addEventListener('click', openBuildPanel);
+
+  function tryOpenBuildFromProximity() {
+    if (state.panelOpen) { closeBuildPanel(); return; }
+    if (!state.tutorialDone) {
+      const dx = player.position.x - spotWorld.x, dz = player.position.z - spotWorld.z;
+      if (Math.hypot(dx, dz) > 3.2) return;
+    }
+    openBuildPanel();
+  }
+
+  // ═══════════════════════════════════════════════
+  //  WELCOME / BOOT
+  // ═══════════════════════════════════════════════
+  const boot = document.getElementById('boot');
+  document.getElementById('btn-start').addEventListener('click', () => boot.classList.add('hidden'));
 
   // ═══════════════════════════════════════════════
   //  ECONOMY TICK
   // ═══════════════════════════════════════════════
   setInterval(() => {
     state.seconds++;
-    if (state.income > 0) {
-      state.money  += state.income;
-      state.earned += state.income;
-    }
+    if (state.income > 0) { state.money += state.income; state.earned += state.income; }
     refreshUI();
   }, 1000);
 
@@ -679,21 +868,15 @@
   //  UI HELPERS
   // ═══════════════════════════════════════════════
   function fmt(n) {
-    if (n >= 1e9)  return `$${(n/1e9).toFixed(2)}B`;
-    if (n >= 1e6)  return `$${(n/1e6).toFixed(1)}M`;
-    if (n >= 1000) return `$${(n/1000).toFixed(1)}K`;
+    if (n >= 1e9)  return `$${(n / 1e9).toFixed(2)}B`;
+    if (n >= 1e6)  return `$${(n / 1e6).toFixed(1)}M`;
+    if (n >= 1000) return `$${(n / 1000).toFixed(1)}K`;
     return `$${Math.floor(n)}`;
   }
 
   function refreshUI() {
-    document.getElementById('money').textContent    = fmt(state.money);
-    document.getElementById('income').textContent   = `${fmt(state.income)}/s`;
-    document.getElementById('s-buildings').textContent = state.buildings;
-    document.getElementById('s-earned').textContent    = fmt(state.earned);
-    const m = Math.floor(state.seconds / 60), s = state.seconds % 60;
-    document.getElementById('s-time').textContent =
-      m > 0 ? `${m}m ${s}s` : `${s}s`;
-    // Grey out unaffordable buttons
+    document.getElementById('money').textContent  = fmt(state.money);
+    document.getElementById('income').textContent = `${fmt(state.income)}/s`;
     Object.keys(DEFS).forEach(key => {
       const btn = document.getElementById(`b-${key}`);
       if (btn) btn.classList.toggle('cant-afford', state.money < DEFS[key].cost);
@@ -704,7 +887,7 @@
   function toast(msg, ok) {
     clearTimeout(toastTimer);
     const el = document.getElementById('toast');
-    el.textContent   = msg;
+    el.textContent = msg;
     el.style.background = ok ? 'rgba(46,125,50,.92)' : 'rgba(198,40,40,.92)';
     el.style.opacity = '1';
     toastTimer = setTimeout(() => el.style.opacity = '0', 2200);
@@ -714,26 +897,96 @@
   //  RESIZE
   // ═══════════════════════════════════════════════
   window.addEventListener('resize', () => {
-    camera.aspect = innerWidth / innerHeight;
-    camera.updateProjectionMatrix();
     renderer.setSize(innerWidth, innerHeight);
+    updateCameraFrustum();
   });
 
   // ═══════════════════════════════════════════════
   //  RENDER LOOP
   // ═══════════════════════════════════════════════
-  (function loop() {
+  const clock = new THREE.Clock();
+  let hintFaded = false;
+
+  function isLand(x, z) {
+    const gx = Math.round(x / CELL), gz = Math.round(z / CELL);
+    return state.landSet.has(`${gx},${gz}`);
+  }
+
+  function updatePlayer(delta, t) {
+    const kb = readKeyboardVector();
+    const ix = THREE.MathUtils.clamp(kb.x + state.touchMove.x, -1, 1);
+    const iz = THREE.MathUtils.clamp(kb.z + state.touchMove.z, -1, 1);
+    const moving = Math.hypot(ix, iz) > 0.05;
+
+    if (moving && !hintFaded) {
+      hintFaded = true;
+      document.getElementById('controls-hint').style.opacity = '0';
+    }
+
+    if (moving) {
+      const dir = new THREE.Vector3()
+        .addScaledVector(flatForward, iz)
+        .addScaledVector(flatRight, ix);
+      const len = dir.length() || 1;
+      dir.multiplyScalar(1 / len);
+
+      const step = PLAYER_SPEED * delta;
+      const nx = player.position.x + dir.x * step;
+      const nz = player.position.z + dir.z * step;
+      if (isLand(nx, player.position.z)) player.position.x = nx;
+      if (isLand(player.position.x, nz)) player.position.z = nz;
+
+      const targetFacing = Math.atan2(dir.x, dir.z);
+      let diff = targetFacing - facing;
+      diff = Math.atan2(Math.sin(diff), Math.cos(diff));
+      facing += diff * Math.min(1, delta * 10);
+      walkCycle += delta * 9;
+    } else {
+      walkCycle *= 0.9;
+    }
+
+    player.rotation.y = facing;
+    const bob = moving ? Math.abs(Math.sin(walkCycle)) * 0.14 : 0;
+    body.position.y = 0.5 + bob;
+    footL.position.y = 0.11 + Math.max(0, Math.sin(walkCycle)) * 0.08;
+    footR.position.y = 0.11 + Math.max(0, -Math.sin(walkCycle)) * 0.08;
+
+    // Build-spot proximity prompt (tutorial only)
+    if (!state.tutorialDone && !state.panelOpen) {
+      const dx = player.position.x - spotWorld.x, dz = player.position.z - spotWorld.z;
+      buildPrompt.classList.toggle('show', Math.hypot(dx, dz) <= 3.2);
+    } else {
+      buildPrompt.classList.remove('show');
+    }
+  }
+
+  function updateCamera(delta) {
+    const smooth = 1 - Math.pow(0.0001, delta);
+    camTarget.lerp(player.position, smooth);
+    camera.position.copy(camTarget).addScaledVector(isoDir, CAM_DIST);
+    camera.lookAt(camTarget);
+  }
+
+  function loop() {
     requestAnimationFrame(loop);
-    controls.update();
-    clouds.forEach(c => {
-      c.mesh.position.x += c.speed;
-      if (c.mesh.position.x >  80) c.mesh.position.x = -80;
-      if (c.mesh.position.x < -80) c.mesh.position.x =  80;
-    });
+    const delta = Math.min(clock.getDelta(), 0.1);
+    const t = clock.elapsedTime;
+
+    updatePlayer(delta, t);
+    updateCamera(delta);
+    updateOcean(t);
+
+    glowPad.material.opacity = 0.45 + Math.sin(t * 3) * 0.15;
+    arrowGroup.position.y = 3.4 + Math.sin(t * 2.2) * 0.35;
+    markerGroup.rotation.y += delta * 0.6;
+
+    spinningBuildings.forEach(m => { m.rotation.z += delta * 1.2; });
+
     renderer.render(scene, camera);
-  })();
+  }
 
   refreshUI();
+  loop();
   </script>
 </body>
 </html>
