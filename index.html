@@ -6,209 +6,13 @@
   <title>CubeWorld</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🧊</text></svg>" />
   <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-    html, body { overflow: hidden; background: #7cc9f0; font-family: 'Baloo 2', 'Segoe UI', Tahoma, sans-serif; height: 100%; touch-action: none; }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { overflow: hidden; background: #cfe9f7; height: 100%; }
     canvas { display: block; }
-
-    /* ── BOOT / WELCOME ─────────────────────── */
-    #boot {
-      position: fixed; inset: 0; z-index: 500;
-      background: radial-gradient(circle at 50% 40%, #8fd6ff 0%, #4fa3d8 100%);
-      display: flex; align-items: center; justify-content: center;
-      transition: opacity .5s ease;
-    }
-    #boot.hidden { opacity: 0; pointer-events: none; }
-    #welcome {
-      background: rgba(255,255,255,.96); border-radius: 22px; padding: 30px 34px;
-      max-width: 400px; text-align: center; box-shadow: 0 20px 60px rgba(0,0,0,.35);
-      border: 4px solid #FFB300;
-    }
-    #welcome h1 { font-size: 28px; color: #2d3436; margin-bottom: 6px; }
-    #welcome p { font-size: 14px; color: #555; margin: 10px 0; line-height: 1.5; }
-    #welcome .row { display:flex; gap:8px; justify-content:center; margin: 12px 0; flex-wrap: wrap; }
-    #welcome .key { background:#2d3436; color:#fff; border-radius:8px; padding:6px 10px; font-size:12px; font-weight:700; }
-    #welcome button {
-      margin-top: 8px; padding: 12px 26px; border: none; border-radius: 14px;
-      background: linear-gradient(180deg,#FFCA28,#FF9800); color:#3e2200; font-weight: 800;
-      font-size: 16px; cursor: pointer; box-shadow: 0 6px 0 #C66900; transition: transform .1s;
-    }
-    #welcome button:active { transform: translateY(4px); box-shadow: 0 2px 0 #C66900; }
-
-    /* ── RESUME OVERLAY (pointer lock lost) ──── */
-    #resume-overlay {
-      position: fixed; inset: 0; z-index: 480; background: rgba(10,15,25,.55);
-      display: none; align-items: center; justify-content: center; text-align: center;
-      color: #fff; cursor: pointer;
-    }
-    #resume-overlay.show { display: flex; }
-    #resume-overlay .box { background: rgba(0,0,0,.4); padding: 22px 30px; border-radius: 16px; border: 1px solid rgba(255,255,255,.2); }
-    #resume-overlay .box b { font-size: 18px; }
-    #resume-overlay .box span { display:block; font-size: 12px; opacity: .75; margin-top: 6px; }
-
-    /* ── HUD ─────────────────────────────── */
-    #hud {
-      position: fixed; top: 0; left: 0; right: 0;
-      padding: 10px 16px;
-      display: flex; justify-content: space-between; align-items: center;
-      background: linear-gradient(180deg, rgba(0,0,0,.45), rgba(0,0,0,0));
-      z-index: 100; pointer-events: none;
-    }
-    .stat { display: flex; align-items: center; gap: 8px; color: #fff; pointer-events: none; }
-    .stat-pill { background: rgba(0,0,0,.4); border-radius: 14px; padding: 6px 14px; display:flex; align-items:center; gap:8px; border: 1.5px solid rgba(255,255,255,.25); }
-    .stat-icon { font-size: 18px; }
-    .stat-value { font-size: 16px; font-weight: 800; color: #FFD54F; }
-    .stat-label { font-size: 9px; color: rgba(255,255,255,.6); text-transform: uppercase; letter-spacing: .5px; }
-    #game-title { color: #fff; text-align: center; text-shadow: 0 2px 6px rgba(0,0,0,.5); }
-    #game-title h1 { font-size: 19px; letter-spacing: .5px; }
-    #game-title p  { font-size: 10px; color: rgba(255,255,255,.75); margin-top: 1px; }
-
-    #controls-hint {
-      position: fixed; left: 16px; top: 64px; z-index: 90; color: rgba(255,255,255,.9);
-      font-size: 11px; line-height: 1.6; background: rgba(0,0,0,.4); padding: 8px 12px; border-radius: 10px;
-      pointer-events: none; transition: opacity .5s;
-    }
-    body.touch #controls-hint { display: none; }
-
-    /* ── CROSSHAIR ───────────────────────────── */
-    #crosshair {
-      position: fixed; left: 50%; top: 50%; width: 20px; height: 20px; margin: -10px;
-      z-index: 130; pointer-events: none; display: none;
-      border: 2px solid rgba(255,255,255,.85); border-radius: 50%;
-      box-shadow: 0 0 0 1px rgba(0,0,0,.45), 0 0 6px rgba(0,0,0,.25);
-      mix-blend-mode: difference;
-    }
-    #crosshair::after {
-      content: ''; position: absolute; left: 50%; top: 50%; width: 3px; height: 3px;
-      background: #fff; border-radius: 50%; margin: -1.5px;
-    }
-    body.touch #crosshair { display: block !important; }
-
-    /* ── CONTEXTUAL BUILD TIP ───────────────── */
-    #build-tip {
-      position: fixed; left: 50%; top: calc(50% - 62px); transform: translateX(-50%) scale(.92);
-      background: rgba(0,0,0,.68); color: #fff; padding: 8px 16px; border-radius: 24px;
-      font-size: 13px; font-weight: 700; z-index: 125; border: 2px solid rgba(255,255,255,.25);
-      display: none; align-items: center; gap: 8px; opacity: 0; transition: opacity .15s, transform .15s;
-      white-space: nowrap; pointer-events: none;
-    }
-    #build-tip.show { display: flex; opacity: 1; transform: translateX(-50%) scale(1); }
-    #build-tip .k { background:#FFD54F; color:#3e2200; border-radius:6px; padding:2px 8px; font-size:11px; }
-    #build-tip .ok { color: #69F0AE; }
-    #build-tip .bad { color: #FF8A80; }
-    #build-tip .refund { color: #FFD54F; }
-
-    /* ── HOTBAR ──────────────────────────────── */
-    #hotbar {
-      position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%);
-      display: flex; gap: 8px; z-index: 120; pointer-events: auto;
-    }
-    .hb-slot {
-      position: relative;
-      display: flex; flex-direction: column; align-items: center;
-      padding: 8px 11px; border-radius: 12px; min-width: 68px;
-      border: 2px solid rgba(255,255,255,.18);
-      background: rgba(10,10,20,.62);
-      color: #fff; cursor: pointer; user-select: none;
-      transition: all .15s;
-    }
-    .hb-slot:active { transform: scale(.94); }
-    .hb-slot.selected { border-color: #FFD54F; background: rgba(255,213,79,.22); transform: translateY(-4px); }
-    .hb-slot.cant-afford { opacity: .4; }
-    .hb-key { position:absolute; top:-7px; left:-7px; background:#222; color:#fff; font-size:10px; font-weight:800;
-      border-radius:6px; padding:1px 5px; border:1px solid rgba(255,255,255,.4); }
-    .hb-icon  { font-size: 22px; margin-bottom: 2px; }
-    .hb-name  { font-size: 9px; font-weight: 700; }
-    .hb-cost  { font-size: 9px; color: #FFD54F; }
-    .hb-inc   { font-size: 9px; color: #69F0AE; }
-
-    /* ── TOAST ───────────────────────────── */
-    #toast {
-      position: fixed; top: 64px; left: 50%; transform: translateX(-50%);
-      padding: 9px 20px; border-radius: 9px; font-size: 13px; font-weight: 700;
-      color: #fff; z-index: 200; opacity: 0;
-      transition: opacity .3s; pointer-events: none; white-space: nowrap;
-    }
-
-    /* ── TOUCH CONTROLS (mobile) ─────────────── */
-    #joy-zone {
-      position: fixed; left: 16px; bottom: 24px; width: 120px; height: 120px;
-      border-radius: 50%; background: rgba(255,255,255,.12); border: 2px solid rgba(255,255,255,.3);
-      z-index: 110; touch-action: none; display: none;
-    }
-    #joy-knob {
-      position: absolute; left: 50%; top: 50%; width: 52px; height: 52px; margin: -26px;
-      border-radius: 50%; background: rgba(255,255,255,.55); border: 2px solid rgba(255,255,255,.8);
-    }
-    body.touch #joy-zone { display: block; }
-
-    #touch-actions { position: fixed; right: 16px; bottom: 24px; z-index: 120; display: none; gap: 10px; }
-    body.touch #touch-actions { display: flex; }
-    .touch-btn {
-      width: 56px; height: 56px; border-radius: 50%; border: 3px solid #fff;
-      font-size: 22px; display: flex; align-items: center; justify-content: center;
-      box-shadow: 0 6px 14px rgba(0,0,0,.35); cursor: pointer;
-    }
-    #btn-build-touch { background: linear-gradient(180deg,#FFCA28,#FF9800); }
-    #btn-demolish-touch { background: linear-gradient(180deg,#EF5350,#B71C1C); }
-    .touch-btn:active { transform: scale(.9); }
   </style>
 </head>
 <body>
   <canvas id="c"></canvas>
-
-  <div id="boot">
-    <div id="welcome">
-      <h1>🧊 CubeWorld</h1>
-      <p>You are <b>CUBEY</b>, the creator of Cube World. Watch him from behind as he explores — build the island into your tycoon empire.</p>
-      <div class="row">
-        <span class="key">W</span><span class="key">A</span><span class="key">S</span><span class="key">D</span><span class="key">move</span>
-      </div>
-      <div class="row">
-        <span class="key">Mouse</span><span class="key">look</span>
-        <span class="key">Click</span><span class="key">build</span>
-        <span class="key">Right-click</span><span class="key">demolish</span>
-      </div>
-      <p>Find the arrow and start building!</p>
-      <button id="btn-start">Let's go! 🚀</button>
-    </div>
-  </div>
-
-  <div id="resume-overlay">
-    <div class="box"><b>🧊 Paused</b><span>Click to look around again</span></div>
-  </div>
-
-  <div id="hud">
-    <div class="stat stat-pill">
-      <span class="stat-icon">💰</span>
-      <div>
-        <div class="stat-value" id="money">$50</div>
-        <div class="stat-label">Balance</div>
-      </div>
-    </div>
-    <div id="game-title"><h1>🧊 CubeWorld</h1><p>CUBEY's Island Tycoon</p></div>
-    <div class="stat stat-pill">
-      <span class="stat-icon">📈</span>
-      <div>
-        <div class="stat-value" id="income">$0/s</div>
-        <div class="stat-label">Income</div>
-      </div>
-    </div>
-  </div>
-
-  <div id="controls-hint">Mouse — look around<br>Left click — build&nbsp;&nbsp;·&nbsp;&nbsp;Right click — demolish<br>1-7 or scroll — choose building</div>
-
-  <div id="crosshair"></div>
-  <div id="build-tip"></div>
-
-  <div id="hotbar"></div>
-
-  <div id="toast"></div>
-
-  <div id="joy-zone"><div id="joy-knob"></div></div>
-  <div id="touch-actions">
-    <div class="touch-btn" id="btn-demolish-touch">🧹</div>
-    <div class="touch-btn" id="btn-build-touch">🔨</div>
-  </div>
 
   <script type="module">
   import * as THREE from './vendor/three/three.module.min.js';
@@ -216,46 +20,11 @@
   // ═══════════════════════════════════════════════
   //  CONFIG
   // ═══════════════════════════════════════════════
-  const CELL       = 2;      // world size of one voxel/grid cell
-  const ISLAND_R   = 10;      // island radius in cells (outer, noisy coastline)
-  const CORE_R     = 7;       // guaranteed-land radius in cells (no noise)
-  const BUILD_R    = 6;       // buildable zone radius in cells
-  const SPAWN_CELL = { gx: 0, gz: 7 };
-  const SPOT_CELL  = { gx: 0, gz: 0 };
-  const LAND_Y     = CELL;    // top surface height of land
-  const PLAYER_SPEED = 6.4;
-  const REACH      = 14;      // max build/demolish distance, measured along the ground
-  const MIN_REACH  = 1.7;     // can't build/demolish literally at your own feet
+  const CELL     = 2;   // world size of one voxel/grid cell
+  const ISLAND_R = 5;   // island radius in cells — small, just enough for this scene
+  const LAND_Y   = CELL;
 
-  // ═══════════════════════════════════════════════
-  //  BUILDING DEFINITIONS
-  // ═══════════════════════════════════════════════
-  const DEFS = {
-    table:  { name:'Table',  icon:'🪵', cost:20,    income:0.5, color:0x8D6E63, accent:0x5D4037, h:0.55, desc:'A little table to sell your first goods.' },
-    stall:  { name:'Stall',  icon:'🏪', cost:100,   income:3,   color:0xEFEBE9, accent:0xE53935, h:1.4,  desc:'A market stall for curious visitors.' },
-    hut:    { name:'Hut',    icon:'🏠', cost:400,   income:10,  color:0xFFCC80, accent:0x6D4C41, h:1.8,  desc:'A cozy cube-hut for your first settlers.' },
-    shop:   { name:'Shop',   icon:'🏬', cost:1500,  income:35,  color:0x4FC3F7, accent:0xFB8C00, h:2.4,  desc:'A proper shop brings steady trade.' },
-    tower:  { name:'Tower',  icon:'🗼', cost:6000,  income:120, color:0xBA68C8, accent:0x4A148C, h:5.5,  desc:'A tall cube-tower overlooking the sea.' },
-    castle: { name:'Castle', icon:'🏰', cost:20000, income:450, color:0x90A4AE, accent:0xB71C1C, h:4.2,  desc:'A blocky fortress fit for a creator.' },
-    portal: { name:'Portal', icon:'🌀', cost:60000, income:1500,color:0x26C6DA, accent:0x7C4DFF, h:3.4,  desc:'A glowing cube-portal to new worlds.' },
-  };
-  const DEF_KEYS = Object.keys(DEFS);
-
-  // ═══════════════════════════════════════════════
-  //  STATE
-  // ═══════════════════════════════════════════════
-  const state = {
-    money: 50, income: 0, earned: 0, seconds: 0, buildings: 0,
-    selected: DEF_KEYS[0],
-    grid: {},          // "gx,gz" -> mesh
-    landSet: new Set(),
-    buildableSet: new Set(),
-    tutorialDone: false,
-    touchMove: { x: 0, z: 0 },// touch joystick vector
-  };
-
-  const isTouch = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
-  if (isTouch) document.body.classList.add('touch');
+  function cellWorld(gx, gz) { return { x: gx * CELL, z: gz * CELL }; }
 
   // ═══════════════════════════════════════════════
   //  RENDERER / SCENE
@@ -271,16 +40,16 @@
 
   const scene = new THREE.Scene();
   const FOG_COLOR = 0xCFE9F7;
-  scene.fog = new THREE.Fog(FOG_COLOR, 22, 150);
+  scene.fog = new THREE.Fog(FOG_COLOR, 18, 90);
 
   // ── Sky gradient dome ──
   const sky = new THREE.Mesh(
-    new THREE.SphereGeometry(300, 20, 20),
+    new THREE.SphereGeometry(200, 20, 20),
     new THREE.ShaderMaterial({
       uniforms: {
         topColor:    { value: new THREE.Color(0x4E9BD6) },
         bottomColor: { value: new THREE.Color(FOG_COLOR) },
-        offset:      { value: 10 },
+        offset:      { value: 8 },
         exponent:    { value: 0.7 },
       },
       vertexShader: `
@@ -307,34 +76,42 @@
   scene.add(sky);
 
   // ═══════════════════════════════════════════════
-  //  CAMERA — GTA-style chase cam, orbiting behind CUBEY
+  //  CAMERA — static isometric establishing shot
   // ═══════════════════════════════════════════════
-  const camera = new THREE.PerspectiveCamera(65, innerWidth / innerHeight, 0.05, 400);
+  const viewSize = 9.5;
+  const isoDir = new THREE.Vector3(1, 1, 1).normalize();
+  const CAM_DIST = 30;
+  const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 300);
 
-  let yaw = 0;   // orbit angle around CUBEY; yaw 0 faces -Z, toward the build spot from spawn
-  let pitch = -0.28; // orbit tilt: negative looks down at CUBEY from above, positive looks up from below
-  const PITCH_LIMIT = Math.PI / 2 - 0.15;
-  const CAM_DISTANCE = 6.5;   // how far the camera orbits behind CUBEY
-  const LOOK_HEIGHT  = 1.1;   // camera orbits/aims around a point near CUBEY's head, not his feet
+  function updateCameraFrustum() {
+    const aspect = innerWidth / innerHeight;
+    camera.left   = -viewSize * aspect;
+    camera.right  =  viewSize * aspect;
+    camera.top    =  viewSize;
+    camera.bottom = -viewSize;
+    camera.updateProjectionMatrix();
+  }
+  updateCameraFrustum();
+  camera.position.copy(isoDir).multiplyScalar(CAM_DIST);
+  camera.lookAt(0, 1, 0);
 
   // ═══════════════════════════════════════════════
   //  LIGHTS
   // ═══════════════════════════════════════════════
   scene.add(new THREE.HemisphereLight(0xBFE3F5, 0x6b8f5a, 0.65));
-  scene.add(new THREE.AmbientLight(0xffffff, 0.22));
+  scene.add(new THREE.AmbientLight(0xffffff, 0.25));
 
-  const sun = new THREE.DirectionalLight(0xFFF6DF, 1.35);
-  sun.position.set(30, 45, 20);
+  const sun = new THREE.DirectionalLight(0xFFF6DF, 1.3);
+  sun.position.set(14, 20, 10);
   sun.castShadow = true;
-  sun.shadow.mapSize.set(2048, 2048);
-  sun.shadow.bias = -0.0006;
-  Object.assign(sun.shadow.camera, { near: 1, far: 150, left: -35, right: 35, top: 35, bottom: -35 });
+  sun.shadow.mapSize.set(1024, 1024);
+  Object.assign(sun.shadow.camera, { near: 1, far: 60, left: -15, right: 15, top: 15, bottom: -15 });
   scene.add(sun);
 
   // ═══════════════════════════════════════════════
   //  OCEAN — flat-shaded low-poly waves, depth-tinted
   // ═══════════════════════════════════════════════
-  const oceanGeo = new THREE.PlaneGeometry(500, 500, 60, 60);
+  const oceanGeo = new THREE.PlaneGeometry(300, 300, 50, 50);
   oceanGeo.rotateX(-Math.PI / 2);
   const oceanBase = oceanGeo.attributes.position.array.slice();
 
@@ -343,7 +120,7 @@
   for (let i = 0; i < oceanGeo.attributes.position.count; i++) {
     const x = oceanBase[i * 3], z = oceanBase[i * 3 + 2];
     const d = Math.hypot(x, z);
-    const tt = THREE.MathUtils.clamp((d - 15) / 70, 0, 1);
+    const tt = THREE.MathUtils.clamp((d - 10) / 40, 0, 1);
     const c = shallowC.clone().lerp(deepC, tt);
     oceanColors[i * 3] = c.r; oceanColors[i * 3 + 1] = c.g; oceanColors[i * 3 + 2] = c.b;
   }
@@ -367,31 +144,20 @@
   }
 
   // ═══════════════════════════════════════════════
-  //  ISLAND — voxel cubes (grass core / sand coast)
+  //  ISLAND — small voxel island (grass core / sand coast)
   // ═══════════════════════════════════════════════
   const cubeGeo = new THREE.BoxGeometry(CELL * 0.98, CELL, CELL * 0.98);
   const grassMat = new THREE.MeshStandardMaterial({ color: 0xffffff, flatShading: true, roughness: 0.9 });
   const sandMat  = new THREE.MeshStandardMaterial({ color: 0xffffff, flatShading: true, roughness: 0.9 });
-
-  function cellWorld(gx, gz) { return { x: gx * CELL, z: gz * CELL }; }
 
   const landCells = [];
   for (let gx = -ISLAND_R; gx <= ISLAND_R; gx++) {
     for (let gz = -ISLAND_R; gz <= ISLAND_R; gz++) {
       const dist = Math.sqrt(gx * gx + gz * gz);
       if (dist > ISLAND_R) continue;
-      let land;
-      if (dist <= CORE_R) land = true;
-      else land = (dist + (Math.random() - 0.5) * 2.2) <= ISLAND_R;
-      if (!land) continue;
-      const buildable = dist <= BUILD_R;
-      landCells.push({ gx, gz, dist, buildable, sand: dist > BUILD_R + 1.5 });
-      const key = `${gx},${gz}`;
-      state.landSet.add(key);
-      if (buildable) state.buildableSet.add(key);
+      landCells.push({ gx, gz, sand: dist > ISLAND_R - 1.4 });
     }
   }
-
   const grassCells = landCells.filter(c => !c.sand);
   const sandCells  = landCells.filter(c => c.sand);
 
@@ -405,7 +171,7 @@
       const { x, z } = cellWorld(cell.gx, cell.gz);
       m.setPosition(x, LAND_Y / 2, z);
       mesh.setMatrixAt(i, m);
-      c.copy(baseColor).multiplyScalar(0.86 + Math.random() * 0.28);
+      c.copy(baseColor).multiplyScalar(0.88 + Math.random() * 0.24);
       mesh.setColorAt(i, c);
     });
     mesh.instanceMatrix.needsUpdate = true;
@@ -417,697 +183,215 @@
   buildVoxelMesh(sandCells, sandMat, new THREE.Color(0xE8D18C));
 
   // ═══════════════════════════════════════════════
-  //  DECORATION — trees & rocks on non-buildable land
+  //  COCONUT TREE — the island's only tree
   // ═══════════════════════════════════════════════
-  function makeTree() {
-    const g = new THREE.Group();
-    const trunk = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.14, 0.2, 0.8, 6),
-      new THREE.MeshStandardMaterial({ color: 0x6D4C41, flatShading: true })
-    );
-    trunk.position.y = 0.4;
-    trunk.castShadow = true;
-    const leaves = new THREE.Mesh(
-      new THREE.ConeGeometry(0.75, 1.5, 7),
-      new THREE.MeshStandardMaterial({ color: 0x2E7D32 + (Math.random() * 0x051005 | 0), flatShading: true })
-    );
-    leaves.position.y = 1.35;
-    leaves.castShadow = true;
-    g.add(trunk, leaves);
-    g.scale.setScalar(0.8 + Math.random() * 0.5);
-    g.rotation.y = Math.random() * Math.PI * 2;
-    return g;
-  }
-  function makeRock() {
-    const rock = new THREE.Mesh(
-      new THREE.DodecahedronGeometry(0.35 + Math.random() * 0.25, 0),
-      new THREE.MeshStandardMaterial({ color: 0x9E9E9E, flatShading: true, roughness: 0.95 })
-    );
-    rock.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, 0);
-    rock.castShadow = true;
-    return rock;
-  }
+  function makeCoconutTree() {
+    const group = new THREE.Group();
+    const trunkMat = new THREE.MeshStandardMaterial({ color: 0xA1795A, flatShading: true, roughness: 0.9 });
 
-  const decorGroup = new THREE.Group();
-  scene.add(decorGroup);
-  landCells.forEach(c => {
-    if (c.buildable) return;
-    if (Math.abs(c.gx - SPAWN_CELL.gx) <= 1 && Math.abs(c.gz - SPAWN_CELL.gz) <= 1) return;
-    if (Math.random() > (c.sand ? 0.12 : 0.32)) return;
-    const { x, z } = cellWorld(c.gx, c.gz);
-    const deco = (c.sand || Math.random() < 0.25) ? makeRock() : makeTree();
-    deco.position.set(x + (Math.random() - 0.5) * 0.6, LAND_Y, z + (Math.random() - 0.5) * 0.6);
-    decorGroup.add(deco);
-  });
-
-  // A few hazy silhouette islets far out on the ocean, for horizon depth
-  const farGroup = new THREE.Group();
-  scene.add(farGroup);
-  for (let i = 0; i < 6; i++) {
-    const a = Math.random() * Math.PI * 2;
-    const r = 95 + Math.random() * 45;
-    const s = 3 + Math.random() * 4;
-    const islet = new THREE.Mesh(
-      new THREE.ConeGeometry(s, s * 0.7, 6),
-      new THREE.MeshBasicMaterial({ color: 0x9FC9DE, fog: true })
-    );
-    islet.position.set(Math.cos(a) * r, s * 0.2, Math.sin(a) * r);
-    farGroup.add(islet);
-  }
-
-  // ═══════════════════════════════════════════════
-  //  BUILD SPOT MARKER — glow pad + floating arrow + sign
-  // ═══════════════════════════════════════════════
-  const spotWorld = cellWorld(SPOT_CELL.gx, SPOT_CELL.gz);
-
-  const glowPad = new THREE.Mesh(
-    new THREE.CylinderGeometry(1.3, 1.3, 0.06, 20),
-    new THREE.MeshBasicMaterial({ color: 0xFFD54F, transparent: true, opacity: 0.55 })
-  );
-  glowPad.position.set(spotWorld.x, LAND_Y + 0.03, spotWorld.z);
-  scene.add(glowPad);
-
-  const markerGroup = new THREE.Group();
-  markerGroup.position.set(spotWorld.x, LAND_Y, spotWorld.z);
-  scene.add(markerGroup);
-
-  const arrowGroup = new THREE.Group();
-  const arrowHead = new THREE.Mesh(
-    new THREE.ConeGeometry(0.55, 1.1, 6),
-    new THREE.MeshStandardMaterial({ color: 0xFF7043, flatShading: true })
-  );
-  arrowHead.rotation.x = Math.PI; // point downward
-  const arrowShaft = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.22, 0.22, 1.4, 6),
-    new THREE.MeshStandardMaterial({ color: 0xFF7043, flatShading: true })
-  );
-  arrowShaft.position.y = 1.05;
-  arrowHead.castShadow = true; arrowShaft.castShadow = true;
-  arrowGroup.add(arrowHead, arrowShaft);
-  arrowGroup.position.y = 3.4;
-  markerGroup.add(arrowGroup);
-
-  function makeTextSprite(text, opts = {}) {
-    const { fontsize = 46, color = '#ffffff', bg = 'rgba(20,20,20,.75)' } = opts;
-    const cvs = document.createElement('canvas');
-    const ctx = cvs.getContext('2d');
-    ctx.font = `800 ${fontsize}px 'Segoe UI', Arial, sans-serif`;
-    const w = ctx.measureText(text).width + 48;
-    const h = fontsize + 40;
-    cvs.width = w; cvs.height = h;
-    ctx.font = `800 ${fontsize}px 'Segoe UI', Arial, sans-serif`;
-    ctx.fillStyle = bg;
-    const r = 18;
-    ctx.beginPath();
-    ctx.moveTo(r, 0); ctx.arcTo(w, 0, w, h, r); ctx.arcTo(w, h, 0, h, r);
-    ctx.arcTo(0, h, 0, 0, r); ctx.arcTo(0, 0, w, 0, r); ctx.closePath(); ctx.fill();
-    ctx.fillStyle = color;
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText(text, w / 2, h / 2 + 3);
-    const tex = new THREE.CanvasTexture(cvs);
-    const mat = new THREE.SpriteMaterial({ map: tex, depthTest: false, fog: false });
-    const sprite = new THREE.Sprite(mat);
-    const s = 0.012;
-    sprite.scale.set(w * s, h * s, 1);
-    return sprite;
-  }
-
-  const signSprite = makeTextSprite('Build Building!', { color: '#FFD54F' });
-  signSprite.position.y = 5.3;
-  markerGroup.add(signSprite);
-
-  // ═══════════════════════════════════════════════
-  //  CUBEY — the player, fully visible in third person
-  // ═══════════════════════════════════════════════
-  const player = new THREE.Group();
-  const body = new THREE.Mesh(
-    new THREE.BoxGeometry(1, 1, 1),
-    new THREE.MeshStandardMaterial({ color: 0xFFB74D, flatShading: true, roughness: 0.7 })
-  );
-  body.position.y = 0.5;
-  body.castShadow = true;
-  player.add(body);
-
-  const eyeMat = new THREE.MeshStandardMaterial({ color: 0xFFFFFF });
-  const pupilMat = new THREE.MeshStandardMaterial({ color: 0x2d2d2d });
-  [-0.22, 0.22].forEach(ex => {
-    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.13, 10, 10), eyeMat);
-    eye.position.set(ex, 0.62, 0.49);
-    const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.06, 8, 8), pupilMat);
-    pupil.position.set(ex, 0.62, 0.58);
-    player.add(eye, pupil);
-  });
-
-  const footMat = new THREE.MeshStandardMaterial({ color: 0x6D4C41, flatShading: true });
-  const footL = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.22, 0.36), footMat);
-  const footR = footL.clone();
-  footL.position.set(-0.25, 0.11, 0);
-  footR.position.set(0.25, 0.11, 0);
-  footL.castShadow = true; footR.castShadow = true;
-  player.add(footL, footR);
-
-  player.position.set(SPAWN_CELL.gx * CELL, LAND_Y, SPAWN_CELL.gz * CELL);
-  scene.add(player);
-
-  // Soft contact shadow blob so CUBEY reads as grounded even under flat directional light
-  const shadowBlob = new THREE.Mesh(
-    new THREE.CircleGeometry(0.55, 16),
-    new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.28, depthWrite: false })
-  );
-  shadowBlob.rotation.x = -Math.PI / 2;
-  scene.add(shadowBlob);
-
-  let walkCycle = 0;
-  let moving = false;
-  let facing = 0; // smoothed body-facing angle; only turns while actually moving, independent of camera orbit
-
-  // ═══════════════════════════════════════════════
-  //  BUILDINGS
-  // ═══════════════════════════════════════════════
-  function makeBuildingMesh(type) {
-    const d = DEFS[type];
-    const grp = new THREE.Group();
-    const bw = CELL * 0.78;
-    const mat = new THREE.MeshStandardMaterial({ color: d.color, flatShading: true, roughness: 0.75 });
-    const accentMat = new THREE.MeshStandardMaterial({ color: d.accent, flatShading: true, roughness: 0.75 });
-
-    if (type === 'table') {
-      const top = new THREE.Mesh(new THREE.BoxGeometry(bw, 0.12, bw), mat);
-      top.position.y = 0.5; top.castShadow = true;
-      grp.add(top);
-      [[-1,-1],[1,-1],[-1,1],[1,1]].forEach(([sx, sz]) => {
-        const leg = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.5, 0.1), accentMat);
-        leg.position.set(sx * bw * 0.38, 0.25, sz * bw * 0.38);
-        leg.castShadow = true;
-        grp.add(leg);
-      });
-    } else if (type === 'stall') {
-      const base = new THREE.Mesh(new THREE.BoxGeometry(bw, 0.9, bw), mat);
-      base.position.y = 0.45; base.castShadow = true; base.receiveShadow = true;
-      const roof = new THREE.Mesh(new THREE.ConeGeometry(bw * 0.85, 0.8, 4), accentMat);
-      roof.position.y = 1.3; roof.rotation.y = Math.PI / 4; roof.castShadow = true;
-      grp.add(base, roof);
-    } else if (type === 'hut') {
-      const bodyM = new THREE.Mesh(new THREE.BoxGeometry(bw, d.h, bw), mat);
-      bodyM.position.y = d.h / 2; bodyM.castShadow = true; bodyM.receiveShadow = true;
-      const roof = new THREE.Mesh(new THREE.ConeGeometry(bw * 0.8, 1, 4), accentMat);
-      roof.position.y = d.h + 0.5; roof.rotation.y = Math.PI / 4; roof.castShadow = true;
-      grp.add(bodyM, roof);
-    } else if (type === 'shop') {
-      const bodyM = new THREE.Mesh(new THREE.BoxGeometry(bw, d.h, bw), mat);
-      bodyM.position.y = d.h / 2; bodyM.castShadow = true; bodyM.receiveShadow = true;
-      const roof = new THREE.Mesh(new THREE.BoxGeometry(bw + 0.14, 0.18, bw + 0.14), accentMat);
-      roof.position.y = d.h + 0.09; roof.castShadow = true;
-      const awning = new THREE.Mesh(new THREE.BoxGeometry(bw + 0.2, 0.1, 0.4), accentMat);
-      awning.position.set(0, d.h * 0.6, bw / 2 + 0.15); awning.castShadow = true;
-      grp.add(bodyM, roof, awning);
-    } else if (type === 'tower') {
-      const bodyM = new THREE.Mesh(new THREE.BoxGeometry(bw * 0.75, d.h, bw * 0.75), mat);
-      bodyM.position.y = d.h / 2; bodyM.castShadow = true; bodyM.receiveShadow = true;
-      const roofCone = new THREE.Mesh(new THREE.ConeGeometry(bw * 0.55, 1.4, 8), accentMat);
-      roofCone.position.y = d.h + 0.7; roofCone.castShadow = true;
-      grp.add(bodyM, roofCone);
-    } else if (type === 'castle') {
-      const bodyM = new THREE.Mesh(new THREE.BoxGeometry(bw, d.h, bw), mat);
-      bodyM.position.y = d.h / 2; bodyM.castShadow = true; bodyM.receiveShadow = true;
-      grp.add(bodyM);
-      [[-1,-1],[1,-1],[-1,1],[1,1]].forEach(([sx, sz]) => {
-        const turret = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.28, d.h + 0.6, 8), accentMat);
-        turret.position.set(sx * bw * 0.42, (d.h + 0.6) / 2, sz * bw * 0.42);
-        turret.castShadow = true;
-        grp.add(turret);
-      });
-    } else if (type === 'portal') {
-      const ring = new THREE.Mesh(new THREE.TorusGeometry(bw * 0.5, 0.18, 10, 20), accentMat);
-      ring.position.y = d.h * 0.55;
-      const core = new THREE.Mesh(
-        new THREE.CircleGeometry(bw * 0.42, 20),
-        new THREE.MeshBasicMaterial({ color: d.color, transparent: true, opacity: 0.85 })
-      );
-      core.position.y = d.h * 0.55;
-      ring.castShadow = true;
-      grp.add(ring, core);
-      grp.userData.spin = core;
-    } else {
-      const bodyM = new THREE.Mesh(new THREE.BoxGeometry(bw, d.h, bw), mat);
-      bodyM.position.y = d.h / 2; bodyM.castShadow = true; bodyM.receiveShadow = true;
-      grp.add(bodyM);
+    // A gently curving trunk, built from stacked segments that lean a little more each step.
+    let parent = group;
+    let lean = 0;
+    const segH = 0.62, segs = 5;
+    for (let i = 0; i < segs; i++) {
+      const r0 = 0.16 - i * 0.017, r1 = 0.19 - i * 0.017;
+      const seg = new THREE.Mesh(new THREE.CylinderGeometry(r0, r1, segH, 6), trunkMat);
+      seg.position.y = segH / 2;
+      seg.castShadow = true;
+      const holder = new THREE.Group();
+      holder.rotation.z = lean;
+      holder.add(seg);
+      parent.add(holder);
+      const top = new THREE.Group();
+      top.position.y = segH;
+      holder.add(top);
+      parent = top;
+      lean += 0.1;
     }
 
-    grp.scale.y = 0.001;
-    return grp;
-  }
-
-  const spinningBuildings = [];
-
-  function popIn(grp) {
-    const t0 = performance.now();
-    (function tick() {
-      const t = Math.min((performance.now() - t0) / 320, 1);
-      grp.scale.y = 1 - Math.pow(1 - t, 3);
-      if (t < 1) requestAnimationFrame(tick);
-    })();
-  }
-  function popOut(grp, cb) {
-    const t0 = performance.now();
-    (function tick() {
-      const t = Math.min((performance.now() - t0) / 200, 1);
-      grp.scale.y = 1 - t;
-      if (t < 1) requestAnimationFrame(tick); else cb();
-    })();
-  }
-
-  function placeBuilding(gx, gz) {
-    const key = `${gx},${gz}`;
-    if (!state.buildableSet.has(key)) { toast('You can only build here!', false); return; }
-    if (state.grid[key]) { toast('Already occupied!', false); return; }
-    const d = DEFS[state.selected];
-    if (!d) return;
-    if (state.money < d.cost) { toast('Not enough money!', false); return; }
-
-    state.money -= d.cost;
-    state.income += d.income;
-    state.buildings += 1;
-
-    const grp = makeBuildingMesh(state.selected);
-    const { x, z } = cellWorld(gx, gz);
-    grp.position.set(x, LAND_Y, z);
-    grp.userData.type = state.selected;
-    scene.add(grp);
-    popIn(grp);
-    if (grp.userData.spin) spinningBuildings.push(grp.userData.spin);
-    state.grid[key] = grp;
-
-    // If CUBEY is standing right where the building just went up, step back
-    // outside its footprint so the camera never ends up clipped inside it.
-    const dx0 = player.position.x - x, dz0 = player.position.z - z;
-    const distToCenter = Math.hypot(dx0, dz0);
-    const clearance = CELL * 0.75;
-    if (distToCenter < clearance) {
-      const away = distToCenter > 0.01 ? { x: dx0 / distToCenter, z: dz0 / distToCenter } : { x: 0, z: 1 };
-      const pushedX = x + away.x * clearance, pushedZ = z + away.z * clearance;
-      if (isLand(pushedX, pushedZ)) { player.position.x = pushedX; player.position.z = pushedZ; }
+    // Fronds fan out from the crown, drooping outward and down.
+    const frondMat = new THREE.MeshStandardMaterial({ color: 0x2E8B3D, flatShading: true, roughness: 0.85 });
+    const frondGeo = new THREE.ConeGeometry(0.26, 1.7, 4);
+    frondGeo.translate(0, 0.85, 0); // base at origin, tip extends along +Y
+    const frondCount = 7;
+    for (let i = 0; i < frondCount; i++) {
+      const a = (i / frondCount) * Math.PI * 2;
+      const holder = new THREE.Group();
+      holder.rotation.y = a;
+      const frond = new THREE.Mesh(frondGeo, frondMat);
+      frond.scale.x = 0.34; // flatten into a blade
+      frond.rotation.x = 1.05; // droop outward and down from the crown
+      frond.castShadow = true;
+      holder.add(frond);
+      parent.add(holder);
     }
 
-    if (!state.tutorialDone) {
-      state.tutorialDone = true;
-      markerGroup.visible = false;
-      glowPad.visible = false;
-      toast('First building placed! Keep growing your island.', true);
-    } else {
-      toast(`Built ${d.name}! +${fmt(d.income)}/s`, true);
+    // A few coconuts clustered under the crown.
+    const nutMat = new THREE.MeshStandardMaterial({ color: 0x6D4C41, flatShading: true, roughness: 0.85 });
+    for (let i = 0; i < 3; i++) {
+      const a = i * 2.15;
+      const nut = new THREE.Mesh(new THREE.SphereGeometry(0.13, 8, 8), nutMat);
+      nut.position.set(Math.cos(a) * 0.16, -0.05, Math.sin(a) * 0.16);
+      nut.castShadow = true;
+      parent.add(nut);
     }
-    refreshUI();
-  }
 
-  function demolishAt(gx, gz) {
-    const key = `${gx},${gz}`;
-    const grp = state.grid[key];
-    if (!grp) return;
-    const d = DEFS[grp.userData.type];
-    const ref = Math.floor(d.cost * 0.5);
-    state.money += ref;
-    state.income -= d.income;
-    state.buildings -= 1;
-    delete state.grid[key];
-    popOut(grp, () => scene.remove(grp));
-    refreshUI();
-    toast(`Demolished. Refunded ${fmt(ref)}`, true);
+    return group;
   }
 
   // ═══════════════════════════════════════════════
-  //  CROSSHAIR TARGETING
+  //  WOODEN SHOP — small, windowless
   // ═══════════════════════════════════════════════
-  const rc = new THREE.Raycaster();
-  const centerNDC = new THREE.Vector2(0, 0);
-  const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -LAND_Y);
-  const hitPoint = new THREE.Vector3();
+  function makeWoodenShop() {
+    const group = new THREE.Group();
+    const wallMat = new THREE.MeshStandardMaterial({ color: 0xC08A50, flatShading: true, roughness: 0.85 });
+    const trimMat = new THREE.MeshStandardMaterial({ color: 0x7B4F2B, flatShading: true, roughness: 0.85 });
+    const roofMat = new THREE.MeshStandardMaterial({ color: 0xE0B84B, flatShading: true, roughness: 0.9 });
+    const doorMat = new THREE.MeshStandardMaterial({ color: 0x4E3320, flatShading: true, roughness: 0.85 });
 
-  const hoverMesh = new THREE.Mesh(
-    new THREE.PlaneGeometry(CELL - 0.1, CELL - 0.1),
-    new THREE.MeshBasicMaterial({ color: 0xFFD54F, transparent: true, opacity: 0.5, depthWrite: false, fog: false })
-  );
-  hoverMesh.rotation.x = -Math.PI / 2;
-  hoverMesh.position.y = LAND_Y + 0.02;
-  hoverMesh.visible = false;
-  scene.add(hoverMesh);
+    const w = 1.6, h = 1.3, d = 1.4;
+    const body = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), wallMat);
+    body.position.y = h / 2;
+    body.castShadow = true; body.receiveShadow = true;
+    group.add(body);
 
-  const buildTip = document.getElementById('build-tip');
-  let currentCell = null;
-  let currentOccupied = false;
-
-  function updateCrosshairTarget() {
-    rc.setFromCamera(centerNDC, camera);
-    if (!rc.ray.intersectPlane(groundPlane, hitPoint)) {
-      currentCell = null;
-      hoverMesh.visible = false;
-      buildTip.classList.remove('show');
-      return;
-    }
-    // Measure reach along the ground, not camera-to-point, so pitch doesn't skew the range.
-    const flatDist = Math.hypot(hitPoint.x - player.position.x, hitPoint.z - player.position.z);
-    if (flatDist > REACH || flatDist < MIN_REACH) {
-      currentCell = null;
-      hoverMesh.visible = false;
-      buildTip.classList.remove('show');
-      return;
-    }
-    const gx = Math.round(hitPoint.x / CELL), gz = Math.round(hitPoint.z / CELL);
-    const key = `${gx},${gz}`;
-    if (!state.buildableSet.has(key)) {
-      currentCell = null;
-      hoverMesh.visible = false;
-      buildTip.classList.remove('show');
-      return;
-    }
-    currentCell = { gx, gz, key };
-    currentOccupied = !!state.grid[key];
-    const { x, z } = cellWorld(gx, gz);
-    hoverMesh.position.set(x, LAND_Y + 0.02, z);
-    hoverMesh.visible = true;
-
-    if (currentOccupied) {
-      hoverMesh.material.color.setHex(0xFF7043);
-      const d = DEFS[state.grid[key].userData.type];
-      buildTip.innerHTML = `<span class="k">Right Click</span> Demolish ${d.icon} ${d.name} <span class="refund">+${fmt(Math.floor(d.cost * 0.5))}</span>`;
-      buildTip.classList.add('show');
-    } else {
-      const d = DEFS[state.selected];
-      const afford = state.money >= d.cost;
-      hoverMesh.material.color.setHex(afford ? 0xFFD54F : 0xFF5252);
-      buildTip.innerHTML = `<span class="k">Click</span> Build ${d.icon} ${d.name} <span class="${afford ? 'ok' : 'bad'}">${fmt(d.cost)}</span>`;
-      buildTip.classList.add('show');
-    }
-  }
-
-  function attemptPlace() {
-    if (!currentCell || currentOccupied) return;
-    placeBuilding(currentCell.gx, currentCell.gz);
-  }
-  function attemptDemolish() {
-    if (!currentCell || !currentOccupied) return;
-    demolishAt(currentCell.gx, currentCell.gz);
-  }
-
-  // ═══════════════════════════════════════════════
-  //  POINTER LOCK — mouse-look
-  // ═══════════════════════════════════════════════
-  const MOUSE_SENS = 0.0022;
-  const resumeOverlay = document.getElementById('resume-overlay');
-  const crosshair = document.getElementById('crosshair');
-  let bootDismissed = false;
-  let locked = isTouch; // touch devices skip pointer lock entirely
-
-  function onMouseMove(e) {
-    if (!locked || isTouch) return;
-    yaw   -= e.movementX * MOUSE_SENS;
-    pitch -= e.movementY * MOUSE_SENS;
-    pitch = THREE.MathUtils.clamp(pitch, -PITCH_LIMIT, PITCH_LIMIT);
-  }
-  document.addEventListener('mousemove', onMouseMove);
-
-  if (!isTouch) {
-    document.addEventListener('pointerlockchange', () => {
-      locked = document.pointerLockElement === canvas;
-      crosshair.style.display = locked ? 'block' : 'none';
-      if (bootDismissed) resumeOverlay.classList.toggle('show', !locked);
-      if (!locked) buildTip.classList.remove('show');
+    // Corner posts for a plank-built look — no window cutouts anywhere on the walls.
+    [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([sx, sz]) => {
+      const post = new THREE.Mesh(new THREE.BoxGeometry(0.12, h + 0.15, 0.12), trimMat);
+      post.position.set(sx * w / 2, (h + 0.15) / 2, sz * d / 2);
+      post.castShadow = true;
+      group.add(post);
     });
-    resumeOverlay.addEventListener('click', () => canvas.requestPointerLock());
-    canvas.addEventListener('mousedown', e => {
-      if (document.pointerLockElement !== canvas) { canvas.requestPointerLock(); return; }
-      if (e.button === 0) attemptPlace();
-      else if (e.button === 2) attemptDemolish();
+
+    // Pitched roof: two sloped panels meeting at a ridge.
+    const roofPanelGeo = new THREE.BoxGeometry(w + 0.32, 0.1, d * 0.62);
+    const roofL = new THREE.Mesh(roofPanelGeo, roofMat);
+    roofL.position.set(0, h + 0.34, d * 0.16);
+    roofL.rotation.x = 0.5;
+    roofL.castShadow = true;
+    const roofR = new THREE.Mesh(roofPanelGeo, roofMat);
+    roofR.position.set(0, h + 0.34, -d * 0.16);
+    roofR.rotation.x = -0.5;
+    roofR.castShadow = true;
+    group.add(roofL, roofR);
+    const ridge = new THREE.Mesh(new THREE.BoxGeometry(w + 0.34, 0.14, 0.16), trimMat);
+    ridge.position.set(0, h + 0.6, 0);
+    group.add(ridge);
+
+    // Door on the front face.
+    const door = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.95, 0.05), doorMat);
+    door.position.set(0, 0.475, d / 2 + 0.03);
+    group.add(door);
+
+    // Small awning over the doorway, reading as a shop counter rather than a window.
+    const awning = new THREE.Mesh(new THREE.BoxGeometry(0.95, 0.08, 0.5), trimMat);
+    awning.position.set(0, h * 0.72, d / 2 + 0.28);
+    awning.rotation.x = -0.15;
+    awning.castShadow = true;
+    group.add(awning);
+    [-0.4, 0.4].forEach(sx => {
+      const strut = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.5, 6), trimMat);
+      strut.position.set(sx, h * 0.55, d / 2 + 0.48);
+      strut.rotation.x = 0.15;
+      group.add(strut);
     });
-    canvas.addEventListener('contextmenu', e => e.preventDefault());
+
+    // Small hanging sign board.
+    const sign = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.28, 0.04), trimMat);
+    sign.position.set(0, h + 0.02, d / 2 + 0.06);
+    group.add(sign);
+
+    return group;
   }
 
   // ═══════════════════════════════════════════════
-  //  INPUT — keyboard, touch joystick + look, hotbar select
+  //  CUBEY — a friendly cube, waving hello
   // ═══════════════════════════════════════════════
-  const keys = new Set();
-  window.addEventListener('keydown', e => {
-    keys.add(e.key.toLowerCase());
-    if (e.key.toLowerCase() === 'e') attemptPlace();
-    if (e.key.toLowerCase() === 'q') attemptDemolish();
-    const n = parseInt(e.key, 10);
-    if (n >= 1 && n <= DEF_KEYS.length) selectSlot(n - 1);
-  });
-  window.addEventListener('keyup', e => keys.delete(e.key.toLowerCase()));
+  function makeWavingCubey() {
+    const group = new THREE.Group();
+    const cubeyMat = new THREE.MeshStandardMaterial({ color: 0xFFB74D, flatShading: true, roughness: 0.7 });
 
-  function readKeyboardVector() {
-    let x = 0, z = 0;
-    if (keys.has('w') || keys.has('arrowup'))    z += 1;
-    if (keys.has('s') || keys.has('arrowdown'))  z -= 1;
-    if (keys.has('a') || keys.has('arrowleft'))  x -= 1;
-    if (keys.has('d') || keys.has('arrowright')) x += 1;
-    return { x, z };
-  }
+    const body = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), cubeyMat);
+    body.position.y = 0.5;
+    body.castShadow = true;
+    group.add(body);
 
-  window.addEventListener('wheel', e => {
-    if (document.activeElement && document.activeElement.tagName === 'INPUT') return;
-    const idx = DEF_KEYS.indexOf(state.selected);
-    const next = (idx + Math.sign(e.deltaY) + DEF_KEYS.length) % DEF_KEYS.length;
-    selectSlot(next);
-  }, { passive: true });
-
-  // Touch joystick (movement)
-  const joyZone = document.getElementById('joy-zone');
-  const joyKnob = document.getElementById('joy-knob');
-  let joyActive = false, joyId = null, joyCenter = { x: 0, y: 0 };
-  const JOY_RADIUS = 50;
-
-  function joyStart(e) {
-    const t = e.changedTouches ? e.changedTouches[0] : e;
-    joyId = t.identifier ?? 'mouse';
-    const r = joyZone.getBoundingClientRect();
-    joyCenter = { x: r.left + r.width / 2, y: r.top + r.height / 2 };
-    joyActive = true;
-    joyMove(e);
-  }
-  function joyMove(e) {
-    if (!joyActive) return;
-    const list = e.changedTouches || [e];
-    let t = null;
-    for (const cand of list) { if ((cand.identifier ?? 'mouse') === joyId) t = cand; }
-    if (!t) return;
-    let dx = t.clientX - joyCenter.x, dy = t.clientY - joyCenter.y;
-    const len = Math.hypot(dx, dy) || 1;
-    const clamped = Math.min(len, JOY_RADIUS);
-    dx = (dx / len) * clamped; dy = (dy / len) * clamped;
-    joyKnob.style.left = `calc(50% + ${dx}px)`;
-    joyKnob.style.top  = `calc(50% + ${dy}px)`;
-    state.touchMove.x = dx / JOY_RADIUS;
-    state.touchMove.z = -dy / JOY_RADIUS;
-  }
-  function joyEnd() {
-    joyActive = false; joyId = null;
-    state.touchMove.x = 0; state.touchMove.z = 0;
-    joyKnob.style.left = '50%'; joyKnob.style.top = '50%';
-  }
-  joyZone.addEventListener('touchstart', joyStart, { passive: true });
-  joyZone.addEventListener('touchmove', joyMove, { passive: true });
-  joyZone.addEventListener('touchend', joyEnd);
-  joyZone.addEventListener('touchcancel', joyEnd);
-
-  // Touch look: drag anywhere on the canvas (outside the joystick) to rotate view
-  const TOUCH_SENS = 0.0055;
-  let lookTouchId = null, lookLast = { x: 0, y: 0 };
-  canvas.addEventListener('touchstart', e => {
-    for (const t of e.changedTouches) {
-      if (lookTouchId === null) { lookTouchId = t.identifier; lookLast = { x: t.clientX, y: t.clientY }; }
-    }
-  }, { passive: true });
-  canvas.addEventListener('touchmove', e => {
-    for (const t of e.changedTouches) {
-      if (t.identifier === lookTouchId) {
-        const dx = t.clientX - lookLast.x, dy = t.clientY - lookLast.y;
-        yaw -= dx * TOUCH_SENS;
-        pitch = THREE.MathUtils.clamp(pitch - dy * TOUCH_SENS, -PITCH_LIMIT, PITCH_LIMIT);
-        lookLast = { x: t.clientX, y: t.clientY };
-      }
-    }
-  }, { passive: true });
-  function lookTouchEnd(e) {
-    for (const t of e.changedTouches) if (t.identifier === lookTouchId) lookTouchId = null;
-  }
-  canvas.addEventListener('touchend', lookTouchEnd);
-  canvas.addEventListener('touchcancel', lookTouchEnd);
-
-  document.getElementById('btn-build-touch').addEventListener('click', attemptPlace);
-  document.getElementById('btn-demolish-touch').addEventListener('click', attemptDemolish);
-
-  // ═══════════════════════════════════════════════
-  //  HOTBAR UI
-  // ═══════════════════════════════════════════════
-  const hotbar = document.getElementById('hotbar');
-  const slotEls = {};
-  DEF_KEYS.forEach((key, i) => {
-    const d = DEFS[key];
-    const slot = document.createElement('div');
-    slot.className = 'hb-slot' + (key === state.selected ? ' selected' : '');
-    slot.innerHTML = `
-      <span class="hb-key">${i + 1}</span>
-      <div class="hb-icon">${d.icon}</div>
-      <div class="hb-name">${d.name}</div>
-      <div class="hb-cost">${fmt(d.cost)}</div>
-      <div class="hb-inc">+${fmt(d.income)}/s</div>
-    `;
-    slot.addEventListener('click', () => selectSlot(i));
-    hotbar.appendChild(slot);
-    slotEls[key] = slot;
-  });
-
-  function selectSlot(i) {
-    state.selected = DEF_KEYS[i];
-    Object.values(slotEls).forEach(el => el.classList.remove('selected'));
-    slotEls[state.selected].classList.add('selected');
-  }
-
-  // ═══════════════════════════════════════════════
-  //  WELCOME / BOOT
-  // ═══════════════════════════════════════════════
-  const boot = document.getElementById('boot');
-  document.getElementById('btn-start').addEventListener('click', () => {
-    boot.classList.add('hidden');
-    bootDismissed = true;
-    if (!isTouch) canvas.requestPointerLock();
-    else crosshair.style.display = 'block';
-    setTimeout(() => {
-      const hint = document.getElementById('controls-hint');
-      if (hint) hint.style.opacity = '0';
-    }, 7000);
-  });
-
-  // ═══════════════════════════════════════════════
-  //  ECONOMY TICK
-  // ═══════════════════════════════════════════════
-  setInterval(() => {
-    state.seconds++;
-    if (state.income > 0) { state.money += state.income; state.earned += state.income; }
-    refreshUI();
-  }, 1000);
-
-  // ═══════════════════════════════════════════════
-  //  UI HELPERS
-  // ═══════════════════════════════════════════════
-  function fmt(n) {
-    if (n >= 1e9)  return `$${(n / 1e9).toFixed(2)}B`;
-    if (n >= 1e6)  return `$${(n / 1e6).toFixed(1)}M`;
-    if (n >= 1000) return `$${(n / 1000).toFixed(1)}K`;
-    return `$${Math.floor(n)}`;
-  }
-
-  function refreshUI() {
-    document.getElementById('money').textContent  = fmt(state.money);
-    document.getElementById('income').textContent = `${fmt(state.income)}/s`;
-    DEF_KEYS.forEach(key => {
-      slotEls[key].classList.toggle('cant-afford', state.money < DEFS[key].cost);
+    const eyeMat = new THREE.MeshStandardMaterial({ color: 0xFFFFFF });
+    const pupilMat = new THREE.MeshStandardMaterial({ color: 0x2d2d2d });
+    [-0.22, 0.22].forEach(ex => {
+      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.13, 10, 10), eyeMat);
+      eye.position.set(ex, 0.62, 0.49);
+      const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.06, 8, 8), pupilMat);
+      pupil.position.set(ex, 0.62, 0.58);
+      group.add(eye, pupil);
     });
+
+    const footMat = new THREE.MeshStandardMaterial({ color: 0x6D4C41, flatShading: true });
+    const footL = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.22, 0.36), footMat);
+    const footR = footL.clone();
+    footL.position.set(-0.25, 0.11, 0);
+    footR.position.set(0.25, 0.11, 0);
+    footL.castShadow = true; footR.castShadow = true;
+    group.add(footL, footR);
+
+    // Waving arm, pivoted at the shoulder so it can swing.
+    const armPivot = new THREE.Group();
+    armPivot.position.set(0.53, 0.78, 0.1);
+    const arm = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.5, 0.16), cubeyMat);
+    arm.position.set(0, -0.25, 0);
+    arm.castShadow = true;
+    const hand = new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 8), cubeyMat);
+    hand.position.set(0, -0.5, 0);
+    armPivot.add(arm, hand);
+    group.add(armPivot);
+
+    group.userData.armPivot = armPivot;
+    return group;
   }
 
-  let toastTimer;
-  function toast(msg, ok) {
-    clearTimeout(toastTimer);
-    const el = document.getElementById('toast');
-    el.textContent = msg;
-    el.style.background = ok ? 'rgba(46,125,50,.92)' : 'rgba(198,40,40,.92)';
-    el.style.opacity = '1';
-    toastTimer = setTimeout(() => el.style.opacity = '0', 2200);
-  }
+  // ═══════════════════════════════════════════════
+  //  PLACE THE SCENE
+  // ═══════════════════════════════════════════════
+  const tree = makeCoconutTree();
+  const treePos = cellWorld(1, -2);
+  tree.position.set(treePos.x, LAND_Y, treePos.z);
+  scene.add(tree);
+
+  const shop = makeWoodenShop();
+  const shopPos = cellWorld(-1, -1);
+  shop.position.set(shopPos.x, LAND_Y, shopPos.z);
+  shop.rotation.y = 0.5;
+  scene.add(shop);
+
+  const cubey = makeWavingCubey();
+  const cubeyPos = cellWorld(0, 1);
+  cubey.position.set(cubeyPos.x, LAND_Y, cubeyPos.z);
+  cubey.rotation.y = -0.3; // his face (+Z) and waving arm (+X) both sit toward the camera by default
+  scene.add(cubey);
 
   // ═══════════════════════════════════════════════
   //  RESIZE
   // ═══════════════════════════════════════════════
   window.addEventListener('resize', () => {
     renderer.setSize(innerWidth, innerHeight);
-    camera.aspect = innerWidth / innerHeight;
-    camera.updateProjectionMatrix();
+    updateCameraFrustum();
   });
 
   // ═══════════════════════════════════════════════
   //  RENDER LOOP
   // ═══════════════════════════════════════════════
   const clock = new THREE.Clock();
-
-  function isLand(x, z) {
-    const gx = Math.round(x / CELL), gz = Math.round(z / CELL);
-    return state.landSet.has(`${gx},${gz}`) && !state.grid[`${gx},${gz}`];
-  }
-
-  function updatePlayer(delta) {
-    const kb = readKeyboardVector();
-    const ix = THREE.MathUtils.clamp(kb.x + state.touchMove.x, -1, 1);
-    const iz = THREE.MathUtils.clamp(kb.z + state.touchMove.z, -1, 1);
-    moving = Math.hypot(ix, iz) > 0.05;
-
-    if (moving) {
-      // Movement is relative to camera yaw (like GTA: W runs toward wherever the camera faces).
-      const forward = new THREE.Vector3(-Math.sin(yaw), 0, -Math.cos(yaw));
-      const right   = new THREE.Vector3(Math.cos(yaw), 0, -Math.sin(yaw));
-      const dir = forward.multiplyScalar(iz).add(right.multiplyScalar(ix));
-      if (dir.length() > 1) dir.normalize();
-
-      const step = PLAYER_SPEED * delta;
-      const nx = player.position.x + dir.x * step;
-      const nz = player.position.z + dir.z * step;
-      if (isLand(nx, player.position.z)) player.position.x = nx;
-      if (isLand(player.position.x, nz)) player.position.z = nz;
-
-      // CUBEY's body turns to face the direction he's actually running, not the raw camera
-      // orbit — so you can orbit the camera around him while he stands still, GTA-style.
-      const targetFacing = Math.atan2(dir.x, dir.z);
-      let diff = targetFacing - facing;
-      diff = Math.atan2(Math.sin(diff), Math.cos(diff));
-      facing += diff * Math.min(1, delta * 10);
-
-      walkCycle += delta * 9;
-    } else {
-      walkCycle *= 0.9;
-    }
-
-    player.rotation.y = facing;
-    footL.position.y = 0.11 + Math.max(0, Math.sin(walkCycle)) * 0.08;
-    footR.position.y = 0.11 + Math.max(0, -Math.sin(walkCycle)) * 0.08;
-    shadowBlob.position.set(player.position.x, LAND_Y + 0.02, player.position.z);
-  }
-
-  const lookTarget = new THREE.Vector3();
-  function updateCamera() {
-    // Classic chase cam: orbit a point near CUBEY's head at a fixed distance, driven by
-    // mouse yaw/pitch, then look back at him — camera position is derived, never rotated directly.
-    lookTarget.set(player.position.x, player.position.y + LOOK_HEIGHT, player.position.z);
-    const horiz = Math.cos(pitch) * CAM_DISTANCE;
-    camera.position.set(
-      lookTarget.x + Math.sin(yaw) * horiz,
-      lookTarget.y - Math.sin(pitch) * CAM_DISTANCE,
-      lookTarget.z + Math.cos(yaw) * horiz
-    );
-    // Never let the chase cam dip through the ground when looking up steeply.
-    camera.position.y = Math.max(camera.position.y, LAND_Y + 0.35);
-    camera.lookAt(lookTarget);
-  }
+  const armPivot = cubey.userData.armPivot;
 
   function loop() {
     requestAnimationFrame(loop);
-    const delta = Math.min(clock.getDelta(), 0.1);
-    const t = clock.elapsedTime;
+    const t = clock.getElapsedTime();
 
-    updatePlayer(delta);
-    updateCamera();
     updateOcean(t);
-    if (locked) updateCrosshairTarget();
-
-    glowPad.material.opacity = 0.45 + Math.sin(t * 3) * 0.15;
-    arrowGroup.position.y = 3.4 + Math.sin(t * 2.2) * 0.35;
-    markerGroup.rotation.y += delta * 0.6;
-
-    spinningBuildings.forEach(m => { m.rotation.z += delta * 1.2; });
+    armPivot.rotation.z = 2.75 + Math.sin(t * 5) * 0.35;
 
     renderer.render(scene, camera);
   }
-
-  refreshUI();
   loop();
   </script>
 </body>
