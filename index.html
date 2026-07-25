@@ -6,13 +6,86 @@
   <title>CubeWorld</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🧊</text></svg>" />
   <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    html, body { overflow: hidden; background: #cfe9f7; height: 100%; }
+    * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body { overflow: hidden; background: #cfe9f7; height: 100%; touch-action: none; font-family: 'Segoe UI', Tahoma, sans-serif; }
     canvas { display: block; }
+
+    #fade {
+      position: fixed; inset: 0; background: #000; opacity: 0; pointer-events: none;
+      transition: opacity .35s ease; z-index: 300;
+    }
+    #fade.show { opacity: 1; }
+
+    #start-prompt {
+      position: fixed; left: 50%; bottom: 60px; transform: translateX(-50%);
+      background: rgba(0,0,0,.55); color: #fff; padding: 10px 22px; border-radius: 30px;
+      font-size: 14px; font-weight: 700; z-index: 150; cursor: pointer;
+      opacity: 0; transition: opacity .6s ease; border: 2px solid rgba(255,255,255,.35);
+    }
+    #start-prompt.show { opacity: 1; }
+
+    #resume-overlay {
+      position: fixed; inset: 0; z-index: 280; background: rgba(10,15,25,.55);
+      display: none; align-items: center; justify-content: center; text-align: center;
+      color: #fff; cursor: pointer;
+    }
+    #resume-overlay.show { display: flex; }
+    #resume-overlay .box { background: rgba(0,0,0,.4); padding: 20px 28px; border-radius: 16px; border: 1px solid rgba(255,255,255,.2); }
+    #resume-overlay .box b { font-size: 17px; }
+    #resume-overlay .box span { display: block; font-size: 12px; opacity: .75; margin-top: 6px; }
+
+    #inventory {
+      position: fixed; top: 16px; left: 16px; z-index: 120;
+      background: rgba(0,0,0,.4); border: 1.5px solid rgba(255,255,255,.25); border-radius: 14px;
+      padding: 8px 16px; color: #fff; font-weight: 800; font-size: 16px;
+      display: flex; align-items: center; gap: 8px;
+      opacity: 0; transition: opacity .6s ease;
+    }
+    #inventory.show { opacity: 1; }
+    #inventory .n { color: #FFD54F; }
+
+    #hit-prompt {
+      position: fixed; left: 50%; bottom: 90px; transform: translateX(-50%) scale(.9);
+      background: rgba(0,0,0,.65); color: #fff; padding: 9px 18px; border-radius: 26px;
+      font-size: 14px; font-weight: 700; z-index: 130; border: 2px solid #FFD54F;
+      display: none; align-items: center; gap: 8px; opacity: 0; transition: opacity .18s, transform .18s;
+      pointer-events: none;
+    }
+    #hit-prompt.show { display: flex; opacity: 1; transform: translateX(-50%) scale(1); }
+    #hit-prompt .k { background: #FFD54F; color: #3e2200; border-radius: 6px; padding: 2px 8px; font-size: 12px; }
+
+    #joy-zone {
+      position: fixed; left: 16px; bottom: 24px; width: 110px; height: 110px;
+      border-radius: 50%; background: rgba(255,255,255,.12); border: 2px solid rgba(255,255,255,.3);
+      z-index: 110; touch-action: none; display: none;
+    }
+    #joy-knob {
+      position: absolute; left: 50%; top: 50%; width: 48px; height: 48px; margin: -24px;
+      border-radius: 50%; background: rgba(255,255,255,.55); border: 2px solid rgba(255,255,255,.8);
+    }
+    body.touch #joy-zone { display: block; }
+
+    #hit-btn {
+      position: fixed; right: 20px; bottom: 24px; z-index: 120;
+      width: 64px; height: 64px; border-radius: 50%;
+      background: linear-gradient(180deg,#FFCA28,#FF9800); border: 3px solid #fff;
+      font-size: 26px; display: none; align-items: center; justify-content: center;
+      box-shadow: 0 6px 14px rgba(0,0,0,.35); cursor: pointer;
+    }
+    body.touch #hit-btn.ready { display: flex; }
+    #hit-btn:active { transform: scale(.9); }
   </style>
 </head>
 <body>
   <canvas id="c"></canvas>
+
+  <div id="fade"></div>
+  <div id="start-prompt">Click to begin</div>
+  <div id="resume-overlay"><div class="box"><b>🧊 Paused</b><span>Click to look around again</span></div></div>
+  <div id="inventory">🥥 <span class="n" id="coconut-count">0</span></div>
+  <div id="hit-prompt"><span class="k">E</span> Hit</div>
+  <div id="joy-zone"><div id="joy-knob"></div></div>
+  <div id="hit-btn">🥊</div>
 
   <script type="module">
   import * as THREE from './vendor/three/three.module.min.js';
@@ -20,11 +93,17 @@
   // ═══════════════════════════════════════════════
   //  CONFIG
   // ═══════════════════════════════════════════════
-  const CELL     = 2;   // world size of one voxel/grid cell
-  const ISLAND_R = 5;   // island radius in cells — small, just enough for this scene
-  const LAND_Y   = CELL;
+  const CELL       = 2;   // world size of one voxel/grid cell
+  const ISLAND_R   = 5;   // island radius in cells — small, just enough for this scene
+  const LAND_Y     = CELL;
+  const PLAYER_SPEED = 5.6;
+  const EYE_HEIGHT   = 0.66;
+  const HIT_RANGE    = 2.8;   // how close CUBEY needs to be to the tree to hit it
+  const REGROW_MS    = 8000;  // how long until the tree grows new coconuts
 
   function cellWorld(gx, gz) { return { x: gx * CELL, z: gz * CELL }; }
+  const isTouch = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
+  if (isTouch) document.body.classList.add('touch');
 
   // ═══════════════════════════════════════════════
   //  RENDERER / SCENE
@@ -76,24 +155,30 @@
   scene.add(sky);
 
   // ═══════════════════════════════════════════════
-  //  CAMERA — static isometric establishing shot
+  //  CAMERAS — a static isometric intro shot that turns into first-person
   // ═══════════════════════════════════════════════
   const viewSize = 9.5;
   const isoDir = new THREE.Vector3(1, 1, 1).normalize();
   const CAM_DIST = 30;
-  const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 300);
+  const introCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 300);
 
-  function updateCameraFrustum() {
+  function updateIntroFrustum() {
     const aspect = innerWidth / innerHeight;
-    camera.left   = -viewSize * aspect;
-    camera.right  =  viewSize * aspect;
-    camera.top    =  viewSize;
-    camera.bottom = -viewSize;
-    camera.updateProjectionMatrix();
+    introCamera.left   = -viewSize * aspect;
+    introCamera.right  =  viewSize * aspect;
+    introCamera.top    =  viewSize;
+    introCamera.bottom = -viewSize;
+    introCamera.updateProjectionMatrix();
   }
-  updateCameraFrustum();
-  camera.position.copy(isoDir).multiplyScalar(CAM_DIST);
-  camera.lookAt(0, 1, 0);
+  updateIntroFrustum();
+  introCamera.position.copy(isoDir).multiplyScalar(CAM_DIST);
+  introCamera.lookAt(0, 1, 0);
+
+  const fpsCamera = new THREE.PerspectiveCamera(70, innerWidth / innerHeight, 0.05, 300);
+  let activeCamera = introCamera;
+
+  let yaw = -0.3, pitch = -0.15;
+  const PITCH_LIMIT = Math.PI / 2 - 0.1;
 
   // ═══════════════════════════════════════════════
   //  LIGHTS
@@ -151,11 +236,13 @@
   const sandMat  = new THREE.MeshStandardMaterial({ color: 0xffffff, flatShading: true, roughness: 0.9 });
 
   const landCells = [];
+  const landSet = new Set();
   for (let gx = -ISLAND_R; gx <= ISLAND_R; gx++) {
     for (let gz = -ISLAND_R; gz <= ISLAND_R; gz++) {
       const dist = Math.sqrt(gx * gx + gz * gz);
       if (dist > ISLAND_R) continue;
       landCells.push({ gx, gz, sand: dist > ISLAND_R - 1.4 });
+      landSet.add(`${gx},${gz}`);
     }
   }
   const grassCells = landCells.filter(c => !c.sand);
@@ -182,9 +269,16 @@
   buildVoxelMesh(grassCells, grassMat, new THREE.Color(0x7CC576));
   buildVoxelMesh(sandCells, sandMat, new THREE.Color(0xE8D18C));
 
+  function isLand(x, z) {
+    const gx = Math.round(x / CELL), gz = Math.round(z / CELL);
+    return landSet.has(`${gx},${gz}`);
+  }
+
   // ═══════════════════════════════════════════════
   //  COCONUT TREE — the island's only tree
   // ═══════════════════════════════════════════════
+  const CROWN_HEIGHT = 3.05; // approximate height of the crown above the ground, for spawning falling coconuts
+
   function makeCoconutTree() {
     const group = new THREE.Group();
     const trunkMat = new THREE.MeshStandardMaterial({ color: 0xA1795A, flatShading: true, roughness: 0.9 });
@@ -226,16 +320,19 @@
       parent.add(holder);
     }
 
-    // A few coconuts clustered under the crown.
+    // A few coconuts clustered under the crown — hidden and respawned when harvested.
     const nutMat = new THREE.MeshStandardMaterial({ color: 0x6D4C41, flatShading: true, roughness: 0.85 });
+    const coconutMeshes = [];
     for (let i = 0; i < 3; i++) {
       const a = i * 2.15;
       const nut = new THREE.Mesh(new THREE.SphereGeometry(0.13, 8, 8), nutMat);
       nut.position.set(Math.cos(a) * 0.16, -0.05, Math.sin(a) * 0.16);
       nut.castShadow = true;
       parent.add(nut);
+      coconutMeshes.push(nut);
     }
 
+    group.userData.coconutMeshes = coconutMeshes;
     return group;
   }
 
@@ -305,9 +402,9 @@
   }
 
   // ═══════════════════════════════════════════════
-  //  CUBEY — a friendly cube, waving hello
+  //  CUBEY — the friendly cube waving hello. This is you.
   // ═══════════════════════════════════════════════
-  function makeWavingCubey() {
+  function makeCubey() {
     const group = new THREE.Group();
     const cubeyMat = new THREE.MeshStandardMaterial({ color: 0xFFB74D, flatShading: true, roughness: 0.7 });
 
@@ -318,12 +415,14 @@
 
     const eyeMat = new THREE.MeshStandardMaterial({ color: 0xFFFFFF });
     const pupilMat = new THREE.MeshStandardMaterial({ color: 0x2d2d2d });
+    const faceBits = [];
     [-0.22, 0.22].forEach(ex => {
       const eye = new THREE.Mesh(new THREE.SphereGeometry(0.13, 10, 10), eyeMat);
       eye.position.set(ex, 0.62, 0.49);
       const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.06, 8, 8), pupilMat);
       pupil.position.set(ex, 0.62, 0.58);
       group.add(eye, pupil);
+      faceBits.push(eye, pupil);
     });
 
     const footMat = new THREE.MeshStandardMaterial({ color: 0x6D4C41, flatShading: true });
@@ -346,6 +445,9 @@
     group.add(armPivot);
 
     group.userData.armPivot = armPivot;
+    group.userData.body = body;
+    group.userData.faceBits = faceBits;
+    group.userData.feet = [footL, footR];
     return group;
   }
 
@@ -363,18 +465,321 @@
   shop.rotation.y = 0.5;
   scene.add(shop);
 
-  const cubey = makeWavingCubey();
+  const cubey = makeCubey(); // cubey doubles as the player once first-person begins
   const cubeyPos = cellWorld(0, 1);
   cubey.position.set(cubeyPos.x, LAND_Y, cubeyPos.z);
   cubey.rotation.y = -0.3; // his face (+Z) and waving arm (+X) both sit toward the camera by default
   scene.add(cubey);
+
+  const player = cubey; // clearer name for the movement code below
+
+  // Soft contact shadow so the player still reads as grounded once his body is hidden.
+  const shadowBlob = new THREE.Mesh(
+    new THREE.CircleGeometry(0.5, 16),
+    new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.25, depthWrite: false })
+  );
+  shadowBlob.rotation.x = -Math.PI / 2;
+  shadowBlob.visible = false;
+  scene.add(shadowBlob);
+
+  // ═══════════════════════════════════════════════
+  //  "HIT" MARKER — arrow + sign above the coconut tree
+  // ═══════════════════════════════════════════════
+  const glowPad = new THREE.Mesh(
+    new THREE.CylinderGeometry(1.1, 1.1, 0.06, 20),
+    new THREE.MeshBasicMaterial({ color: 0xFFD54F, transparent: true, opacity: 0.5 })
+  );
+  glowPad.position.set(treePos.x, LAND_Y + 0.03, treePos.z);
+  glowPad.visible = false;
+  scene.add(glowPad);
+
+  const markerGroup = new THREE.Group();
+  markerGroup.position.set(treePos.x, LAND_Y + CROWN_HEIGHT, treePos.z);
+  markerGroup.visible = false;
+  scene.add(markerGroup);
+
+  const arrowGroup = new THREE.Group();
+  const arrowHead = new THREE.Mesh(
+    new THREE.ConeGeometry(0.45, 0.9, 6),
+    new THREE.MeshStandardMaterial({ color: 0xFF7043, flatShading: true })
+  );
+  arrowHead.rotation.x = Math.PI;
+  const arrowShaft = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.18, 0.18, 1.1, 6),
+    new THREE.MeshStandardMaterial({ color: 0xFF7043, flatShading: true })
+  );
+  arrowShaft.position.y = 0.85;
+  arrowHead.castShadow = true; arrowShaft.castShadow = true;
+  arrowGroup.add(arrowHead, arrowShaft);
+  arrowGroup.position.y = 1.6;
+  markerGroup.add(arrowGroup);
+
+  function makeTextSprite(text, opts = {}) {
+    const { fontsize = 46, color = '#ffffff', bg = 'rgba(20,20,20,.75)' } = opts;
+    const cvs = document.createElement('canvas');
+    const ctx = cvs.getContext('2d');
+    ctx.font = `800 ${fontsize}px 'Segoe UI', Arial, sans-serif`;
+    const w = ctx.measureText(text).width + 48;
+    const h = fontsize + 40;
+    cvs.width = w; cvs.height = h;
+    ctx.font = `800 ${fontsize}px 'Segoe UI', Arial, sans-serif`;
+    ctx.fillStyle = bg;
+    const r = 18;
+    ctx.beginPath();
+    ctx.moveTo(r, 0); ctx.arcTo(w, 0, w, h, r); ctx.arcTo(w, h, 0, h, r);
+    ctx.arcTo(0, h, 0, 0, r); ctx.arcTo(0, 0, w, 0, r); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = color;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(text, w / 2, h / 2 + 3);
+    const tex = new THREE.CanvasTexture(cvs);
+    const mat = new THREE.SpriteMaterial({ map: tex, depthTest: false, fog: false });
+    const sprite = new THREE.Sprite(mat);
+    const s = 0.012;
+    sprite.scale.set(w * s, h * s, 1);
+    return sprite;
+  }
+
+  const signSprite = makeTextSprite('Hit!', { color: '#FFD54F' });
+  signSprite.position.y = 2.5;
+  markerGroup.add(signSprite);
+
+  // ═══════════════════════════════════════════════
+  //  COCONUT HARVEST — hit the tree, coconuts fall, inventory grows
+  // ═══════════════════════════════════════════════
+  let coconutCount = 0;
+  let coconutsReady = false; // becomes true once the intro→fps transition completes
+  let regrowAt = 0;
+  const fallingCoconuts = []; // { mesh, vel, bounces }
+  const nutMat2 = new THREE.MeshStandardMaterial({ color: 0x6D4C41, flatShading: true, roughness: 0.85 });
+
+  const inventoryEl = document.getElementById('inventory');
+  const coconutCountEl = document.getElementById('coconut-count');
+  const hitPromptEl = document.getElementById('hit-prompt');
+  const hitBtnEl = document.getElementById('hit-btn');
+
+  function refreshInventory() {
+    coconutCountEl.textContent = coconutCount;
+  }
+
+  let nearTree = false;
+
+  function hitTree() {
+    if (!coconutsReady || !nearTree) return;
+    coconutsReady = false;
+    regrowAt = performance.now() + REGROW_MS;
+    tree.userData.coconutMeshes.forEach(m => (m.visible = false));
+    glowPad.visible = false;
+    markerGroup.visible = false;
+
+    for (let i = 0; i < 3; i++) {
+      const nut = new THREE.Mesh(new THREE.SphereGeometry(0.13, 8, 8), nutMat2);
+      nut.position.set(
+        treePos.x + (Math.random() - 0.5) * 0.3,
+        LAND_Y + CROWN_HEIGHT - 0.2,
+        treePos.z + (Math.random() - 0.5) * 0.3
+      );
+      nut.castShadow = true;
+      scene.add(nut);
+      fallingCoconuts.push({
+        mesh: nut,
+        vel: new THREE.Vector3((Math.random() - 0.5) * 1.6, 0.5, (Math.random() - 0.5) * 1.6),
+        bounces: 0,
+        settleAt: 0,
+      });
+    }
+
+    coconutCount += 3;
+    refreshInventory();
+  }
+
+  function updateFallingCoconuts(delta) {
+    const now = performance.now();
+    for (let i = fallingCoconuts.length - 1; i >= 0; i--) {
+      const fc = fallingCoconuts[i];
+      const m = fc.mesh;
+      if (fc.settleAt) {
+        if (now > fc.settleAt) {
+          scene.remove(m);
+          fallingCoconuts.splice(i, 1);
+        }
+        continue;
+      }
+      fc.vel.y -= 9.8 * delta;
+      m.position.addScaledVector(fc.vel, delta);
+      const groundY = LAND_Y + 0.13;
+      if (m.position.y <= groundY) {
+        m.position.y = groundY;
+        if (fc.bounces < 2 && Math.abs(fc.vel.y) > 0.6) {
+          fc.vel.y = -fc.vel.y * 0.4;
+          fc.vel.x *= 0.6; fc.vel.z *= 0.6;
+          fc.bounces++;
+        } else {
+          fc.vel.set(0, 0, 0);
+          fc.settleAt = now + 1800; // leave it lying on the ground briefly, then remove
+        }
+      }
+    }
+  }
+
+  // ═══════════════════════════════════════════════
+  //  INTRO → FIRST PERSON TRANSITION
+  // ═══════════════════════════════════════════════
+  const fadeEl = document.getElementById('fade');
+  const startPromptEl = document.getElementById('start-prompt');
+  const resumeOverlayEl = document.getElementById('resume-overlay');
+
+  let phase = 'intro'; // 'intro' -> 'fps'
+  let bootDismissed = false;
+  let locked = isTouch;
+
+  setTimeout(() => startPromptEl.classList.add('show'), 1500);
+
+  function beginFirstPerson() {
+    if (phase !== 'intro') return;
+    phase = 'transitioning';
+    startPromptEl.classList.remove('show');
+    if (!isTouch) canvas.requestPointerLock();
+
+    fadeEl.classList.add('show');
+    setTimeout(() => {
+      activeCamera = fpsCamera;
+      activeCamera.aspect = innerWidth / innerHeight;
+      activeCamera.updateProjectionMatrix();
+
+      player.userData.body.visible = false;
+      player.userData.faceBits.forEach(o => (o.visible = false));
+      shadowBlob.visible = true;
+
+      coconutsReady = true;
+      glowPad.visible = true;
+      markerGroup.visible = true;
+
+      phase = 'fps';
+      bootDismissed = true;
+      inventoryEl.classList.add('show');
+
+      fadeEl.classList.remove('show');
+    }, 380);
+  }
+
+  startPromptEl.addEventListener('click', beginFirstPerson);
+  window.addEventListener('keydown', e => { if (phase === 'intro' && e.key === 'Enter') beginFirstPerson(); });
+
+  // ═══════════════════════════════════════════════
+  //  POINTER LOCK — mouse-look (desktop)
+  // ═══════════════════════════════════════════════
+  const MOUSE_SENS = 0.0022;
+
+  document.addEventListener('mousemove', e => {
+    if (!locked || isTouch || phase !== 'fps') return;
+    yaw   -= e.movementX * MOUSE_SENS;
+    pitch -= e.movementY * MOUSE_SENS;
+    pitch = THREE.MathUtils.clamp(pitch, -PITCH_LIMIT, PITCH_LIMIT);
+  });
+
+  if (!isTouch) {
+    document.addEventListener('pointerlockchange', () => {
+      locked = document.pointerLockElement === canvas;
+      if (bootDismissed) resumeOverlayEl.classList.toggle('show', !locked);
+    });
+    resumeOverlayEl.addEventListener('click', () => canvas.requestPointerLock());
+    canvas.addEventListener('click', () => {
+      if (phase === 'fps' && document.pointerLockElement !== canvas) canvas.requestPointerLock();
+    });
+  }
+
+  // ═══════════════════════════════════════════════
+  //  INPUT — keyboard + touch joystick/look + Hit
+  // ═══════════════════════════════════════════════
+  const keys = new Set();
+  window.addEventListener('keydown', e => {
+    keys.add(e.key.toLowerCase());
+    if (e.key.toLowerCase() === 'e') hitTree();
+  });
+  window.addEventListener('keyup', e => keys.delete(e.key.toLowerCase()));
+
+  function readKeyboardVector() {
+    let x = 0, z = 0;
+    if (keys.has('w') || keys.has('arrowup'))    z += 1;
+    if (keys.has('s') || keys.has('arrowdown'))  z -= 1;
+    if (keys.has('a') || keys.has('arrowleft'))  x -= 1;
+    if (keys.has('d') || keys.has('arrowright')) x += 1;
+    return { x, z };
+  }
+
+  const touchMove = { x: 0, z: 0 };
+  const joyZone = document.getElementById('joy-zone');
+  const joyKnob = document.getElementById('joy-knob');
+  let joyActive = false, joyId = null, joyCenter = { x: 0, y: 0 };
+  const JOY_RADIUS = 46;
+
+  function joyStart(e) {
+    const t = e.changedTouches ? e.changedTouches[0] : e;
+    joyId = t.identifier ?? 'mouse';
+    const r = joyZone.getBoundingClientRect();
+    joyCenter = { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+    joyActive = true;
+    joyMove(e);
+  }
+  function joyMove(e) {
+    if (!joyActive) return;
+    const list = e.changedTouches || [e];
+    let t = null;
+    for (const cand of list) { if ((cand.identifier ?? 'mouse') === joyId) t = cand; }
+    if (!t) return;
+    let dx = t.clientX - joyCenter.x, dy = t.clientY - joyCenter.y;
+    const len = Math.hypot(dx, dy) || 1;
+    const clamped = Math.min(len, JOY_RADIUS);
+    dx = (dx / len) * clamped; dy = (dy / len) * clamped;
+    joyKnob.style.left = `calc(50% + ${dx}px)`;
+    joyKnob.style.top  = `calc(50% + ${dy}px)`;
+    touchMove.x = dx / JOY_RADIUS;
+    touchMove.z = -dy / JOY_RADIUS;
+  }
+  function joyEnd() {
+    joyActive = false; joyId = null;
+    touchMove.x = 0; touchMove.z = 0;
+    joyKnob.style.left = '50%'; joyKnob.style.top = '50%';
+  }
+  joyZone.addEventListener('touchstart', joyStart, { passive: true });
+  joyZone.addEventListener('touchmove', joyMove, { passive: true });
+  joyZone.addEventListener('touchend', joyEnd);
+  joyZone.addEventListener('touchcancel', joyEnd);
+
+  const TOUCH_SENS = 0.0055;
+  let lookTouchId = null, lookLast = { x: 0, y: 0 };
+  canvas.addEventListener('touchstart', e => {
+    if (phase === 'intro') { beginFirstPerson(); return; }
+    for (const t of e.changedTouches) {
+      if (lookTouchId === null) { lookTouchId = t.identifier; lookLast = { x: t.clientX, y: t.clientY }; }
+    }
+  }, { passive: true });
+  canvas.addEventListener('touchmove', e => {
+    for (const t of e.changedTouches) {
+      if (t.identifier === lookTouchId) {
+        const dx = t.clientX - lookLast.x, dy = t.clientY - lookLast.y;
+        yaw -= dx * TOUCH_SENS;
+        pitch = THREE.MathUtils.clamp(pitch - dy * TOUCH_SENS, -PITCH_LIMIT, PITCH_LIMIT);
+        lookLast = { x: t.clientX, y: t.clientY };
+      }
+    }
+  }, { passive: true });
+  function lookTouchEnd(e) {
+    for (const t of e.changedTouches) if (t.identifier === lookTouchId) lookTouchId = null;
+  }
+  canvas.addEventListener('touchend', lookTouchEnd);
+  canvas.addEventListener('touchcancel', lookTouchEnd);
+
+  hitBtnEl.addEventListener('click', hitTree);
 
   // ═══════════════════════════════════════════════
   //  RESIZE
   // ═══════════════════════════════════════════════
   window.addEventListener('resize', () => {
     renderer.setSize(innerWidth, innerHeight);
-    updateCameraFrustum();
+    updateIntroFrustum();
+    fpsCamera.aspect = innerWidth / innerHeight;
+    fpsCamera.updateProjectionMatrix();
   });
 
   // ═══════════════════════════════════════════════
@@ -382,15 +787,73 @@
   // ═══════════════════════════════════════════════
   const clock = new THREE.Clock();
   const armPivot = cubey.userData.armPivot;
+  let walkCycle = 0;
+
+  function updatePlayer(delta) {
+    const kb = readKeyboardVector();
+    const ix = THREE.MathUtils.clamp(kb.x + touchMove.x, -1, 1);
+    const iz = THREE.MathUtils.clamp(kb.z + touchMove.z, -1, 1);
+    const moving = Math.hypot(ix, iz) > 0.05;
+
+    if (moving) {
+      const forward = new THREE.Vector3(-Math.sin(yaw), 0, -Math.cos(yaw));
+      const right   = new THREE.Vector3(Math.cos(yaw), 0, -Math.sin(yaw));
+      const dir = forward.multiplyScalar(iz).add(right.multiplyScalar(ix));
+      if (dir.length() > 1) dir.normalize();
+
+      const step = PLAYER_SPEED * delta;
+      const nx = player.position.x + dir.x * step;
+      const nz = player.position.z + dir.z * step;
+      if (isLand(nx, player.position.z)) player.position.x = nx;
+      if (isLand(player.position.x, nz)) player.position.z = nz;
+      walkCycle += delta * 9;
+    } else {
+      walkCycle *= 0.9;
+    }
+
+    player.rotation.y = yaw;
+    const feet = player.userData.feet;
+    feet[0].position.y = 0.11 + Math.max(0, Math.sin(walkCycle)) * 0.08;
+    feet[1].position.y = 0.11 + Math.max(0, -Math.sin(walkCycle)) * 0.08;
+    shadowBlob.position.set(player.position.x, LAND_Y + 0.02, player.position.z);
+
+    const dx = player.position.x - treePos.x, dz = player.position.z - treePos.z;
+    nearTree = Math.hypot(dx, dz) <= HIT_RANGE;
+    hitPromptEl.classList.toggle('show', nearTree && coconutsReady && !isTouch);
+    hitBtnEl.classList.toggle('ready', nearTree && coconutsReady && isTouch);
+  }
+
+  function updateFpsCamera() {
+    fpsCamera.rotation.set(pitch, yaw, 0, 'YXZ');
+    fpsCamera.position.set(player.position.x, player.position.y + EYE_HEIGHT, player.position.z);
+  }
 
   function loop() {
     requestAnimationFrame(loop);
+    const delta = Math.min(clock.getDelta(), 0.1);
     const t = clock.getElapsedTime();
 
     updateOcean(t);
-    armPivot.rotation.z = 2.75 + Math.sin(t * 5) * 0.35;
 
-    renderer.render(scene, camera);
+    if (phase === 'intro' || phase === 'transitioning') {
+      armPivot.rotation.z = 2.75 + Math.sin(t * 5) * 0.35;
+    } else if (phase === 'fps') {
+      updatePlayer(delta);
+      updateFpsCamera();
+      updateFallingCoconuts(delta);
+
+      if (!coconutsReady && performance.now() > regrowAt) {
+        coconutsReady = true;
+        tree.userData.coconutMeshes.forEach(m => (m.visible = true));
+        glowPad.visible = true;
+        markerGroup.visible = true;
+      }
+      glowPad.material.opacity = 0.4 + Math.sin(t * 3) * 0.15;
+      arrowGroup.position.y = 1.6 + Math.sin(t * 2.2) * 0.3;
+      markerGroup.rotation.y += delta * 0.6;
+    }
+
+    renderer.render(scene, activeCamera);
   }
   loop();
   </script>
