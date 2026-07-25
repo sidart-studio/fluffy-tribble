@@ -617,16 +617,17 @@
   //  coconut tree's arrow has done its job and retired.
   // ═══════════════════════════════════════════════
   function makeSidewaysArrow(color) {
-    // Built pointing along local -Z, so Object3D.lookAt() aims the tip at any target.
+    // Built pointing along local +Z: for a plain Object3D (unlike a camera or light),
+    // lookAt() swings its +Z axis toward the target, not -Z — so the tip has to live here.
     const g = new THREE.Group();
     const mat = new THREE.MeshStandardMaterial({ color, flatShading: true });
     const head = new THREE.Mesh(new THREE.ConeGeometry(0.4, 0.8, 6), mat);
-    head.rotation.x = -Math.PI / 2;
-    head.position.z = -0.85;
+    head.rotation.x = Math.PI / 2;
+    head.position.z = 0.85;
     head.castShadow = true;
     const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 0.9, 6), mat);
-    shaft.rotation.x = -Math.PI / 2;
-    shaft.position.z = -0.35;
+    shaft.rotation.x = Math.PI / 2;
+    shaft.position.z = 0.35;
     shaft.castShadow = true;
     g.add(head, shaft);
     return g;
