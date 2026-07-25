@@ -64,6 +64,30 @@
     }
     body.touch #hit-btn.ready { display: flex; }
     #hit-btn:active { transform: scale(.9); }
+
+    #inventory .n2 { color: #8BE28B; }
+
+    #speech-bubble {
+      position: fixed; z-index: 140; transform: translate(-50%, -100%);
+      background: #fff; color: #2d2d2d; border-radius: 16px; padding: 12px 14px;
+      min-width: 190px; max-width: 240px; box-shadow: 0 6px 18px rgba(0,0,0,.3);
+      display: none; text-align: center; font-size: 13px;
+    }
+    #speech-bubble.show { display: block; }
+    #speech-bubble::after {
+      content: ''; position: absolute; left: 50%; bottom: -9px; margin-left: -9px;
+      border: 9px solid transparent; border-top-color: #fff;
+    }
+    #speech-text { font-weight: 700; margin-bottom: 8px; line-height: 1.35; }
+    #speech-buttons { display: flex; flex-direction: column; gap: 6px; }
+    .speech-btn {
+      border: 1.5px solid #ddd; background: #f4f4f4; border-radius: 10px;
+      padding: 7px 10px; font-size: 12px; font-weight: 700; color: #2d2d2d;
+      cursor: pointer; transition: background .12s;
+    }
+    .speech-btn:hover { background: #eaeaea; }
+    .speech-btn:active { transform: scale(.97); }
+    .speech-btn.cancel { color: #a33; }
   </style>
 </head>
 <body>
@@ -71,10 +95,19 @@
 
   <div id="fade"></div>
   <div id="start-prompt">Click to begin — drag or arrow keys to turn</div>
-  <div id="inventory">🥥 <span class="n" id="coconut-count">0</span></div>
+  <div id="inventory">🥥 <span class="n" id="coconut-count">0</span> &nbsp; 🪙 <span class="n2" id="coin-count">0</span></div>
   <div id="hit-prompt"><span class="k">E</span> Hit</div>
   <div id="joy-zone"><div id="joy-knob"></div></div>
   <div id="hit-btn">🥊</div>
+
+  <div id="speech-bubble">
+    <div id="speech-text">What do you want to sell?</div>
+    <div id="speech-buttons">
+      <div class="speech-btn" data-action="all">All my inventory</div>
+      <div class="speech-btn" data-action="hand">This thing on your hand</div>
+      <div class="speech-btn cancel" data-action="cancel">Cancel</div>
+    </div>
+  </div>
 
   <script type="module">
   import * as THREE from './vendor/three/three.module.min.js';
@@ -89,6 +122,9 @@
   const EYE_HEIGHT   = 0.66;
   const HIT_RANGE    = 2.8;   // how close CUBEY needs to be to the tree to hit it
   const REGROW_MS    = 8000;  // how long until the tree grows new coconuts
+  const SHOP_RANGE   = 2.6;   // how close, and in front of, the shop CUBEY needs to be
+  const COCONUT_PRICE = 10;   // cubecoins per coconut
+  const SHOP_WALK_MS = 1100;  // how long the shopkeeper takes to walk in/out
 
   function cellWorld(gx, gz) { return { x: gx * CELL, z: gz * CELL }; }
   const isTouch = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
@@ -441,6 +477,39 @@
   }
 
   // ═══════════════════════════════════════════════
+  //  SHOPKEEPER — a blue cube who runs the shop
+  // ═══════════════════════════════════════════════
+  function makeShopkeeper() {
+    const group = new THREE.Group();
+    const mat = new THREE.MeshStandardMaterial({ color: 0x42A5F5, flatShading: true, roughness: 0.7 });
+
+    const body = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), mat);
+    body.position.y = 0.5;
+    body.castShadow = true;
+    group.add(body);
+
+    const eyeMat = new THREE.MeshStandardMaterial({ color: 0xFFFFFF });
+    const pupilMat = new THREE.MeshStandardMaterial({ color: 0x2d2d2d });
+    [-0.22, 0.22].forEach(ex => {
+      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.13, 10, 10), eyeMat);
+      eye.position.set(ex, 0.62, 0.49);
+      const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.06, 8, 8), pupilMat);
+      pupil.position.set(ex, 0.62, 0.58);
+      group.add(eye, pupil);
+    });
+
+    const footMat = new THREE.MeshStandardMaterial({ color: 0x1E4E7A, flatShading: true });
+    const footL = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.22, 0.36), footMat);
+    const footR = footL.clone();
+    footL.position.set(-0.25, 0.11, 0);
+    footR.position.set(0.25, 0.11, 0);
+    footL.castShadow = true; footR.castShadow = true;
+    group.add(footL, footR);
+
+    return group;
+  }
+
+  // ═══════════════════════════════════════════════
   //  PLACE THE SCENE
   // ═══════════════════════════════════════════════
   const tree = makeCoconutTree();
@@ -453,6 +522,17 @@
   shop.position.set(shopPos.x, LAND_Y, shopPos.z);
   shop.rotation.y = 0.5;
   scene.add(shop);
+
+  // The direction the shop's door faces — "in front of the shop" is out along this vector.
+  const shopDoorDir = new THREE.Vector3(Math.sin(shop.rotation.y), 0, Math.cos(shop.rotation.y));
+  const shopInsidePos = new THREE.Vector3(shopPos.x, LAND_Y, shopPos.z).addScaledVector(shopDoorDir, 0.3);
+  const shopStandPos  = new THREE.Vector3(shopPos.x, LAND_Y, shopPos.z).addScaledVector(shopDoorDir, 1.2);
+
+  const shopkeeper = makeShopkeeper();
+  shopkeeper.position.copy(shopInsidePos);
+  shopkeeper.rotation.y = Math.PI + shop.rotation.y; // face outward, toward the door direction
+  shopkeeper.visible = false;
+  scene.add(shopkeeper);
 
   const cubey = makeCubey(); // cubey doubles as the player once first-person begins
   const cubeyPos = cellWorld(0, 1);
@@ -533,21 +613,71 @@
   markerGroup.add(signSprite);
 
   // ═══════════════════════════════════════════════
+  //  SHOP MARKER — a sideways arrow pointing at the shop, shown once the
+  //  coconut tree's arrow has done its job and retired.
+  // ═══════════════════════════════════════════════
+  function makeSidewaysArrow(color) {
+    // Built pointing along local -Z, so Object3D.lookAt() aims the tip at any target.
+    const g = new THREE.Group();
+    const mat = new THREE.MeshStandardMaterial({ color, flatShading: true });
+    const head = new THREE.Mesh(new THREE.ConeGeometry(0.4, 0.8, 6), mat);
+    head.rotation.x = -Math.PI / 2;
+    head.position.z = -0.85;
+    head.castShadow = true;
+    const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 0.9, 6), mat);
+    shaft.rotation.x = -Math.PI / 2;
+    shaft.position.z = -0.35;
+    shaft.castShadow = true;
+    g.add(head, shaft);
+    return g;
+  }
+
+  const shopGlowPad = new THREE.Mesh(
+    new THREE.CylinderGeometry(1.1, 1.1, 0.06, 20),
+    new THREE.MeshBasicMaterial({ color: 0x64B5F6, transparent: true, opacity: 0.5 })
+  );
+  shopGlowPad.position.copy(shopStandPos).setY(LAND_Y + 0.03);
+  shopGlowPad.visible = false;
+  scene.add(shopGlowPad);
+
+  // Placed off to the side (toward the tree, where CUBEY is coming from) rather than
+  // straight along the approach path, so its profile reads as a clear sideways arrow
+  // instead of being viewed end-on.
+  const shopSidePerp = new THREE.Vector3(shopDoorDir.z, 0, -shopDoorDir.x);
+  const shopMarkerGroup = new THREE.Group();
+  const shopArrowAnchor = new THREE.Vector3(shopPos.x, LAND_Y + 1.4, shopPos.z).addScaledVector(shopSidePerp, 2.1);
+  shopMarkerGroup.position.copy(shopArrowAnchor);
+  shopMarkerGroup.lookAt(shopPos.x, LAND_Y + 1.4, shopPos.z);
+  shopMarkerGroup.visible = false;
+  scene.add(shopMarkerGroup);
+
+  const shopArrow = makeSidewaysArrow(0x42A5F5);
+  shopMarkerGroup.add(shopArrow);
+
+  const shopSignSprite = makeTextSprite('Walk in front of the shop', { color: '#90CAF9' });
+  shopSignSprite.position.y = 0.9;
+  shopMarkerGroup.add(shopSignSprite);
+
+  // ═══════════════════════════════════════════════
   //  COCONUT HARVEST — hit the tree, coconuts fall, inventory grows
   // ═══════════════════════════════════════════════
   let coconutCount = 0;
+  let cubeCoins = 0;
   let coconutsReady = false; // becomes true once the intro→fps transition completes
+  let treeIntroduced = false; // once true, the tree's own arrow retires for good
   let regrowAt = 0;
   const fallingCoconuts = []; // { mesh, vel, bounces }
   const nutMat2 = new THREE.MeshStandardMaterial({ color: 0x6D4C41, flatShading: true, roughness: 0.85 });
 
   const inventoryEl = document.getElementById('inventory');
   const coconutCountEl = document.getElementById('coconut-count');
+  const coinCountEl = document.getElementById('coin-count');
   const hitPromptEl = document.getElementById('hit-prompt');
   const hitBtnEl = document.getElementById('hit-btn');
 
   function refreshInventory() {
     coconutCountEl.textContent = coconutCount;
+    coinCountEl.textContent = cubeCoins;
   }
 
   let nearTree = false;
@@ -579,6 +709,14 @@
 
     coconutCount += 3;
     refreshInventory();
+
+    // The tree's own "Hit!" marker has done its job — retire it for good, and
+    // point the player at the shop instead.
+    if (!treeIntroduced) {
+      treeIntroduced = true;
+      shopMarkerGroup.visible = true;
+      shopGlowPad.visible = true;
+    }
   }
 
   function updateFallingCoconuts(delta) {
@@ -608,6 +746,110 @@
         }
       }
     }
+  }
+
+  // ═══════════════════════════════════════════════
+  //  SHOPKEEPER — walks out when CUBEY steps in front of the shop, and sells
+  // ═══════════════════════════════════════════════
+  const speechBubbleEl = document.getElementById('speech-bubble');
+  const speechTextEl = document.getElementById('speech-text');
+  const speechButtonsEl = document.getElementById('speech-buttons');
+
+  let shopState = 'inside'; // 'inside' | 'walking_out' | 'out' | 'walking_in'
+  let shopAnimT0 = 0;
+  let dialogMode = null;     // null | 'prompt' | 'message'
+  let dialogRevertAt = 0;
+  let nearShop = false;
+
+  function showPrompt() {
+    dialogMode = 'prompt';
+    speechTextEl.textContent = 'What do you want to sell?';
+    speechButtonsEl.style.display = 'flex';
+  }
+
+  function showMessage(text, revertMs = 1900) {
+    dialogMode = 'message';
+    speechTextEl.textContent = text;
+    speechButtonsEl.style.display = 'none';
+    dialogRevertAt = performance.now() + revertMs;
+  }
+
+  function shopEnter() {
+    if (shopState !== 'inside') return;
+    shopkeeper.visible = true;
+    shopkeeper.position.copy(shopInsidePos);
+    shopAnimT0 = performance.now();
+    shopState = 'walking_out';
+  }
+
+  function shopExit() {
+    if (shopState !== 'out' && shopState !== 'walking_out') return;
+    dialogMode = null;
+    speechBubbleEl.classList.remove('show');
+    shopAnimT0 = performance.now();
+    shopState = 'walking_in';
+  }
+
+  function sellAll() {
+    if (coconutCount <= 0) { showMessage('Sorry, you have nothing to sell.'); return; }
+    const sold = coconutCount, earned = sold * COCONUT_PRICE;
+    coconutCount = 0;
+    cubeCoins += earned;
+    refreshInventory();
+    showMessage(`Sold ${sold} coconuts for ${earned} cubecoins!`);
+  }
+
+  function sellHand() {
+    if (coconutCount <= 0) { showMessage('Sorry, you have nothing in your hand.'); return; }
+    coconutCount -= 1;
+    cubeCoins += COCONUT_PRICE;
+    refreshInventory();
+    showMessage(`Sold 1 coconut for ${COCONUT_PRICE} cubecoins!`);
+  }
+
+  speechButtonsEl.addEventListener('click', e => {
+    const action = e.target.dataset.action;
+    if (action === 'all') sellAll();
+    else if (action === 'hand') sellHand();
+    else if (action === 'cancel') shopExit();
+  });
+
+  function worldToScreen(vec3) {
+    const v = vec3.clone().project(fpsCamera);
+    return { x: (v.x * 0.5 + 0.5) * innerWidth, y: (-v.y * 0.5 + 0.5) * innerHeight, behind: v.z > 1 };
+  }
+
+  const shopHeadOffset = new THREE.Vector3(0, 1.15, 0);
+  function updateShopkeeper(delta) {
+    if (shopState === 'walking_out' || shopState === 'walking_in') {
+      const tt = Math.min((performance.now() - shopAnimT0) / SHOP_WALK_MS, 1);
+      const ease = tt * tt * (3 - 2 * tt);
+      if (shopState === 'walking_out') shopkeeper.position.lerpVectors(shopInsidePos, shopStandPos, ease);
+      else shopkeeper.position.lerpVectors(shopStandPos, shopInsidePos, ease);
+      if (tt >= 1) {
+        if (shopState === 'walking_out') { shopState = 'out'; showPrompt(); }
+        else { shopState = 'inside'; shopkeeper.visible = false; }
+      }
+    }
+
+    if (dialogMode === 'message' && performance.now() > dialogRevertAt) {
+      if (shopState === 'out') showPrompt();
+      else dialogMode = null;
+    }
+
+    const showBubble = shopState === 'out' && dialogMode !== null;
+    speechBubbleEl.classList.toggle('show', showBubble);
+    if (showBubble) {
+      const head = shopkeeper.position.clone().add(shopHeadOffset);
+      const s = worldToScreen(head);
+      if (!s.behind) {
+        speechBubbleEl.style.left = `${s.x}px`;
+        speechBubbleEl.style.top = `${s.y - 14}px`;
+      }
+    }
+
+    // Walking away mid-conversation politely ends it.
+    if ((shopState === 'out') && !nearShop) shopExit();
   }
 
   // ═══════════════════════════════════════════════
@@ -814,6 +1056,14 @@
     nearTree = Math.hypot(dx, dz) <= HIT_RANGE;
     hitPromptEl.classList.toggle('show', nearTree && coconutsReady && !isTouch);
     hitBtnEl.classList.toggle('ready', nearTree && coconutsReady && isTouch);
+
+    if (treeIntroduced) {
+      const sdx = player.position.x - shopPos.x, sdz = player.position.z - shopPos.z;
+      const sdist = Math.hypot(sdx, sdz);
+      const facing = (sdx * shopDoorDir.x + sdz * shopDoorDir.z) / (sdist || 1);
+      nearShop = sdist <= SHOP_RANGE && facing > 0.3; // roughly in front of the door, not behind it
+      if (nearShop) shopEnter();
+    }
   }
 
   function updateFpsCamera() {
@@ -834,17 +1084,24 @@
       applyKeyboardTurn(delta);
       updatePlayer(delta);
       updateFpsCamera();
+      fpsCamera.updateMatrixWorld(); // so worldToScreen below reflects this frame's look direction
       updateFallingCoconuts(delta);
+      updateShopkeeper(delta);
 
       if (!coconutsReady && performance.now() > regrowAt) {
         coconutsReady = true;
         tree.userData.coconutMeshes.forEach(m => (m.visible = true));
         glowPad.visible = true;
-        markerGroup.visible = true;
+        if (!treeIntroduced) markerGroup.visible = true;
       }
       glowPad.material.opacity = 0.4 + Math.sin(t * 3) * 0.15;
       arrowGroup.position.y = 1.0 + Math.sin(t * 2.2) * 0.25;
       markerGroup.rotation.y += delta * 0.6;
+
+      if (shopMarkerGroup.visible) {
+        shopGlowPad.material.opacity = 0.4 + Math.sin(t * 3) * 0.15;
+        shopArrow.position.x = Math.sin(t * 2.2) * 0.25; // sideways bob, matching its horizontal pose
+      }
     }
 
     renderer.render(scene, activeCamera);
