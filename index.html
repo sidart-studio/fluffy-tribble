@@ -24,16 +24,6 @@
     }
     #start-prompt.show { opacity: 1; }
 
-    #resume-overlay {
-      position: fixed; inset: 0; z-index: 280; background: rgba(10,15,25,.55);
-      display: none; align-items: center; justify-content: center; text-align: center;
-      color: #fff; cursor: pointer;
-    }
-    #resume-overlay.show { display: flex; }
-    #resume-overlay .box { background: rgba(0,0,0,.4); padding: 20px 28px; border-radius: 16px; border: 1px solid rgba(255,255,255,.2); }
-    #resume-overlay .box b { font-size: 17px; }
-    #resume-overlay .box span { display: block; font-size: 12px; opacity: .75; margin-top: 6px; }
-
     #inventory {
       position: fixed; top: 16px; left: 16px; z-index: 120;
       background: rgba(0,0,0,.4); border: 1.5px solid rgba(255,255,255,.25); border-radius: 14px;
@@ -80,8 +70,7 @@
   <canvas id="c"></canvas>
 
   <div id="fade"></div>
-  <div id="start-prompt">Click to begin</div>
-  <div id="resume-overlay"><div class="box"><b>🧊 Paused</b><span>Click to look around again</span></div></div>
+  <div id="start-prompt">Click to begin — drag or arrow keys to turn</div>
   <div id="inventory">🥥 <span class="n" id="coconut-count">0</span></div>
   <div id="hit-prompt"><span class="k">E</span> Hit</div>
   <div id="joy-zone"><div id="joy-knob"></div></div>
@@ -494,7 +483,7 @@
   scene.add(glowPad);
 
   const markerGroup = new THREE.Group();
-  markerGroup.position.set(treePos.x, LAND_Y + CROWN_HEIGHT, treePos.z);
+  markerGroup.position.set(treePos.x, LAND_Y + 1.2, treePos.z); // low, near eye level, so it stays in view
   markerGroup.visible = false;
   scene.add(markerGroup);
 
@@ -511,7 +500,7 @@
   arrowShaft.position.y = 0.85;
   arrowHead.castShadow = true; arrowShaft.castShadow = true;
   arrowGroup.add(arrowHead, arrowShaft);
-  arrowGroup.position.y = 1.6;
+  arrowGroup.position.y = 1.0;
   markerGroup.add(arrowGroup);
 
   function makeTextSprite(text, opts = {}) {
@@ -540,7 +529,7 @@
   }
 
   const signSprite = makeTextSprite('Hit!', { color: '#FFD54F' });
-  signSprite.position.y = 2.5;
+  signSprite.position.y = 1.9;
   markerGroup.add(signSprite);
 
   // ═══════════════════════════════════════════════
@@ -626,11 +615,8 @@
   // ═══════════════════════════════════════════════
   const fadeEl = document.getElementById('fade');
   const startPromptEl = document.getElementById('start-prompt');
-  const resumeOverlayEl = document.getElementById('resume-overlay');
 
   let phase = 'intro'; // 'intro' -> 'fps'
-  let bootDismissed = false;
-  let locked = isTouch;
 
   setTimeout(() => startPromptEl.classList.add('show'), 1500);
 
@@ -638,7 +624,6 @@
     if (phase !== 'intro') return;
     phase = 'transitioning';
     startPromptEl.classList.remove('show');
-    if (!isTouch) canvas.requestPointerLock();
 
     fadeEl.classList.add('show');
     setTimeout(() => {
@@ -655,7 +640,6 @@
       markerGroup.visible = true;
 
       phase = 'fps';
-      bootDismissed = true;
       inventoryEl.classList.add('show');
 
       fadeEl.classList.remove('show');
@@ -666,27 +650,25 @@
   window.addEventListener('keydown', e => { if (phase === 'intro' && e.key === 'Enter') beginFirstPerson(); });
 
   // ═══════════════════════════════════════════════
-  //  POINTER LOCK — mouse-look (desktop)
+  //  LOOK — click-and-drag mouse (no Pointer Lock API, so it works even in
+  //  sandboxed embeds that don't grant it), plus dedicated arrow-key turning.
   // ═══════════════════════════════════════════════
-  const MOUSE_SENS = 0.0022;
+  const MOUSE_SENS = 0.0035;
+  let dragging = false, dragLast = { x: 0, y: 0 };
 
-  document.addEventListener('mousemove', e => {
-    if (!locked || isTouch || phase !== 'fps') return;
-    yaw   -= e.movementX * MOUSE_SENS;
-    pitch -= e.movementY * MOUSE_SENS;
-    pitch = THREE.MathUtils.clamp(pitch, -PITCH_LIMIT, PITCH_LIMIT);
+  canvas.addEventListener('mousedown', e => {
+    if (isTouch || phase !== 'fps') return;
+    dragging = true;
+    dragLast = { x: e.clientX, y: e.clientY };
   });
-
-  if (!isTouch) {
-    document.addEventListener('pointerlockchange', () => {
-      locked = document.pointerLockElement === canvas;
-      if (bootDismissed) resumeOverlayEl.classList.toggle('show', !locked);
-    });
-    resumeOverlayEl.addEventListener('click', () => canvas.requestPointerLock());
-    canvas.addEventListener('click', () => {
-      if (phase === 'fps' && document.pointerLockElement !== canvas) canvas.requestPointerLock();
-    });
-  }
+  window.addEventListener('mousemove', e => {
+    if (!dragging) return;
+    const dx = e.clientX - dragLast.x, dy = e.clientY - dragLast.y;
+    yaw   -= dx * MOUSE_SENS;
+    pitch  = THREE.MathUtils.clamp(pitch - dy * MOUSE_SENS, -PITCH_LIMIT, PITCH_LIMIT);
+    dragLast = { x: e.clientX, y: e.clientY };
+  });
+  window.addEventListener('mouseup', () => { dragging = false; });
 
   // ═══════════════════════════════════════════════
   //  INPUT — keyboard + touch joystick/look + Hit
@@ -700,11 +682,22 @@
 
   function readKeyboardVector() {
     let x = 0, z = 0;
-    if (keys.has('w') || keys.has('arrowup'))    z += 1;
-    if (keys.has('s') || keys.has('arrowdown'))  z -= 1;
-    if (keys.has('a') || keys.has('arrowleft'))  x -= 1;
-    if (keys.has('d') || keys.has('arrowright')) x += 1;
+    if (keys.has('w')) z += 1;
+    if (keys.has('s')) z -= 1;
+    if (keys.has('a')) x -= 1;
+    if (keys.has('d')) x += 1;
     return { x, z };
+  }
+
+  // Arrow keys turn CUBEY around (left/right) and look up/down — a mouse-free
+  // way to turn, on top of the click-and-drag look above.
+  const TURN_SPEED = 2.0;
+  const LOOK_SPEED = 1.4;
+  function applyKeyboardTurn(delta) {
+    if (keys.has('arrowleft'))  yaw += TURN_SPEED * delta;
+    if (keys.has('arrowright')) yaw -= TURN_SPEED * delta;
+    if (keys.has('arrowup'))    pitch = THREE.MathUtils.clamp(pitch + LOOK_SPEED * delta, -PITCH_LIMIT, PITCH_LIMIT);
+    if (keys.has('arrowdown'))  pitch = THREE.MathUtils.clamp(pitch - LOOK_SPEED * delta, -PITCH_LIMIT, PITCH_LIMIT);
   }
 
   const touchMove = { x: 0, z: 0 };
@@ -838,6 +831,7 @@
     if (phase === 'intro' || phase === 'transitioning') {
       armPivot.rotation.z = 2.75 + Math.sin(t * 5) * 0.35;
     } else if (phase === 'fps') {
+      applyKeyboardTurn(delta);
       updatePlayer(delta);
       updateFpsCamera();
       updateFallingCoconuts(delta);
@@ -849,7 +843,7 @@
         markerGroup.visible = true;
       }
       glowPad.material.opacity = 0.4 + Math.sin(t * 3) * 0.15;
-      arrowGroup.position.y = 1.6 + Math.sin(t * 2.2) * 0.3;
+      arrowGroup.position.y = 1.0 + Math.sin(t * 2.2) * 0.25;
       markerGroup.rotation.y += delta * 0.6;
     }
 
