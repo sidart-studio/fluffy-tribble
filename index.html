@@ -528,7 +528,9 @@
   const shopInsidePos = new THREE.Vector3(shopPos.x, LAND_Y, shopPos.z).addScaledVector(shopDoorDir, 0.3);
   const shopStandPos  = new THREE.Vector3(shopPos.x, LAND_Y, shopPos.z).addScaledVector(shopDoorDir, 1.2);
 
+  const SHOPKEEPER_SCALE = 0.65; // smaller than CUBEY, so he fits his little shop
   const shopkeeper = makeShopkeeper();
+  shopkeeper.scale.setScalar(SHOPKEEPER_SCALE);
   shopkeeper.position.copy(shopInsidePos);
   shopkeeper.rotation.y = Math.PI + shop.rotation.y; // face outward, toward the door direction
   shopkeeper.visible = false;
@@ -820,7 +822,7 @@
     return { x: (v.x * 0.5 + 0.5) * innerWidth, y: (-v.y * 0.5 + 0.5) * innerHeight, behind: v.z > 1 };
   }
 
-  const shopHeadOffset = new THREE.Vector3(0, 1.15, 0);
+  const shopHeadOffset = new THREE.Vector3(0, 1.15 * SHOPKEEPER_SCALE, 0);
   function updateShopkeeper(delta) {
     if (shopState === 'walking_out' || shopState === 'walking_in') {
       const tt = Math.min((performance.now() - shopAnimT0) / SHOP_WALK_MS, 1);
