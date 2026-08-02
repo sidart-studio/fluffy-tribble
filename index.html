@@ -88,6 +88,9 @@
     .speech-btn:hover { background: #eaeaea; }
     .speech-btn:active { transform: scale(.97); }
     .speech-btn.cancel { color: #a33; }
+    .speech-btn.buy { background: #e3f4e3; border-color: #b9dcb9; color: #1d6b2a; }
+    .speech-btn.buy:hover { background: #d5eed5; }
+    .speech-btn.buy.maxed { opacity: .45; cursor: default; }
   </style>
 </head>
 <body>
@@ -105,6 +108,7 @@
     <div id="speech-buttons">
       <div class="speech-btn" data-action="all">All my inventory</div>
       <div class="speech-btn" data-action="hand">This thing on your hand</div>
+      <div class="speech-btn buy" data-action="land" id="btn-buy-land">Buy more land</div>
       <div class="speech-btn cancel" data-action="cancel">Cancel</div>
     </div>
   </div>
@@ -125,6 +129,8 @@
   const SHOP_RANGE   = 2.6;   // how close, and in front of, the shop CUBEY needs to be
   const COCONUT_PRICE = 10;   // cubecoins per coconut
   const SHOP_WALK_MS = 1100;  // how long the shopkeeper takes to walk in/out
+  const MAX_ISLAND_R = 9;     // the island can grow this many rings big
+  const LAND_PRICE_BASE = 100; // first ring costs this; each ring after doubles
 
   function cellWorld(gx, gz) { return { x: gx * CELL, z: gz * CELL }; }
   const isTouch = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
@@ -215,7 +221,7 @@
   sun.position.set(14, 20, 10);
   sun.castShadow = true;
   sun.shadow.mapSize.set(1024, 1024);
-  Object.assign(sun.shadow.camera, { near: 1, far: 60, left: -15, right: 15, top: 15, bottom: -15 });
+  Object.assign(sun.shadow.camera, { near: 1, far: 80, left: -24, right: 24, top: 24, bottom: -24 }); // sized for the fully-grown island
   scene.add(sun);
 
   // ═══════════════════════════════════════════════
@@ -254,24 +260,16 @@
   }
 
   // ═══════════════════════════════════════════════
-  //  ISLAND — small voxel island (grass core / sand coast)
+  //  ISLAND — small voxel island (grass core / sand coast), rebuildable so
+  //  buying land from the shopkeeper can grow it a ring at a time.
   // ═══════════════════════════════════════════════
   const cubeGeo = new THREE.BoxGeometry(CELL * 0.98, CELL, CELL * 0.98);
   const grassMat = new THREE.MeshStandardMaterial({ color: 0xffffff, flatShading: true, roughness: 0.9 });
   const sandMat  = new THREE.MeshStandardMaterial({ color: 0xffffff, flatShading: true, roughness: 0.9 });
 
-  const landCells = [];
+  let islandRadius = ISLAND_R;
   const landSet = new Set();
-  for (let gx = -ISLAND_R; gx <= ISLAND_R; gx++) {
-    for (let gz = -ISLAND_R; gz <= ISLAND_R; gz++) {
-      const dist = Math.sqrt(gx * gx + gz * gz);
-      if (dist > ISLAND_R) continue;
-      landCells.push({ gx, gz, sand: dist > ISLAND_R - 1.4 });
-      landSet.add(`${gx},${gz}`);
-    }
-  }
-  const grassCells = landCells.filter(c => !c.sand);
-  const sandCells  = landCells.filter(c => c.sand);
+  let grassMesh = null, sandMesh = null;
 
   function buildVoxelMesh(cells, mat, baseColor) {
     const mesh = new THREE.InstancedMesh(cubeGeo, mat, Math.max(cells.length, 1));
@@ -291,8 +289,24 @@
     scene.add(mesh);
     return mesh;
   }
-  buildVoxelMesh(grassCells, grassMat, new THREE.Color(0x7CC576));
-  buildVoxelMesh(sandCells, sandMat, new THREE.Color(0xE8D18C));
+
+  function buildIsland(radius) {
+    if (grassMesh) { scene.remove(grassMesh); grassMesh.dispose(); }
+    if (sandMesh)  { scene.remove(sandMesh);  sandMesh.dispose(); }
+    landSet.clear();
+    const cells = [];
+    for (let gx = -radius; gx <= radius; gx++) {
+      for (let gz = -radius; gz <= radius; gz++) {
+        const dist = Math.sqrt(gx * gx + gz * gz);
+        if (dist > radius) continue;
+        cells.push({ gx, gz, sand: dist > radius - 1.4 });
+        landSet.add(`${gx},${gz}`);
+      }
+    }
+    grassMesh = buildVoxelMesh(cells.filter(c => !c.sand), grassMat, new THREE.Color(0x7CC576));
+    sandMesh  = buildVoxelMesh(cells.filter(c => c.sand),  sandMat,  new THREE.Color(0xE8D18C));
+  }
+  buildIsland(islandRadius);
 
   function isLand(x, z) {
     const gx = Math.round(x / CELL), gz = Math.round(z / CELL);
@@ -764,10 +778,24 @@
   let dialogRevertAt = 0;
   let nearShop = false;
 
+  const buyLandBtn = document.getElementById('btn-buy-land');
+
+  function landPrice() {
+    // 100, 200, 400, 800 for each successive ring
+    return LAND_PRICE_BASE * Math.pow(2, islandRadius - ISLAND_R);
+  }
+
   function showPrompt() {
     dialogMode = 'prompt';
     speechTextEl.textContent = 'What do you want to sell?';
     speechButtonsEl.style.display = 'flex';
+    if (islandRadius >= MAX_ISLAND_R) {
+      buyLandBtn.textContent = 'No more land for sale';
+      buyLandBtn.classList.add('maxed');
+    } else {
+      buyLandBtn.textContent = `Buy more land (${landPrice()} 🪙)`;
+      buyLandBtn.classList.remove('maxed');
+    }
   }
 
   function showMessage(text, revertMs = 1900) {
@@ -810,10 +838,22 @@
     showMessage(`Sold 1 coconut for ${COCONUT_PRICE} cubecoins!`);
   }
 
+  function buyLand() {
+    if (islandRadius >= MAX_ISLAND_R) { showMessage('Sorry, there is no more land for sale!'); return; }
+    const price = landPrice();
+    if (cubeCoins < price) { showMessage(`You need ${price} cubecoins to buy more land.`); return; }
+    cubeCoins -= price;
+    islandRadius += 1;
+    buildIsland(islandRadius);
+    refreshInventory();
+    showMessage('Deal! Your island just got bigger. 🏝️');
+  }
+
   speechButtonsEl.addEventListener('click', e => {
     const action = e.target.dataset.action;
     if (action === 'all') sellAll();
     else if (action === 'hand') sellHand();
+    else if (action === 'land') buyLand();
     else if (action === 'cancel') shopExit();
   });
 
