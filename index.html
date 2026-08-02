@@ -239,16 +239,23 @@ const COLS = 50, ROWS = 34; // world units (1 unit = 1 tile)
 
 const SEED_TYPES = [
   { id:'sprout', key:'1', name:'Sprout Seed', cost:10, icon:'🌱', desc:'Grows fast, weak fighter',
-    monster:{ name:'Sprout Slime', icon:'🟢', hp:22, atk:4 }, growTime:10000 },
+    monster:{ name:'Sprout Slime', icon:'🟢', hp:22, atk:4, color:0x6fd66f, accessory:'leaf', size:0.5 }, growTime:10000 },
   { id:'ember', key:'2', name:'Ember Seed', cost:25, icon:'🌶️', desc:'Fiery mid-tier brawler',
-    monster:{ name:'Ember Imp', icon:'👹', hp:32, atk:7 }, growTime:14000 },
+    monster:{ name:'Ember Imp', icon:'👹', hp:32, atk:7, color:0xe0532f, accessory:'horns', size:0.55 }, growTime:14000 },
   { id:'boulder', key:'3', name:'Boulder Seed', cost:40, icon:'🪨', desc:'Slow to grow, huge HP',
-    monster:{ name:'Boulder Golem', icon:'🗿', hp:60, atk:5 }, growTime:18000 },
+    monster:{ name:'Boulder Golem', icon:'🗿', hp:60, atk:5, color:0x9e9e9e, accessory:'spikes', size:0.72 }, growTime:18000 },
   { id:'gale', key:'4', name:'Gale Seed', cost:60, icon:'🌪️', desc:'Rare seed, hits hard',
-    monster:{ name:'Gale Hawk', icon:'🦅', hp:28, atk:11 }, growTime:22000 },
+    monster:{ name:'Gale Hawk', icon:'🦅', hp:28, atk:11, color:0xeaf6ff, accessory:'wings', size:0.5 }, growTime:22000 },
 ];
 
-const ENEMY_ICONS = ['👺','💀','🧟','🐗','🦂','👻','🐍'];
+const ENEMY_MOBS = [
+  { color:0x4c6b3a, eyeColor:'#e53935', accessory:'none' },
+  { color:0xe8e4d0, eyeColor:'#222222', accessory:'none' },
+  { color:0x2b2b2b, eyeColor:'#e53935', accessory:'spikes' },
+  { color:0x6d4c2f, eyeColor:'#000000', accessory:'horns' },
+  { color:0x8e6bb0, eyeColor:'#ffffff', accessory:'none' },
+  { color:0x3e5c3e, eyeColor:'#ffeb3b', accessory:'horns' },
+];
 const MAX_ROSTER = 8;
 
 // dirt patch: tiles x9-13, y5-9 (5x5 = 25 plots)
@@ -281,7 +288,7 @@ const canvas = document.getElementById('game');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
 renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
 renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.shadowMap.type = THREE.BasicShadowMap; // hard edges suit the blocky look, and it's cheaper
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x8fd0f0);
@@ -304,7 +311,7 @@ scene.add(new THREE.AmbientLight(0xffffff, 0.62));
 const sun = new THREE.DirectionalLight(0xfff3d6, 1.15);
 sun.position.set(18, 26, 10);
 sun.castShadow = true;
-sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.mapSize.set(1024, 1024);
 sun.shadow.camera.left = -30; sun.shadow.camera.right = 30;
 sun.shadow.camera.top = 30; sun.shadow.camera.bottom = -30;
 sun.shadow.camera.far = 80;
@@ -315,30 +322,25 @@ scene.add(new THREE.DirectionalLight(0xbfe3ff, 0.25));
 // ---- helpers ----
 function makeCanvas(w,h){ const c=document.createElement('canvas'); c.width=w; c.height=h; return c; }
 
-const EMOJI_FONT_STACK = `"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji","Segoe UI Symbol",sans-serif`;
-
-function makeEmojiSprite(emoji, px=96, badgeColor=null){
-  const c = makeCanvas(px,px);
-  const ctx = c.getContext('2d');
-  // Draw a solid colored badge behind the glyph first: on systems with no
-  // color-emoji font the glyph can fail to rasterize entirely, and without
-  // this the sprite would be fully transparent (a character-shaped hole).
-  if (badgeColor){
-    ctx.beginPath();
-    ctx.arc(px/2, px/2, px*0.42, 0, Math.PI*2);
-    ctx.fillStyle = badgeColor;
-    ctx.fill();
-    ctx.lineWidth = px*0.04;
-    ctx.strokeStyle = 'rgba(0,0,0,.28)';
-    ctx.stroke();
-  }
-  ctx.font = `${px*0.72}px ${EMOJI_FONT_STACK}`;
-  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.fillText(emoji, px/2, px/2 + px*0.04);
+// Blocky, low-res pixel textures with nearest-neighbor filtering — the
+// signature crisp/blocky Minecraft look, as opposed to smooth photographic
+// textures. Everything the world is built from goes through this.
+const PIXEL = 16;
+function pixelTexture(drawFn){
+  const c = makeCanvas(PIXEL, PIXEL);
+  drawFn(c.getContext('2d'));
   const tex = new THREE.CanvasTexture(c);
+  tex.magFilter = THREE.NearestFilter;
+  tex.minFilter = THREE.NearestFilter;
   tex.colorSpace = THREE.SRGBColorSpace;
-  const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false });
-  return new THREE.Sprite(mat);
+  return tex;
+}
+function speckle(ctx, base, dark, light, n=40, hMax=PIXEL){
+  ctx.fillStyle = base; ctx.fillRect(0,0,PIXEL,hMax);
+  for (let i=0;i<n;i++){
+    ctx.fillStyle = Math.random()<0.5 ? dark : light;
+    ctx.fillRect((Math.random()*PIXEL)|0, (Math.random()*hMax)|0, 1, 1);
+  }
 }
 
 function makeShadowBlob(radius=0.42){
@@ -379,76 +381,111 @@ function makeTextTexture(text, w=256, h=64, color='#fff', bg=null){
   return new THREE.CanvasTexture(c);
 }
 
-// ============================= GROUND =============================
-function grassTexture(){
-  const c = makeCanvas(256,256);
-  const ctx = c.getContext('2d');
-  ctx.fillStyle = '#3f9450'; ctx.fillRect(0,0,256,256);
-  ctx.fillStyle = 'rgba(0,0,0,0.05)';
-  for (let i=0;i<900;i++){
-    const x=Math.random()*256, y=Math.random()*256;
-    ctx.fillRect(x,y,2,2);
+// ============================= VOXEL TEXTURES =============================
+const grassTopTex = pixelTexture(ctx => speckle(ctx, '#5fb84c', '#4a9a3c', '#72c95f', 55));
+const farmlandTopTex = pixelTexture(ctx => {
+  speckle(ctx, '#5a3d22', '#432c18', '#6b4a2c', 40);
+  ctx.strokeStyle = 'rgba(0,0,0,0.35)'; ctx.lineWidth = 1;
+  for (let row=2; row<PIXEL; row+=4){
+    ctx.beginPath(); ctx.moveTo(0,row+0.5); ctx.lineTo(PIXEL,row+0.5); ctx.stroke();
   }
-  ctx.fillStyle = 'rgba(255,255,255,0.05)';
-  for (let i=0;i<900;i++){
-    const x=Math.random()*256, y=Math.random()*256;
-    ctx.fillRect(x,y,2,2);
-  }
-  const tex = new THREE.CanvasTexture(c);
-  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-  tex.repeat.set(COLS/3, ROWS/3);
-  return tex;
-}
+});
+const plankTex = pixelTexture(ctx => {
+  ctx.fillStyle = '#a9762f'; ctx.fillRect(0,0,PIXEL,PIXEL);
+  ctx.strokeStyle = 'rgba(0,0,0,0.25)'; ctx.lineWidth = 1;
+  for (let i=0;i<PIXEL;i+=4){ ctx.beginPath(); ctx.moveTo(0,i+0.5); ctx.lineTo(PIXEL,i+0.5); ctx.stroke(); }
+});
 
-const groundGeo = new THREE.PlaneGeometry(COLS+30, ROWS+30);
-const groundMat = new THREE.MeshLambertMaterial({ map: grassTexture() });
-const ground = new THREE.Mesh(groundGeo, groundMat);
+const plankMat = new THREE.MeshLambertMaterial({ map: plankTex });
+
+// Ground is a flat, unbroken field, so it's rendered as textured planes
+// rather than a full grid of boxes: every block would need 6 faces even
+// though only the top is ever visible, at ~6x the vertex cost for zero
+// visual gain. Real block geometry (below) is reserved for things that
+// actually protrude — the shop, trees, portal, characters — where the
+// extra faces are what you see. The nearest-filter pixel texture is what
+// keeps this reading as blocky rather than smooth.
+grassTopTex.wrapS = grassTopTex.wrapT = THREE.RepeatWrapping;
+grassTopTex.repeat.set(COLS, ROWS);
+const ground = new THREE.Mesh(
+  new THREE.PlaneGeometry(COLS+80, ROWS+80),
+  new THREE.MeshLambertMaterial({ color: 0x4a9a3c })
+);
 ground.rotation.x = -Math.PI/2;
-ground.position.set(COLS/2, 0, ROWS/2);
+ground.position.set(COLS/2, -0.01, ROWS/2);
 ground.receiveShadow = true;
 scene.add(ground);
 
-// low boundary wall of bushes so the field reads as "big land" with an edge
-function scatterBushes(){
-  const bushGeo = new THREE.IcosahedronGeometry(0.55, 0);
-  const bushMat = new THREE.MeshLambertMaterial({ color:0x2f7a3d });
-  const group = new THREE.Group();
-  for (let x=-2; x<=COLS+2; x+=2.4){
-    [-2, ROWS+2].forEach(z => {
-      const m = new THREE.Mesh(bushGeo, bushMat);
-      m.position.set(x + (Math.random()-0.5), 0.5, z + (Math.random()-0.5));
-      m.scale.setScalar(0.7 + Math.random()*0.6);
-      m.castShadow = true;
-      group.add(m);
-    });
-  }
-  for (let z=-2; z<=ROWS+2; z+=2.4){
-    [-2, COLS+2].forEach(x => {
-      const m = new THREE.Mesh(bushGeo, bushMat);
-      m.position.set(x + (Math.random()-0.5), 0.5, z + (Math.random()-0.5));
-      m.scale.setScalar(0.7 + Math.random()*0.6);
-      m.castShadow = true;
-      group.add(m);
-    });
-  }
-  scene.add(group);
-}
-scatterBushes();
+const grassPlane = new THREE.Mesh(
+  new THREE.PlaneGeometry(COLS, ROWS),
+  new THREE.MeshLambertMaterial({ map: grassTopTex })
+);
+grassPlane.rotation.x = -Math.PI/2;
+grassPlane.position.set(COLS/2, 0, ROWS/2);
+grassPlane.receiveShadow = true;
+scene.add(grassPlane);
 
-// ============================= DIRT PATCH =============================
-const dirtPlotMat = new THREE.MeshLambertMaterial({ color: 0x7a5330 });
-const dirtDarkMat = new THREE.MeshLambertMaterial({ color: 0x6e4a2a });
-const dirtPlotGeo = new THREE.PlaneGeometry(0.94, 0.94);
+// Blocky Minecraft-style trees ring the field instead of smooth bushes.
+// All trunks share one InstancedMesh and all leaf cubes share another, so a
+// whole tree line costs 2 draw calls total instead of one mesh per block.
+function scatterTrees(){
+  const positions = [];
+  for (let x=-2; x<=COLS+2; x+=4.6){
+    [-2, ROWS+2].forEach(z => positions.push([x+(Math.random()-0.5)*1.5, z+(Math.random()-0.5)*1.5]));
+  }
+  for (let z=-2; z<=ROWS+2; z+=4.6){
+    [-2, COLS+2].forEach(x => positions.push([x+(Math.random()-0.5)*1.5, z+(Math.random()-0.5)*1.5]));
+  }
+
+  // Kept deliberately cheap: one trunk cube + one canopy cube per tree
+  // (rather than a full stacked-log-and-9-leaf-cube model), batched into
+  // just 2 InstancedMeshes total — many on-screen trees for very little
+  // render cost, which matters a lot on software/low-end GPUs.
+  const dummy = new THREE.Object3D();
+  const logMatrices = [], leafMatrices = [];
+  positions.forEach(([x,z]) => {
+    const scale = 0.85 + Math.random()*0.4;
+    dummy.position.set(x, 0.7*scale, z);
+    dummy.scale.setScalar(scale);
+    dummy.updateMatrix();
+    logMatrices.push(dummy.matrix.clone());
+
+    dummy.position.set(x, 1.65*scale, z);
+    dummy.scale.setScalar(scale);
+    dummy.updateMatrix();
+    leafMatrices.push(dummy.matrix.clone());
+  });
+
+  const trunkMat = new THREE.MeshLambertMaterial({ color: 0x6b4a2b });
+  const leafMat = new THREE.MeshLambertMaterial({ color: 0x3f8f3f });
+
+  const logMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(0.4,1.4,0.4), trunkMat, logMatrices.length);
+  logMatrices.forEach((m,i) => logMesh.setMatrixAt(i,m));
+  logMesh.castShadow = true; logMesh.receiveShadow = true;
+  scene.add(logMesh);
+
+  const leafMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(1.3,1.1,1.3), leafMat, leafMatrices.length);
+  leafMatrices.forEach((m,i) => leafMesh.setMatrixAt(i,m));
+  leafMesh.castShadow = true; leafMesh.receiveShadow = true;
+  scene.add(leafMesh);
+}
+scatterTrees();
+
+// ============================= DIRT PATCH (farmland) =============================
+farmlandTopTex.wrapS = farmlandTopTex.wrapT = THREE.RepeatWrapping;
+farmlandTopTex.repeat.set(DIRT_W, DIRT_D);
+const farmlandPlane = new THREE.Mesh(
+  new THREE.PlaneGeometry(DIRT_W, DIRT_D),
+  new THREE.MeshLambertMaterial({ map: farmlandTopTex })
+);
+farmlandPlane.rotation.x = -Math.PI/2;
+farmlandPlane.position.set(DIRT_X0 + DIRT_W/2, 0.01, DIRT_Z0 + DIRT_D/2);
+farmlandPlane.receiveShadow = true;
+scene.add(farmlandPlane);
 
 for (let gx=0; gx<DIRT_W; gx++){
   for (let gz=0; gz<DIRT_D; gz++){
     const tx = DIRT_X0+gx, tz = DIRT_Z0+gz;
-    const mesh = new THREE.Mesh(dirtPlotGeo, (tx+tz)%2===0 ? dirtPlotMat : dirtDarkMat);
-    mesh.rotation.x = -Math.PI/2;
-    mesh.position.set(tx+0.5, 0.015, tz+0.5);
-    mesh.receiveShadow = true;
-    scene.add(mesh);
-
     const plantGroup = new THREE.Group();
     plantGroup.position.set(tx+0.5, 0, tz+0.5);
     plantGroup.visible = false;
@@ -467,42 +504,43 @@ for (let gx=0; gx<DIRT_W; gx++){
   const group = new THREE.Group();
   const cx = SHOP_TX + SHOP_TW/2, cz = SHOP_TZ + SHOP_TD/2;
 
-  const base = new THREE.Mesh(
-    new THREE.BoxGeometry(SHOP_TW, 1.3, SHOP_TD),
-    new THREE.MeshLambertMaterial({ color: 0x8a5a2e })
-  );
+  const base = new THREE.Mesh(new THREE.BoxGeometry(SHOP_TW, 1.3, SHOP_TD), plankMat);
   base.position.set(0, 0.65, 0);
   base.castShadow = true; base.receiveShadow = true;
   group.add(base);
 
-  const roof = new THREE.Mesh(
-    new THREE.ConeGeometry(SHOP_TW*1.05, 1.1, 4),
-    new THREE.MeshLambertMaterial({ color: 0xc0392b })
-  );
-  roof.rotation.y = Math.PI/4;
-  roof.position.set(0, 1.85, 0);
-  roof.castShadow = true;
-  group.add(roof);
+  // stepped block roof (Minecraft roofs are stacked blocks, not smooth cones)
+  const roofMat = new THREE.MeshLambertMaterial({ color: 0xb23a2c });
+  const roofLayers = 3;
+  for (let i=0;i<roofLayers;i++){
+    const w = SHOP_TW + 0.7 - i*0.55;
+    const d = SHOP_TD + 0.7 - i*0.55;
+    const layer = new THREE.Mesh(new THREE.BoxGeometry(w, 0.32, d), roofMat);
+    layer.position.set(0, 1.5 + i*0.32, 0);
+    layer.castShadow = true;
+    group.add(layer);
+  }
 
-  const counter = new THREE.Mesh(
-    new THREE.BoxGeometry(SHOP_TW*0.9, 0.55, 0.4),
-    new THREE.MeshLambertMaterial({ color: 0xa9762f })
-  );
+  const counter = new THREE.Mesh(new THREE.BoxGeometry(SHOP_TW*0.9, 0.55, 0.4), plankMat);
   counter.position.set(0, 0.28, SHOP_TD/2 + 0.25);
   counter.castShadow = true; counter.receiveShadow = true;
   group.add(counter);
 
+  const post = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.9, 0.12), new THREE.MeshLambertMaterial({ color: 0x5c3a1a }));
+  post.position.set(0, 0.95, SHOP_TD/2 + 0.05);
+  post.castShadow = true;
+  group.add(post);
+
   const signTex = makeTextTexture('SEED SHOP', 300, 70, '#ffffff', '#5c3a1a');
   const sign = new THREE.Sprite(new THREE.SpriteMaterial({ map: signTex, depthWrite:false }));
   sign.scale.set(1.7, 0.4, 1);
-  sign.position.set(0, 1.55, SHOP_TD/2 + 0.02);
+  sign.position.set(0, 1.75, SHOP_TD/2 + 0.05);
   group.add(sign);
 
-  // a couple of seed sacks for flavor
-  const sackGeo = new THREE.SphereGeometry(0.28, 8, 6);
+  // a couple of seed sacks (blocky crates instead of smooth spheres)
   const sackMat = new THREE.MeshLambertMaterial({ color: 0xd6b26a });
-  [[-0.7,0.28,SHOP_TD/2+0.15],[0.75,0.26,SHOP_TD/2+0.2]].forEach(p => {
-    const s = new THREE.Mesh(sackGeo, sackMat);
+  [[-0.7,0.24,SHOP_TD/2+0.15],[0.75,0.24,SHOP_TD/2+0.2]].forEach(p => {
+    const s = new THREE.Mesh(new THREE.BoxGeometry(0.34,0.34,0.34), sackMat);
     s.position.set(...p);
     s.castShadow = true;
     group.add(s);
@@ -513,23 +551,145 @@ for (let gx=0; gx<DIRT_W; gx++){
 })();
 
 // ============================= ENTITY GROUPS (player / NPC / monsters) =============================
-function makeCharacter(emoji, spriteScale=1.15, badgeColor=null){
-  const group = new THREE.Group();
-  const shadow = makeShadowBlob(0.4);
-  group.add(shadow);
-  const spr = makeEmojiSprite(emoji, 96, badgeColor);
-  spr.position.y = 0.85;
-  spr.scale.set(spriteScale, spriteScale, 1);
-  spr.castShadow = false;
-  group.add(spr);
-  return { group, sprite: spr, shadow };
+// Rotate a group so its local +Z ("front") faces world direction (dx,dz).
+function faceTowards(group, dx, dz){
+  if (Math.abs(dx) < 1e-4 && Math.abs(dz) < 1e-4) return;
+  group.rotation.y = Math.atan2(dx, dz);
 }
 
-const playerChar = makeCharacter('🧑‍🌾', 1.2, '#FFD24C');
+function drawSimpleFace(ctx, w, h){
+  ctx.fillStyle = '#000';
+  ctx.fillRect(w*0.22, h*0.35, w*0.14, h*0.14);
+  ctx.fillRect(w*0.64, h*0.35, w*0.14, h*0.14);
+  ctx.fillRect(w*0.32, h*0.65, w*0.36, h*0.08);
+}
+
+function makeVoxelHead(skinColor, faceDraw){
+  const faceTex = pixelTexture(ctx => faceDraw(ctx, PIXEL, PIXEL));
+  const faceMat = new THREE.MeshLambertMaterial({ map: faceTex });
+  const skinMat = new THREE.MeshLambertMaterial({ color: skinColor });
+  // Box face order: +x,-x,+y,-y,+z(front),-z
+  const mats = [skinMat, skinMat, skinMat, skinMat, faceMat, skinMat];
+  const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.5,0.5,0.5), mats);
+  mesh.castShadow = true; mesh.receiveShadow = true;
+  return mesh;
+}
+
+// A simplified Minecraft "Steve"-style rig: head, torso, arms, legs, all boxes.
+function makeVoxelHumanoid({ skin, shirt, pants, hatColor=null, beard=false, faceDraw=drawSimpleFace }){
+  const group = new THREE.Group();
+  group.add(makeShadowBlob(0.42));
+
+  const skinMat = new THREE.MeshLambertMaterial({ color: skin });
+  const shirtMat = new THREE.MeshLambertMaterial({ color: shirt });
+  const pantsMat = new THREE.MeshLambertMaterial({ color: pants });
+
+  const head = makeVoxelHead(skin, faceDraw);
+  head.position.y = 1.15;
+  group.add(head);
+
+  if (beard){
+    const beardMesh = new THREE.Mesh(new THREE.BoxGeometry(0.3,0.18,0.08), new THREE.MeshLambertMaterial({ color: 0x6b4a2b }));
+    beardMesh.position.set(0, 0.98, 0.27);
+    beardMesh.castShadow = true;
+    group.add(beardMesh);
+  }
+
+  if (hatColor){
+    const hatMat = new THREE.MeshLambertMaterial({ color: hatColor });
+    const brim = new THREE.Mesh(new THREE.BoxGeometry(0.66,0.1,0.66), hatMat);
+    brim.position.y = 1.42;
+    brim.castShadow = true;
+    group.add(brim);
+    const top = new THREE.Mesh(new THREE.BoxGeometry(0.3,0.18,0.3), hatMat);
+    top.position.y = 1.52;
+    top.castShadow = true;
+    group.add(top);
+  }
+
+  const torso = new THREE.Mesh(new THREE.BoxGeometry(0.5,0.65,0.3), shirtMat);
+  torso.position.y = 0.75;
+  torso.castShadow = true; torso.receiveShadow = true;
+  group.add(torso);
+
+  [-1,1].forEach(side => {
+    const arm = new THREE.Mesh(new THREE.BoxGeometry(0.18,0.65,0.18), skinMat);
+    arm.position.set(side*0.34, 0.75, 0);
+    arm.castShadow = true;
+    group.add(arm);
+
+    const leg = new THREE.Mesh(new THREE.BoxGeometry(0.2,0.62,0.2), pantsMat);
+    leg.position.set(side*0.13, 0.1, 0);
+    leg.castShadow = true;
+    group.add(leg);
+  });
+
+  return { group, head };
+}
+
+// Monsters/enemies: a boxy "mob" body with eyes and a per-type accessory,
+// in the spirit of Minecraft's own blocky, geometric mob designs.
+function makeVoxelMob({ bodyColor, eyeColor='#101010', accessory='none', size=0.55 }){
+  const group = new THREE.Group();
+  group.add(makeShadowBlob(size*0.7));
+
+  const bodyMat = new THREE.MeshLambertMaterial({ color: bodyColor });
+  const body = new THREE.Mesh(new THREE.BoxGeometry(size,size,size), bodyMat);
+  const bodyY = size/2 + 0.05;
+  body.position.y = bodyY;
+  body.castShadow = true; body.receiveShadow = true;
+  group.add(body);
+
+  const eyeMat = new THREE.MeshBasicMaterial({ color: eyeColor });
+  const eyeSize = size*0.14;
+  [-1,1].forEach(side => {
+    const eye = new THREE.Mesh(new THREE.BoxGeometry(eyeSize, eyeSize, eyeSize*0.6), eyeMat);
+    eye.position.set(side*size*0.2, bodyY + size*0.12, size/2 + eyeSize*0.15);
+    group.add(eye);
+  });
+
+  const accMat1 = new THREE.MeshLambertMaterial({ color: 0x3a2418 });
+  const accMat2 = new THREE.MeshLambertMaterial({ color: 0x8a8a8a });
+  const accMat3 = new THREE.MeshLambertMaterial({ color: 0xe8e8e8 });
+  const accMat4 = new THREE.MeshLambertMaterial({ color: 0x4caf50 });
+
+  if (accessory === 'leaf'){
+    const leaf = new THREE.Mesh(new THREE.BoxGeometry(size*0.2,size*0.4,size*0.2), accMat4);
+    leaf.position.y = bodyY + size/2 + size*0.2;
+    leaf.castShadow = true;
+    group.add(leaf);
+  } else if (accessory === 'horns'){
+    [-1,1].forEach(side => {
+      const horn = new THREE.Mesh(new THREE.BoxGeometry(size*0.12,size*0.26,size*0.12), accMat1);
+      horn.position.set(side*size*0.28, bodyY + size*0.55, 0);
+      horn.rotation.z = side*0.3;
+      horn.castShadow = true;
+      group.add(horn);
+    });
+  } else if (accessory === 'spikes'){
+    for (let i=0;i<4;i++){
+      const spike = new THREE.Mesh(new THREE.BoxGeometry(size*0.14,size*0.14,size*0.14), accMat2);
+      spike.position.set((i-1.5)*size*0.28, bodyY + size*0.5 + size*0.07, 0);
+      spike.castShadow = true;
+      group.add(spike);
+    }
+  } else if (accessory === 'wings'){
+    [-1,1].forEach(side => {
+      const wing = new THREE.Mesh(new THREE.BoxGeometry(size*0.5,size*0.06,size*0.32), accMat3);
+      wing.position.set(side*(size*0.5+size*0.25), bodyY, 0);
+      wing.castShadow = true;
+      group.add(wing);
+    });
+  }
+
+  return { group, body };
+}
+
+const playerChar = makeVoxelHumanoid({ skin:0xF2C79E, shirt:0x3d7dd8, pants:0x5b3d22, hatColor:0xE8C25B });
 playerChar.group.position.set(player.x, 0, player.z);
 scene.add(playerChar.group);
 
-const npcChar = makeCharacter('🧔', 1.1, '#C98A4B');
+const npcChar = makeVoxelHumanoid({ skin:0xE0AC7E, shirt:0x8a5a2e, pants:0x4a3220, beard:true });
 npcChar.group.position.set(NPC_POS.x, 0, NPC_POS.z);
 scene.add(npcChar.group);
 
@@ -724,9 +884,9 @@ function collectMonster(plot){
   }
   const s = seedById(plot.seedId);
   const m = s.monster;
-  const char = makeCharacter(m.icon, 1.0, '#8FE38F');
+  const char = makeVoxelMob({ bodyColor: m.color, accessory: m.accessory, size: m.size });
   const hpBar = makeHpBarSprite();
-  hpBar.position.y = 1.55;
+  hpBar.position.y = m.size + 0.6;
   char.group.add(hpBar);
   char.group.position.set(plot.tx+0.5, 0, plot.tz+0.5);
   scene.add(char.group);
@@ -752,7 +912,7 @@ function removeRosterEntity(m){
   scene.remove(m.group);
 }
 
-// ============================= PARTICLES (floating text sprites) =============================
+// ============================= PARTICLES =============================
 function spawnParticle(x,y,z,text,color){
   const tex = makeTextTexture(text, 220, 56, color, null);
   const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent:true, depthWrite:false }));
@@ -762,13 +922,42 @@ function spawnParticle(x,y,z,text,color){
   state.particles.push({ sprite: spr, life: 1100, born: performance.now(), baseY: y });
 }
 
-function updateParticles(now){
+// Little cube fragments that pop and tumble away — Minecraft's iconic
+// block-break particle effect — used for defeats/hits instead of emoji.
+function spawnBlockBurst(x,y,z,color,count=7){
+  const cubeGeo = new THREE.BoxGeometry(0.09,0.09,0.09);
+  for (let i=0;i<count;i++){
+    const mat = new THREE.MeshBasicMaterial({ color, transparent:true });
+    const cube = new THREE.Mesh(cubeGeo, mat);
+    cube.position.set(x, y, z);
+    scene.add(cube);
+    const ang = Math.random()*Math.PI*2;
+    const speed = 0.8 + Math.random()*1.4;
+    state.particles.push({
+      mesh: cube,
+      vx: Math.cos(ang)*speed, vz: Math.sin(ang)*speed, vy: 1.6 + Math.random()*1.2,
+      life: 650, born: performance.now(),
+    });
+  }
+}
+
+function updateParticles(now, dt){
+  const dtSec = Math.min(0.05, dt/1000);
   state.particles = state.particles.filter(p => {
     const age = now - p.born;
-    if (age >= p.life){ scene.remove(p.sprite); return false; }
+    if (age >= p.life){ scene.remove(p.sprite || p.mesh); return false; }
     const t = age / p.life;
-    p.sprite.position.y = p.baseY + t*0.9;
-    p.sprite.material.opacity = 1 - t;
+    if (p.sprite){
+      p.sprite.position.y = p.baseY + t*0.9;
+      p.sprite.material.opacity = 1 - t;
+    } else {
+      p.vy -= 5*dtSec;
+      p.mesh.position.x += p.vx*dtSec;
+      p.mesh.position.y += p.vy*dtSec;
+      p.mesh.position.z += p.vz*dtSec;
+      p.mesh.rotation.x += dtSec*5; p.mesh.rotation.y += dtSec*4;
+      p.mesh.material.opacity = 1 - t;
+    }
     return true;
   });
 }
@@ -787,14 +976,19 @@ function updateDirt(now, dt){
       }
       if (pct >= 1){
         plot.status = 'ready';
-        const sparkle = makeEmojiSprite('✨', 64);
-        sparkle.position.set(0, 0.75, 0);
-        sparkle.scale.set(0.55,0.55,1);
-        plot.plantGroup.add(sparkle);
-        plot.sparkle = sparkle;
+        // a small floating, spinning glow cube — Minecraft's "dropped item"
+        // look — marks the plot as ready to collect
+        const glowCube = new THREE.Mesh(
+          new THREE.BoxGeometry(0.22,0.22,0.22),
+          new THREE.MeshBasicMaterial({ color: 0xfff176 })
+        );
+        glowCube.position.set(0, 0.75, 0);
+        plot.plantGroup.add(glowCube);
+        plot.sparkle = glowCube;
       }
     } else if (plot.status === 'ready' && plot.sparkle){
       plot.sparkle.position.y = 0.75 + Math.sin(now/220 + plot.tx)*0.08;
+      plot.sparkle.rotation.y += dt/300;
     }
   }
 }
@@ -810,47 +1004,59 @@ function enemyStatsForLevel(level){
 
 let portalPointLight = null;
 
+// A Minecraft Nether-portal-style gateway: an obsidian block frame around a
+// shimmering purple sheen, instead of a smooth glowing ring.
 function buildPortalObject(){
   const group = new THREE.Group();
 
-  const ringGeo = new THREE.TorusGeometry(1.15, 0.16, 12, 28);
-  const ringMat = new THREE.MeshStandardMaterial({ color:0x6a2fbf, emissive:0x6a2fbf, emissiveIntensity:1.4, roughness:0.4 });
-  const ring = new THREE.Mesh(ringGeo, ringMat);
-  ring.position.y = 1.3;
-  group.add(ring);
+  const obsidianMat = new THREE.MeshLambertMaterial({ color: 0x1b1025 });
+  const frameGeo = new THREE.BoxGeometry(1,1,1);
+  const cells = [];
+  for (let x=-1; x<=1; x++){ cells.push([x,0]); cells.push([x,3]); }
+  for (let y=1; y<=2; y++){ cells.push([-1,y]); cells.push([1,y]); }
+  cells.forEach(([x,y]) => {
+    const block = new THREE.Mesh(frameGeo, obsidianMat);
+    block.position.set(x, y+0.5, 0);
+    block.castShadow = true; block.receiveShadow = true;
+    group.add(block);
+  });
 
-  const glowC = makeCanvas(128,128);
-  const gctx = glowC.getContext('2d');
-  const grad = gctx.createRadialGradient(64,64,4,64,64,62);
-  grad.addColorStop(0,'rgba(230,200,255,0.95)');
-  grad.addColorStop(0.55,'rgba(130,60,220,0.85)');
-  grad.addColorStop(1,'rgba(80,20,140,0)');
-  gctx.fillStyle = grad; gctx.fillRect(0,0,128,128);
-  const glowTex = new THREE.CanvasTexture(glowC);
-  const glow = new THREE.Mesh(
-    new THREE.CircleGeometry(1.0, 32),
-    new THREE.MeshBasicMaterial({ map: glowTex, transparent:true, depthWrite:false, blending: THREE.AdditiveBlending })
-  );
-  glow.position.y = 1.3;
-  group.add(glow);
+  const sheenTex = pixelTexture(ctx => {
+    ctx.fillStyle = '#2a0a40'; ctx.fillRect(0,0,PIXEL,PIXEL);
+    for (let i=0;i<70;i++){
+      ctx.fillStyle = Math.random()<0.5 ? '#a86bff' : '#5c1fae';
+      ctx.fillRect((Math.random()*PIXEL)|0, (Math.random()*PIXEL)|0, 1, 1);
+    }
+  });
+  sheenTex.wrapS = sheenTex.wrapT = THREE.RepeatWrapping;
+  const sheenMat = new THREE.MeshBasicMaterial({ map: sheenTex, transparent:true, opacity:0.92, blending: THREE.AdditiveBlending, depthWrite:false });
+  const sheen = new THREE.Mesh(new THREE.PlaneGeometry(0.94,1.94), sheenMat);
+  sheen.position.set(0, 2, 0.02);
+  group.add(sheen);
+  const sheenBack = sheen.clone();
+  sheenBack.position.z = -0.02;
+  sheenBack.rotation.y = Math.PI;
+  group.add(sheenBack);
 
   const light = new THREE.PointLight(0x9955ff, 2.2, 8);
-  light.position.set(0, 1.3, 0);
+  light.position.set(0, 2, 0);
   group.add(light);
   portalPointLight = light;
 
-  // swirling particles
-  const N = 36;
-  const positions = new Float32Array(N*3);
-  const particleGeo = new THREE.BufferGeometry();
-  particleGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-  const particleMat = new THREE.PointsMaterial({ color:0xd8b8ff, size:0.12, transparent:true, opacity:0.9, blending: THREE.AdditiveBlending, depthWrite:false });
-  const points = new THREE.Points(particleGeo, particleMat);
-  group.add(points);
+  // swirling cube particles instead of round points — blocky, not smooth
+  const N = 24;
+  const cubeGeo = new THREE.BoxGeometry(0.08,0.08,0.08);
+  const cubeMat = new THREE.MeshBasicMaterial({ color:0xd8b8ff, transparent:true, opacity:0.85 });
+  const cubes = [];
+  for (let i=0;i<N;i++){
+    const cube = new THREE.Mesh(cubeGeo, cubeMat);
+    group.add(cube);
+    cubes.push(cube);
+  }
 
-  group.userData.ring = ring;
-  group.userData.glow = glow;
-  group.userData.points = points;
+  group.userData.sheen = sheen;
+  group.userData.sheenBack = sheenBack;
+  group.userData.cubes = cubes;
   group.userData.particleCount = N;
   return group;
 }
@@ -879,16 +1085,17 @@ function startBattle(){
   state.battle.enemies = [];
   for (let i=0;i<cfg.count;i++){
     const angle = (i/cfg.count) * Math.PI*2;
-    const icon = ENEMY_ICONS[Math.floor(Math.random()*ENEMY_ICONS.length)];
-    const char = makeCharacter(icon, 1.0, '#FF8A73');
+    const mobCfg = ENEMY_MOBS[Math.floor(Math.random()*ENEMY_MOBS.length)];
+    const mobSize = 0.5 + Math.random()*0.15;
+    const char = makeVoxelMob({ bodyColor: mobCfg.color, eyeColor: mobCfg.eyeColor, accessory: mobCfg.accessory, size: mobSize });
     const hpBar = makeHpBarSprite();
-    hpBar.position.y = 1.55;
+    hpBar.position.y = mobSize + 0.6;
     char.group.add(hpBar);
     const sx = portalX + Math.cos(angle)*0.3, sz = portalZ + Math.sin(angle)*0.3;
     char.group.position.set(sx, 0, sz);
     scene.add(char.group);
     state.battle.enemies.push({
-      id: state.nextId++, icon,
+      id: state.nextId++,
       hp: cfg.hp, maxHp: cfg.hp, atk: cfg.atk,
       x: sx, z: sz,
       targetX: portalX + Math.cos(angle)*(3.2+Math.random()*1.3) - ox*0.35,
@@ -923,34 +1130,35 @@ function updateBattle(now, dt){
     b.portal.life += dt;
     const grow = Math.min(1, b.portal.life/500);
     b.portal.obj.scale.setScalar(0.15 + grow*0.85);
-    b.portal.obj.userData.ring.rotation.z += dt/500;
-    b.portal.obj.userData.glow.rotation.z -= dt/700;
+    b.portal.obj.userData.sheen.material.map.offset.y += dt/4000;
+    b.portal.obj.userData.sheenBack.material.map.offset.y += dt/4000;
     if (portalPointLight) portalPointLight.intensity = 1.6 + Math.sin(now/150)*0.6;
 
-    const pts = b.portal.obj.userData.points;
+    const cubes = b.portal.obj.userData.cubes;
     const N = b.portal.obj.userData.particleCount;
-    const arr = pts.geometry.attributes.position.array;
-    for (let i=0;i<N;i++){
+    cubes.forEach((cube, i) => {
       const a = (i/N)*Math.PI*2 + now/600;
-      const r = 1.0 + Math.sin(now/300 + i)*0.15;
-      arr[i*3]   = Math.cos(a)*r;
-      arr[i*3+1] = 1.3 + Math.sin(a*2 + now/400)*0.5;
-      arr[i*3+2] = Math.sin(a)*r*0.3;
-    }
-    pts.geometry.attributes.position.needsUpdate = true;
+      const r = 0.55 + Math.sin(now/300 + i)*0.12;
+      cube.position.set(Math.cos(a)*r, 2 + Math.sin(a*2 + now/400)*1.3, Math.sin(a)*r*0.25);
+      cube.rotation.x += dt/200; cube.rotation.y += dt/250;
+    });
   }
 
   b.enemies.forEach(e => {
     if (!e.alive) return;
-    e.x += (e.targetX - e.x) * Math.min(1, dt/400);
-    e.z += (e.targetZ - e.z) * Math.min(1, dt/400);
+    const ddx = e.targetX - e.x, ddz = e.targetZ - e.z;
+    e.x += ddx * Math.min(1, dt/400);
+    e.z += ddz * Math.min(1, dt/400);
     e.group.position.set(e.x, 0, e.z);
+    faceTowards(e.group, ddx, ddz);
   });
   state.roster.forEach(m => {
     if (m.targetX == null) return;
-    m.x += (m.targetX - m.x) * Math.min(1, dt/400);
-    m.z += (m.targetZ - m.z) * Math.min(1, dt/400);
+    const ddx = m.targetX - m.x, ddz = m.targetZ - m.z;
+    m.x += ddx * Math.min(1, dt/400);
+    m.z += ddz * Math.min(1, dt/400);
     m.group.position.set(m.x, 0, m.z);
+    faceTowards(m.group, ddx, ddz);
   });
 
   if (b.phase === 'spawning' && b.portal.life > 900){
@@ -996,7 +1204,7 @@ function combatTick(){
     t.hp -= dmg;
     updateHpBar(t.hpBar, Math.max(0,t.hp/t.maxHp));
     spawnParticle(t.x, 1.3, t.z, `-${dmg}`, '#FFD24C');
-    if (t.hp<=0){ t.alive=false; scene.remove(t.group); spawnParticle(t.x, 1.1, t.z, '💥', '#fff'); }
+    if (t.hp<=0){ t.alive=false; scene.remove(t.group); spawnBlockBurst(t.x, 1.1, t.z, 0xffffff, 8); }
   });
 
   const remaining = state.roster.filter(m=>m.hp>0);
@@ -1008,7 +1216,7 @@ function combatTick(){
     t.hp -= dmg;
     updateHpBar(t.hpBar, Math.max(0,t.hp/t.maxHp));
     spawnParticle(t.x, 1.3, t.z, `-${dmg}`, '#FF6B4C');
-    if (t.hp<=0){ spawnParticle(t.x, 1.1, t.z, '💫', '#fff'); }
+    if (t.hp<=0){ spawnBlockBurst(t.x, 1.1, t.z, 0xff8080, 8); }
   });
 
   const dead = state.roster.filter(m => m.hp <= 0);
@@ -1044,9 +1252,13 @@ function updatePlayer(dt){
   if (k['s']||k['arrowdown']) dz += 1;
   if (k['a']||k['arrowleft']) dx -= 1;
   if (k['d']||k['arrowright']) dx += 1;
-  if (dx===0 && dz===0) return;
+  if (dx===0 && dz===0){
+    playerChar.group.position.y = 0;
+    return;
+  }
   if (dx>0) state.facing='right'; else if (dx<0) state.facing='left';
   if (dz>0) state.facing='down'; else if (dz<0) state.facing='up';
+  faceTowards(playerChar.group, dx, dz);
 
   const len = Math.hypot(dx,dz) || 1;
   const nx = player.x + (dx/len) * player.speed * dt/1000;
@@ -1056,9 +1268,8 @@ function updatePlayer(dt){
   if (!rectsOverlap(tryRect(nx, player.z), SHOP_RECT)) player.x = clamp(nx, 0.5, COLS-0.5);
   if (!rectsOverlap(tryRect(player.x, nz), SHOP_RECT)) player.z = clamp(nz, 0.5, ROWS-0.5);
 
-  playerChar.group.position.set(player.x, 0, player.z);
-  const bob = Math.sin(performance.now()/90) * 0.06;
-  playerChar.sprite.position.y = 0.85 + Math.abs(bob);
+  const bob = Math.abs(Math.sin(performance.now()/90)) * 0.08;
+  playerChar.group.position.set(player.x, bob, player.z);
 }
 
 let lastRegen = 0;
@@ -1079,9 +1290,11 @@ function updateIdleRoster(dt){
     const angle = (i / Math.max(1,state.roster.length)) * Math.PI*2 + performance.now()/3000;
     const homeX = player.x - 1.6 + Math.cos(angle)*1.1;
     const homeZ = player.z + 0.3 + Math.sin(angle)*0.7;
-    m.x += (homeX - m.x) * Math.min(1, dt/600);
-    m.z += (homeZ - m.z) * Math.min(1, dt/600);
+    const ddx = homeX - m.x, ddz = homeZ - m.z;
+    m.x += ddx * Math.min(1, dt/600);
+    m.z += ddz * Math.min(1, dt/600);
     m.group.position.set(m.x, 0, m.z);
+    faceTowards(m.group, ddx, ddz);
   });
 }
 
@@ -1124,11 +1337,12 @@ function loop(now){
   lastFrame = now;
 
   updatePlayer(dt);
+  faceTowards(npcChar.group, player.x - NPC_POS.x, player.z - NPC_POS.z);
   updateDirt(now, dt);
   updateBattle(now, dt);
   updateRegen(now);
   updateIdleRoster(dt);
-  updateParticles(now);
+  updateParticles(now, dt);
   updateCamera(dt);
   updateSpeechAndPrompt();
 
