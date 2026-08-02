@@ -1,739 +1,888 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>City Tycoon 3D</title>
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { overflow: hidden; background: #1a1a2e; font-family: 'Segoe UI', Tahoma, sans-serif; }
-    canvas { display: block; }
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Seed & Summon Farm</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { width:100%; height:100%; overflow:hidden; background:#2b6e3f; font-family:'Segoe UI', Tahoma, sans-serif; user-select:none; }
+  canvas { display:block; image-rendering: pixelated; }
 
-    /* ── HUD ─────────────────────────────── */
-    #hud {
-      position: fixed; top: 0; left: 0; right: 0;
-      padding: 12px 20px;
-      display: flex; justify-content: space-between; align-items: center;
-      background: rgba(0,0,0,.55);
-      backdrop-filter: blur(12px);
-      border-bottom: 1px solid rgba(255,255,255,.12);
-      z-index: 100;
-    }
-    .stat { display: flex; align-items: center; gap: 10px; color: #fff; }
-    .stat-icon { font-size: 22px; }
-    .stat-value { font-size: 22px; font-weight: 700; color: #FFD700; }
-    .stat-label { font-size: 11px; color: rgba(255,255,255,.55); }
-    #game-title { color: #fff; text-align: center; }
-    #game-title h1 { font-size: 20px; letter-spacing: 1px; }
-    #game-title p  { font-size: 11px; color: rgba(255,255,255,.45); margin-top: 2px; }
+  #ui { position:fixed; inset:0; pointer-events:none; z-index:10; }
+  #ui * { pointer-events:auto; }
 
-    /* ── TOOLBAR ─────────────────────────── */
-    #toolbar {
-      position: fixed; top: 68px; left: 50%; transform: translateX(-50%);
-      display: flex; gap: 8px; z-index: 100;
-    }
-    .tool-btn {
-      padding: 7px 14px; border-radius: 8px; border: 1.5px solid rgba(255,255,255,.2);
-      background: rgba(0,0,0,.45); backdrop-filter: blur(8px);
-      color: #fff; font-size: 13px; cursor: pointer; user-select: none;
-      transition: all .18s;
-    }
-    .tool-btn:hover { background: rgba(255,255,255,.15); }
-    .tool-btn.active { border-color: #FF5722; background: rgba(255,87,34,.25); color: #FF8A65; }
+  /* ---------- top bars ---------- */
+  #topbar {
+    position:fixed; top:0; left:0; right:0;
+    display:flex; justify-content:space-between; align-items:flex-start;
+    padding:10px 14px; z-index:20;
+  }
+  .pill {
+    background:rgba(0,0,0,.55); backdrop-filter:blur(6px);
+    border:1px solid rgba(255,255,255,.15); border-radius:12px;
+    color:#fff; padding:8px 14px; font-size:14px; font-weight:700;
+    display:flex; align-items:center; gap:8px;
+  }
+  .pill .icon { font-size:18px; }
+  #coins-val { color:#FFD24C; }
+  #level-val { color:#7CE0FF; }
 
-    /* ── BUILDING PANEL ───────────────────── */
-    #building-panel {
-      position: fixed; bottom: 0; left: 0; right: 0;
-      padding: 12px 16px;
-      display: flex; gap: 10px; justify-content: center;
-      overflow-x: auto;
-      background: rgba(0,0,0,.55);
-      backdrop-filter: blur(12px);
-      border-top: 1px solid rgba(255,255,255,.12);
-      z-index: 100;
-    }
-    .bld-btn {
-      display: flex; flex-direction: column; align-items: center;
-      padding: 9px 13px; border-radius: 12px; min-width: 85px;
-      border: 2px solid rgba(255,255,255,.18);
-      background: rgba(255,255,255,.06);
-      color: #fff; cursor: pointer; user-select: none;
-      transition: all .18s;
-    }
-    .bld-btn:hover { background: rgba(255,255,255,.15); transform: translateY(-3px); }
-    .bld-btn.selected { border-color: #FFD700; background: rgba(255,215,0,.18); }
-    .bld-btn.cant-afford { opacity: .4; }
-    .bld-icon  { font-size: 26px; margin-bottom: 3px; }
-    .bld-name  { font-size: 10px; font-weight: 700; }
-    .bld-cost  { font-size: 10px; color: #FFD700; }
-    .bld-inc   { font-size: 10px; color: #69F0AE; }
+  #roster-panel {
+    background:rgba(0,0,0,.55); backdrop-filter:blur(6px);
+    border:1px solid rgba(255,255,255,.15); border-radius:12px;
+    color:#fff; padding:10px 12px; width:190px; max-height:60vh; overflow-y:auto;
+  }
+  #roster-panel h3 { font-size:12px; letter-spacing:.5px; color:#B7FFCB; margin-bottom:6px; text-transform:uppercase; }
+  .roster-row { display:flex; align-items:center; gap:6px; margin-bottom:6px; }
+  .roster-icon { font-size:20px; width:24px; text-align:center; }
+  .roster-bar-wrap { flex:1; height:8px; background:rgba(255,255,255,.15); border-radius:4px; overflow:hidden; }
+  .roster-bar { height:100%; background:linear-gradient(90deg,#5CE65C,#2E9E2E); }
+  .roster-empty { font-size:12px; color:rgba(255,255,255,.5); }
 
-    /* ── INFO CARD ───────────────────────── */
-    #info-card {
-      position: fixed; top: 115px; right: 18px;
-      width: 195px; padding: 14px;
-      background: rgba(0,0,0,.6); backdrop-filter: blur(12px);
-      border: 1px solid rgba(255,255,255,.12); border-radius: 14px;
-      color: #fff; z-index: 100; display: none;
-    }
-    #info-card h3 { font-size: 14px; margin-bottom: 6px; }
-    #info-card p  { font-size: 12px; color: rgba(255,255,255,.65); margin: 3px 0; }
-    #info-card .highlight { color: #FFD700; font-weight: 700; }
+  /* ---------- bottom hotbar ---------- */
+  #hotbar {
+    position:fixed; bottom:14px; left:50%; transform:translateX(-50%);
+    display:flex; gap:8px; z-index:20;
+  }
+  .seed-slot {
+    width:66px; padding:6px 4px 8px; border-radius:10px;
+    background:rgba(0,0,0,.55); backdrop-filter:blur(6px);
+    border:2px solid rgba(255,255,255,.18); color:#fff; text-align:center;
+    cursor:pointer; transition:all .15s;
+  }
+  .seed-slot:hover { background:rgba(255,255,255,.12); }
+  .seed-slot.selected { border-color:#FFD24C; background:rgba(255,210,76,.18); }
+  .seed-slot .key { font-size:10px; color:rgba(255,255,255,.5); }
+  .seed-slot .icon { font-size:24px; }
+  .seed-slot .count { font-size:12px; font-weight:700; color:#FFD24C; }
 
-    /* ── STATS CARD ──────────────────────── */
-    #stats-card {
-      position: fixed; top: 115px; left: 18px;
-      width: 165px; padding: 14px;
-      background: rgba(0,0,0,.6); backdrop-filter: blur(12px);
-      border: 1px solid rgba(255,255,255,.12); border-radius: 14px;
-      color: #fff; z-index: 100;
-    }
-    #stats-card h3 { font-size: 12px; color: rgba(255,255,255,.55); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 1px; }
-    .stat-row { display: flex; justify-content: space-between; font-size: 12px; margin: 4px 0; }
-    .stat-row span:last-child { color: #FFD700; font-weight: 700; }
+  /* ---------- attack button ---------- */
+  #attack-btn {
+    position:fixed; bottom:16px; right:18px; z-index:20;
+    background:linear-gradient(180deg,#FF6B4C,#C7311A);
+    border:2px solid rgba(255,255,255,.35); color:#fff;
+    font-size:16px; font-weight:800; letter-spacing:.5px;
+    padding:16px 22px; border-radius:16px; cursor:pointer;
+    box-shadow:0 6px 0 #7a1f0f, 0 8px 16px rgba(0,0,0,.4);
+  }
+  #attack-btn:active { transform:translateY(4px); box-shadow:0 2px 0 #7a1f0f; }
+  #attack-btn:disabled { filter:grayscale(.8) brightness(.7); cursor:not-allowed; box-shadow:0 6px 0 #444; }
 
-    /* ── TOAST ───────────────────────────── */
-    #toast {
-      position: fixed; top: 78px; left: 50%; transform: translateX(-50%);
-      padding: 9px 20px; border-radius: 9px; font-size: 13px; font-weight: 600;
-      color: #fff; z-index: 200; opacity: 0;
-      transition: opacity .3s; pointer-events: none; white-space: nowrap;
-    }
-  </style>
+  #wave-banner {
+    position:fixed; top:64px; left:50%; transform:translateX(-50%);
+    background:rgba(0,0,0,.55); color:#fff; padding:6px 16px; border-radius:10px;
+    font-size:13px; font-weight:700; z-index:20; display:none;
+  }
+
+  /* ---------- speech bubble ---------- */
+  #speech {
+    position:absolute; transform:translate(-50%,-100%);
+    background:#fff; color:#222; padding:8px 12px; border-radius:12px;
+    font-size:13px; font-weight:700; white-space:nowrap; z-index:20; display:none;
+    box-shadow:0 4px 10px rgba(0,0,0,.3);
+  }
+  #speech:after {
+    content:''; position:absolute; left:50%; bottom:-8px; transform:translateX(-50%);
+    border:8px solid transparent; border-top-color:#fff;
+  }
+  #prompt {
+    position:absolute; transform:translate(-50%,-100%);
+    background:rgba(0,0,0,.7); color:#FFD24C; padding:4px 10px; border-radius:8px;
+    font-size:12px; font-weight:700; z-index:20; display:none;
+  }
+
+  /* ---------- shop modal ---------- */
+  #shop-overlay {
+    position:fixed; inset:0; background:rgba(0,0,0,.55); z-index:40; display:none;
+    align-items:center; justify-content:center;
+  }
+  #shop-modal {
+    background:#3a2418; border:3px solid #7a4a2a; border-radius:18px;
+    width:min(440px,90vw); padding:18px 20px; color:#fff;
+    box-shadow:0 20px 50px rgba(0,0,0,.5);
+  }
+  #shop-modal h2 { font-size:18px; margin-bottom:2px; }
+  #shop-modal .sub { font-size:12px; color:rgba(255,255,255,.6); margin-bottom:12px; }
+  .shop-item {
+    display:flex; align-items:center; gap:10px;
+    background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.1);
+    border-radius:12px; padding:8px 10px; margin-bottom:8px;
+  }
+  .shop-item .icon { font-size:30px; width:40px; text-align:center; }
+  .shop-item .info { flex:1; }
+  .shop-item .name { font-weight:700; font-size:14px; }
+  .shop-item .desc { font-size:11px; color:rgba(255,255,255,.55); }
+  .shop-item .cost { font-size:12px; color:#FFD24C; font-weight:700; margin-top:2px; }
+  .buy-btn {
+    background:#FFD24C; color:#3a2418; border:none; border-radius:8px;
+    font-weight:800; font-size:12px; padding:8px 12px; cursor:pointer;
+  }
+  .buy-btn:disabled { background:#666; color:#aaa; cursor:not-allowed; }
+  #shop-close {
+    display:block; margin:10px auto 0; background:rgba(255,255,255,.12);
+    border:1px solid rgba(255,255,255,.2); color:#fff; padding:8px 20px;
+    border-radius:10px; cursor:pointer; font-weight:700;
+  }
+
+  /* ---------- help ---------- */
+  #help-btn {
+    position:fixed; top:10px; left:50%; transform:translateX(-50%); z-index:20;
+    background:rgba(0,0,0,.55); color:#fff; border:1px solid rgba(255,255,255,.2);
+    border-radius:50%; width:34px; height:34px; font-weight:800; cursor:pointer;
+  }
+  #help-overlay {
+    position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:50; display:flex;
+    align-items:center; justify-content:center;
+  }
+  #help-modal {
+    background:#1d3b25; border:3px solid #3f7a4f; border-radius:18px;
+    width:min(420px,90vw); padding:20px; color:#fff;
+  }
+  #help-modal h2 { margin-bottom:10px; }
+  #help-modal ul { margin:10px 0 16px 18px; font-size:13px; line-height:1.7; }
+  #help-modal button {
+    display:block; margin:0 auto; background:#FFD24C; color:#3a2418; border:none;
+    padding:10px 20px; border-radius:10px; font-weight:800; cursor:pointer;
+  }
+
+  /* ---------- center banners ---------- */
+  #center-banner {
+    position:fixed; top:38%; left:50%; transform:translate(-50%,-50%);
+    z-index:45; text-align:center; color:#fff; display:none;
+    text-shadow:0 4px 10px rgba(0,0,0,.6);
+  }
+  #center-banner h1 { font-size:42px; }
+  #center-banner p { font-size:16px; margin-top:6px; }
+
+  @media (max-width:640px) {
+    #roster-panel { width:130px; }
+    .seed-slot { width:56px; }
+    #attack-btn { padding:12px 16px; font-size:14px; }
+  }
+</style>
 </head>
 <body>
-  <canvas id="c"></canvas>
 
-  <div id="hud">
-    <div class="stat">
-      <span class="stat-icon">💰</span>
-      <div>
-        <div class="stat-value" id="money">$1,000</div>
-        <div class="stat-label">Balance</div>
-      </div>
-    </div>
-    <div id="game-title"><h1>🏙️ City Tycoon 3D</h1><p>Build your empire</p></div>
-    <div class="stat">
-      <span class="stat-icon">📈</span>
-      <div>
-        <div class="stat-value" id="income">$0/s</div>
-        <div class="stat-label">Income</div>
-      </div>
+<canvas id="game"></canvas>
+
+<div id="ui">
+  <div id="topbar">
+    <div class="pill"><span class="icon">💰</span><span id="coins-val">60</span></div>
+    <div id="roster-panel">
+      <h3>Your Monsters</h3>
+      <div id="roster-list"><div class="roster-empty">None yet — grow some!</div></div>
     </div>
   </div>
-
-  <div id="toolbar">
-    <button class="tool-btn" id="btn-bulldoze">🔨 Bulldoze</button>
-    <button class="tool-btn" id="btn-clear">🧹 Clear All</button>
+  <div class="pill" id="level-pill" style="position:fixed; top:10px; right:auto; left:14px; top:56px;">
+    <span class="icon">🏆</span> Level <span id="level-val">1</span>
   </div>
 
-  <div id="stats-card">
-    <h3>City Stats</h3>
-    <div class="stat-row"><span>Buildings</span><span id="s-buildings">0</span></div>
-    <div class="stat-row"><span>Earned total</span><span id="s-earned">$0</span></div>
-    <div class="stat-row"><span>Time played</span><span id="s-time">0s</span></div>
+  <button id="help-btn">?</button>
+  <div id="wave-banner"></div>
+
+  <div id="speech">What do you want?</div>
+  <div id="prompt">[E] Talk</div>
+
+  <div id="hotbar"></div>
+  <button id="attack-btn">⚔️ ATTACK</button>
+
+  <div id="center-banner"><h1 id="banner-title"></h1><p id="banner-sub"></p></div>
+
+  <div id="shop-overlay">
+    <div id="shop-modal">
+      <h2>🌾 Seed Shop</h2>
+      <div class="sub">"What do you want?" — Coins: <span id="shop-coins">60</span></div>
+      <div id="shop-items"></div>
+      <button id="shop-close">Close</button>
+    </div>
   </div>
 
-  <div id="info-card">
-    <h3 id="ic-name">Building</h3>
-    <p id="ic-desc">Description</p>
-    <p>Cost: <span class="highlight" id="ic-cost">$0</span></p>
-    <p>Income: <span class="highlight" id="ic-income">+$0/s</span></p>
-    <p>ROI: <span class="highlight" id="ic-roi">—</span></p>
+  <div id="help-overlay">
+    <div id="help-modal">
+      <h2>🌱 Welcome to the Farm!</h2>
+      <ul>
+        <li><b>WASD / Arrows</b> — walk around the land</li>
+        <li>Walk up to the <b>seed shop man</b> and press <b>E</b> to talk & buy seeds</li>
+        <li>Pick a seed with keys <b>1-4</b>, walk onto empty <b>dirt</b>, press <b>E</b> to plant</li>
+        <li>Seeds grow into <b>monsters</b> that join your team automatically</li>
+        <li>Press <b>ATTACK</b> to tear open a portal — waves of enemy monsters pour out!</li>
+        <li>Your monsters auto-battle the invaders. Clear the wave to <b>level up</b> and earn coins</li>
+      </ul>
+      <button id="help-close">Let's farm! 🌾</button>
+    </div>
   </div>
+</div>
 
-  <div id="building-panel"></div>
-  <div id="toast"></div>
+<script>
+(() => {
+"use strict";
 
-  <script type="importmap">
-  { "imports": {
-      "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
-      "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
-  } }
-  </script>
+// ============================= CONSTANTS =============================
+const TILE = 32;
+const COLS = 50, ROWS = 34;
+const WORLD_W = COLS * TILE, WORLD_H = ROWS * TILE;
 
-  <script type="module">
-  import * as THREE from 'three';
-  import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+const SEED_TYPES = [
+  { id:'sprout', key:'1', name:'Sprout Seed', cost:10, icon:'🌱', desc:'Grows fast, weak fighter',
+    monster:{ name:'Sprout Slime', icon:'🟢', hp:22, atk:4 }, growTime:10000 },
+  { id:'ember', key:'2', name:'Ember Seed', cost:25, icon:'🌶️', desc:'Fiery mid-tier brawler',
+    monster:{ name:'Ember Imp', icon:'👹', hp:32, atk:7 }, growTime:14000 },
+  { id:'boulder', key:'3', name:'Boulder Seed', cost:40, icon:'🪨', desc:'Slow to grow, huge HP',
+    monster:{ name:'Boulder Golem', icon:'🗿', hp:60, atk:5 }, growTime:18000 },
+  { id:'gale', key:'4', name:'Gale Seed', cost:60, icon:'🌪️', desc:'Rare seed, hits hard',
+    monster:{ name:'Gale Hawk', icon:'🦅', hp:28, atk:11 }, growTime:22000 },
+];
 
-  // ═══════════════════════════════════════════════
-  //  CONFIG
-  // ═══════════════════════════════════════════════
-  const GRID  = 14;
-  const CELL  = 3;
-  const HALF  = (GRID * CELL) / 2;
+const ENEMY_ICONS = ['👺','💀','🧟','🐗','🦂','👻','🐍'];
+const MAX_ROSTER = 8;
+const GROWTH_STAGE_ICONS = ['🌱','🌿','🌳']; // 0-33%, 33-66%, 66-100%
 
-  const DEFS = {
-    house:      { name:'House',       icon:'🏠', cost:100,    income:1,    color:0x66BB6A, accent:0xE53935, h:1.4, desc:'A cozy home for your citizens.' },
-    shop:       { name:'Shop',        icon:'🏪', cost:500,    income:6,    color:0x42A5F5, accent:0xFB8C00, h:2.0, desc:'Local retail, brings steady trade.' },
-    park:       { name:'Park',        icon:'🌳', cost:200,    income:2,    color:0x26A69A, accent:0x1B5E20, h:0.3, desc:'Green space boosts city morale.' },
-    factory:    { name:'Factory',     icon:'🏭', cost:2000,   income:25,   color:0x8D6E63, accent:0x546E7A, h:2.5, desc:'Industrial engine of growth.' },
-    hotel:      { name:'Hotel',       icon:'🏨', cost:8000,   income:100,  color:0xAB47BC, accent:0x6A1B9A, h:4.5, desc:'Luxury lodging attracts tourists.' },
-    bank:       { name:'Bank',        icon:'🏦', cost:25000,  income:300,  color:0xFFB300, accent:0xE65100, h:3.2, desc:'The city\'s financial heart.' },
-    tower:      { name:'Skyscraper',  icon:'🏢', cost:80000,  income:1000, color:0x26C6DA, accent:0x006064, h:9.0, desc:'A towering downtown landmark.' },
-    stadium:    { name:'Stadium',     icon:'🏟️', cost:250000, income:3000, color:0xEF5350, accent:0x880E4F, h:2.2, desc:'Sports & entertainment colosseum.' },
-    casino:     { name:'Casino',      icon:'🎰', cost:800000, income:10000,color:0xFFD700, accent:0xF57F17, h:5.5, desc:'High-stakes luxury destination.' },
-  };
+// dirt patch: tiles x9-13, y5-9 (5x5 = 25 plots)
+const DIRT_X0 = 9, DIRT_Y0 = 5, DIRT_W = 5, DIRT_H = 5;
+// shop stall: tiles x6-7, y6-7
+const SHOP_TX = 6, SHOP_TY = 6, SHOP_TW = 2, SHOP_TH = 2;
+const SHOP_RECT = { x: SHOP_TX*TILE, y: SHOP_TY*TILE, w: SHOP_TW*TILE, h: SHOP_TH*TILE };
+const NPC_POS = { x: (SHOP_TX+SHOP_TW)*TILE + 10, y: SHOP_TY*TILE + TILE };
 
-  // ═══════════════════════════════════════════════
-  //  STATE
-  // ═══════════════════════════════════════════════
-  const state = {
-    money:      1000,
-    income:     0,
-    earned:     0,
-    seconds:    0,
-    buildings:  0,
-    selected:   'house',
-    bulldoze:   false,
-    grid:       {},   // "gx,gz" → THREE.Group
-  };
+// ============================= STATE =============================
+const state = {
+  coins: 60,
+  level: 1,
+  selectedSeed: SEED_TYPES[0].id,
+  inventory: { sprout: 1, ember: 0, boulder: 0, gale: 0 },
+  roster: [], // {id,name,icon,hp,maxHp,atk, x,y, targetX,targetY, alive}
+  dirt: [], // plots
+  keys: {},
+  facing: 'down',
+  shopOpen: false,
+  helpOpen: true,
+  battle: { active:false, portal:null, enemies:[], phase:'idle', timer:0 },
+  particles: [], // floating damage text / poof
+  nextId: 1,
+};
 
-  // ═══════════════════════════════════════════════
-  //  RENDERER / SCENE
-  // ═══════════════════════════════════════════════
-  const canvas   = document.getElementById('c');
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
-  renderer.setSize(innerWidth, innerHeight);
-  renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type    = THREE.PCFSoftShadowMap;
-  renderer.setClearColor(0x87CEEB);
-
-  const scene = new THREE.Scene();
-  scene.fog   = new THREE.Fog(0x87CEEB, 80, 160);
-
-  const camera = new THREE.PerspectiveCamera(42, innerWidth / innerHeight, 0.1, 500);
-  camera.position.set(38, 50, 38);
-  camera.lookAt(0, 0, 0);
-
-  const controls = new OrbitControls(camera, canvas);
-  controls.enableDamping  = true;
-  controls.dampingFactor  = 0.06;
-  controls.maxPolarAngle  = Math.PI / 2.15;
-  controls.minDistance    = 15;
-  controls.maxDistance    = 90;
-
-  // ═══════════════════════════════════════════════
-  //  LIGHTS
-  // ═══════════════════════════════════════════════
-  scene.add(new THREE.AmbientLight(0xffffff, 0.65));
-
-  const sun = new THREE.DirectionalLight(0xFFF8DC, 1.3);
-  sun.position.set(25, 45, 20);
-  sun.castShadow = true;
-  sun.shadow.mapSize.set(2048, 2048);
-  const sc = sun.shadow.camera;
-  Object.assign(sc, { near:0.5, far:200, left:-50, right:50, top:50, bottom:-50 });
-  scene.add(sun);
-
-  // Fill from opposite side
-  const fill = new THREE.DirectionalLight(0xB3E5FC, 0.35);
-  fill.position.set(-20, 20, -15);
-  scene.add(fill);
-
-  // ═══════════════════════════════════════════════
-  //  GROUND & GRID
-  // ═══════════════════════════════════════════════
-  const groundMat = new THREE.MeshLambertMaterial({ color: 0x4a7c59 });
-  const ground    = new THREE.Mesh(new THREE.PlaneGeometry(200, 200), groundMat);
-  ground.rotation.x = -Math.PI / 2;
-  ground.receiveShadow = true;
-  scene.add(ground);
-
-  // City plot (slightly lighter)
-  const plotMat = new THREE.MeshLambertMaterial({ color: 0x5a8a68 });
-  const plot    = new THREE.Mesh(new THREE.PlaneGeometry(GRID * CELL, GRID * CELL), plotMat);
-  plot.rotation.x = -Math.PI / 2;
-  plot.position.y  = 0.01;
-  plot.receiveShadow = true;
-  scene.add(plot);
-
-  // Road grid overlay
-  const gridHelper = new THREE.GridHelper(GRID * CELL, GRID, 0x000000, 0x000000);
-  gridHelper.position.y = 0.03;
-  gridHelper.material.opacity     = 0.12;
-  gridHelper.material.transparent = true;
-  scene.add(gridHelper);
-
-  // Hover tile
-  const hoverMesh = new THREE.Mesh(
-    new THREE.PlaneGeometry(CELL - 0.15, CELL - 0.15),
-    new THREE.MeshBasicMaterial({ color: 0xFFD700, transparent: true, opacity: 0.45, depthWrite: false })
-  );
-  hoverMesh.rotation.x = -Math.PI / 2;
-  hoverMesh.position.y = 0.06;
-  hoverMesh.visible    = false;
-  scene.add(hoverMesh);
-
-  // ═══════════════════════════════════════════════
-  //  ENVIRONMENT DECOR
-  // ═══════════════════════════════════════════════
-
-  // Mountains
-  for (let i = 0; i < 10; i++) {
-    const a = (i / 10) * Math.PI * 2;
-    const r = 65 + Math.random() * 20;
-    const h = 12 + Math.random() * 18;
-    const m = new THREE.Mesh(
-      new THREE.ConeGeometry(9 + Math.random() * 6, h, 7),
-      new THREE.MeshLambertMaterial({ color: 0x455A64 })
-    );
-    m.position.set(Math.cos(a) * r, h / 2 - 2, Math.sin(a) * r);
-    scene.add(m);
-    // Snow cap
-    const snow = new THREE.Mesh(
-      new THREE.ConeGeometry(3, h * 0.25, 7),
-      new THREE.MeshLambertMaterial({ color: 0xECEFF1 })
-    );
-    snow.position.set(Math.cos(a) * r, h - h * 0.1, Math.sin(a) * r);
-    scene.add(snow);
-  }
-
-  // Perimeter trees
-  for (let i = 0; i < 40; i++) {
-    const a = Math.random() * Math.PI * 2;
-    const r = HALF + 5 + Math.random() * 12;
-    const x = Math.cos(a) * r, z = Math.sin(a) * r;
-    const h = 1.8 + Math.random() * 2.5;
-    const trunk = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.15, 0.22, 0.9, 6),
-      new THREE.MeshLambertMaterial({ color: 0x5D4037 })
-    );
-    trunk.position.set(x, 0.45, z);
-    const leaves = new THREE.Mesh(
-      new THREE.ConeGeometry(0.9, h, 7),
-      new THREE.MeshLambertMaterial({ color: 0x1B5E20 + (Math.random() * 0x0A1010 | 0) })
-    );
-    leaves.position.set(x, 0.9 + h / 2, z);
-    scene.add(trunk, leaves);
-  }
-
-  // Clouds
-  const cloudGroup = new THREE.Group();
-  scene.add(cloudGroup);
-
-  function makeCloud(x, y, z, scale = 1) {
-    const g  = new THREE.Group();
-    const m  = new THREE.MeshLambertMaterial({ color: 0xFFFFFF });
-    [[0,0,0,1],[1.3,.3,0,.8],[-.9,.35,0,.7],[.5,.55,0,.65],[-.4,.5,.4,.6]].forEach(([px,py,pz,s]) => {
-      const sphere = new THREE.Mesh(new THREE.SphereGeometry((0.9 + Math.random() * .3) * scale, 8, 8), m);
-      sphere.position.set(px * scale, py * scale, pz * scale);
-      g.add(sphere);
-    });
-    g.position.set(x, y, z);
-    cloudGroup.add(g);
-    return g;
-  }
-
-  const clouds = [];
-  for (let i = 0; i < 8; i++) {
-    clouds.push({
-      mesh: makeCloud((Math.random() - .5) * 100, 22 + Math.random() * 14, (Math.random() - .5) * 100, .8 + Math.random() * .6),
-      speed: (0.008 + Math.random() * 0.012) * (Math.random() < .5 ? 1 : -1)
+for (let gy=0; gy<DIRT_H; gy++){
+  for (let gx=0; gx<DIRT_W; gx++){
+    state.dirt.push({
+      tx: DIRT_X0+gx, ty: DIRT_Y0+gy,
+      status:'empty', // empty | growing | ready
+      seedId:null, plantedAt:0, growTime:0,
     });
   }
+}
 
-  // ═══════════════════════════════════════════════
-  //  BUILDING FACTORY
-  // ═══════════════════════════════════════════════
-  function makeBuilding(type, gx, gz) {
-    const d   = DEFS[type];
-    const grp = new THREE.Group();
-    const bw  = CELL * 0.78;
+const player = {
+  x: (SHOP_TX+4)*TILE, y: (SHOP_TY+6)*TILE,
+  w: 22, h: 26, speed: 150,
+};
 
-    // Main body
-    const body = new THREE.Mesh(
-      new THREE.BoxGeometry(bw, d.h, bw),
-      new THREE.MeshPhongMaterial({ color: d.color, shininess: 40 })
-    );
-    body.position.y   = d.h / 2;
-    body.castShadow   = true;
-    body.receiveShadow = true;
-    grp.add(body);
+// ============================= CANVAS =============================
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+function resize(){ canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+window.addEventListener('resize', resize);
+resize();
 
-    // Type-specific details
-    if (type === 'house') {
-      const roof = new THREE.Mesh(
-        new THREE.ConeGeometry(bw * 0.78, 1.1, 4),
-        new THREE.MeshPhongMaterial({ color: d.accent })
-      );
-      roof.position.y   = d.h + 0.55;
-      roof.rotation.y   = Math.PI / 4;
-      roof.castShadow   = true;
-      grp.add(roof);
+// ============================= INPUT =============================
+window.addEventListener('keydown', e => {
+  state.keys[e.key.toLowerCase()] = true;
+  if (['arrowup','arrowdown','arrowleft','arrowright',' '].includes(e.key.toLowerCase())) e.preventDefault();
+  if (e.key.toLowerCase() === 'e') handleInteract();
+  if (e.key.toLowerCase() === 'escape') closeShop();
+  if (['1','2','3','4'].includes(e.key)) selectSeedByIndex(parseInt(e.key,10)-1);
+});
+window.addEventListener('keyup', e => { state.keys[e.key.toLowerCase()] = false; });
 
-      // Door
-      const door = new THREE.Mesh(
-        new THREE.BoxGeometry(0.3, 0.55, 0.05),
-        new THREE.MeshPhongMaterial({ color: 0x5D4037 })
-      );
-      door.position.set(0, 0.27, bw / 2 + 0.03);
-      grp.add(door);
+function selectSeedByIndex(i){
+  const s = SEED_TYPES[i];
+  if (!s) return;
+  state.selectedSeed = s.id;
+  renderHotbar();
+}
 
-    } else if (type === 'park') {
-      // Trees on the park tile
-      grp.remove(body);
-      const base = new THREE.Mesh(
-        new THREE.BoxGeometry(bw, 0.2, bw),
-        new THREE.MeshPhongMaterial({ color: 0x388E3C })
-      );
-      base.position.y = 0.1;
-      base.receiveShadow = true;
-      grp.add(base);
-      const positions = [[-0.6,0,.6],[.6,0,.6],[0,0,-.7],[-.5,0,-.2],[.5,0,-.3]];
-      positions.forEach(([px,,pz]) => {
-        const th = 0.9 + Math.random() * .5;
-        const tr = new THREE.Mesh(new THREE.CylinderGeometry(.1,.14,.6,6), new THREE.MeshPhongMaterial({ color:0x5D4037 }));
-        tr.position.set(px, .3, pz);
-        const lv = new THREE.Mesh(new THREE.ConeGeometry(.45, th, 7), new THREE.MeshPhongMaterial({ color:0x2E7D32 }));
-        lv.position.set(px, .6 + th / 2, pz);
-        grp.add(tr, lv);
-      });
+// ============================= HELPERS =============================
+function rectsOverlap(a,b){
+  return a.x < b.x+b.w && a.x+a.w > b.x && a.y < b.y+b.h && a.y+a.h > b.y;
+}
+function dist(x1,y1,x2,y2){ return Math.hypot(x1-x2, y1-y2); }
+function clamp(v,min,max){ return Math.max(min, Math.min(max, v)); }
+function seedById(id){ return SEED_TYPES.find(s => s.id === id); }
+function fmtCoins(n){ return Math.max(0, Math.floor(n)).toLocaleString(); }
 
-    } else if (type === 'factory') {
-      const roof = new THREE.Mesh(
-        new THREE.BoxGeometry(bw + 0.08, 0.12, bw + 0.08),
-        new THREE.MeshPhongMaterial({ color: d.accent })
-      );
-      roof.position.y = d.h + 0.06;
-      grp.add(roof);
-      // Chimneys
-      for (let i = 0; i < 3; i++) {
-        const cx = (i - 1) * 0.7;
-        const ch = new THREE.Mesh(
-          new THREE.CylinderGeometry(.18, .2, 1.6, 8),
-          new THREE.MeshPhongMaterial({ color: 0x795548 })
-        );
-        ch.position.set(cx, d.h + 0.8, 0);
-        ch.castShadow = true;
-        grp.add(ch);
-        // Smoke ring
-        const ring = new THREE.Mesh(
-          new THREE.TorusGeometry(.25, .06, 6, 12),
-          new THREE.MeshBasicMaterial({ color: 0xBBBBBB, transparent: true, opacity: .5 })
-        );
-        ring.position.set(cx, d.h + 1.7, 0);
-        ring.rotation.x = Math.PI / 2;
-        grp.add(ring);
-      }
+// ============================= UI RENDER =============================
+const coinsVal = document.getElementById('coins-val');
+const levelVal = document.getElementById('level-val');
+const shopCoins = document.getElementById('shop-coins');
+const rosterList = document.getElementById('roster-list');
+const hotbar = document.getElementById('hotbar');
+const attackBtn = document.getElementById('attack-btn');
+const waveBanner = document.getElementById('wave-banner');
+const speechEl = document.getElementById('speech');
+const promptEl = document.getElementById('prompt');
+const centerBanner = document.getElementById('center-banner');
+const bannerTitle = document.getElementById('banner-title');
+const bannerSub = document.getElementById('banner-sub');
 
-    } else if (type === 'tower' || type === 'hotel' || type === 'casino') {
-      // Antenna
-      const ant = new THREE.Mesh(
-        new THREE.CylinderGeometry(.04, .04, 2, 6),
-        new THREE.MeshPhongMaterial({ color: 0xCFD8DC })
-      );
-      ant.position.y = d.h + 1;
-      grp.add(ant);
-      const tip = new THREE.Mesh(
-        new THREE.SphereGeometry(.16, 8, 8),
-        new THREE.MeshBasicMaterial({ color: 0xFF1744 })
-      );
-      tip.position.y = d.h + 2.1;
-      grp.add(tip);
-      // Flat roof
-      const rf = new THREE.Mesh(
-        new THREE.BoxGeometry(bw + 0.12, 0.14, bw + 0.12),
-        new THREE.MeshPhongMaterial({ color: d.accent })
-      );
-      rf.position.y = d.h + 0.07;
-      grp.add(rf);
+function updateTopUI(){
+  coinsVal.textContent = fmtCoins(state.coins);
+  levelVal.textContent = state.level;
+  shopCoins.textContent = fmtCoins(state.coins);
+}
 
-    } else if (type === 'stadium') {
-      // Ring/oval structure
-      const ring = new THREE.Mesh(
-        new THREE.TorusGeometry(bw * 0.58, bw * 0.18, 8, 24),
-        new THREE.MeshPhongMaterial({ color: d.accent })
-      );
-      ring.position.y = d.h + 0.1;
-      ring.rotation.x = Math.PI / 2;
-      grp.add(ring);
-      const rf = new THREE.Mesh(
-        new THREE.BoxGeometry(bw + 0.1, 0.12, bw + 0.1),
-        new THREE.MeshPhongMaterial({ color: d.accent })
-      );
-      rf.position.y = d.h + 0.06;
-      grp.add(rf);
+function renderRoster(){
+  if (state.roster.length === 0){
+    rosterList.innerHTML = '<div class="roster-empty">None yet — grow some!</div>';
+    return;
+  }
+  rosterList.innerHTML = state.roster.map(m => {
+    const pct = Math.max(0, m.hp / m.maxHp * 100);
+    return `<div class="roster-row">
+      <div class="roster-icon">${m.icon}</div>
+      <div class="roster-bar-wrap"><div class="roster-bar" style="width:${pct}%"></div></div>
+    </div>`;
+  }).join('') + `<div class="roster-empty">${state.roster.length}/${MAX_ROSTER}</div>`;
+}
 
-    } else {
-      // Generic flat roof
-      const rf = new THREE.Mesh(
-        new THREE.BoxGeometry(bw + 0.1, 0.12, bw + 0.1),
-        new THREE.MeshPhongMaterial({ color: d.accent })
-      );
-      rf.position.y = d.h + 0.06;
-      grp.add(rf);
-    }
+function renderHotbar(){
+  hotbar.innerHTML = SEED_TYPES.map(s => {
+    const owned = state.inventory[s.id] || 0;
+    const sel = state.selectedSeed === s.id ? 'selected' : '';
+    return `<div class="seed-slot ${sel}" data-id="${s.id}">
+      <div class="key">${s.key}</div>
+      <div class="icon">${s.icon}</div>
+      <div class="count">x${owned}</div>
+    </div>`;
+  }).join('');
+  hotbar.querySelectorAll('.seed-slot').forEach(el => {
+    el.addEventListener('click', () => { state.selectedSeed = el.dataset.id; renderHotbar(); });
+  });
+}
 
-    // Windows (glowing panels for tall buildings)
-    if (d.h >= 2 && type !== 'park' && type !== 'factory') {
-      const winMat = new THREE.MeshBasicMaterial({ color: 0xFFFDE7 });
-      const floors = Math.max(1, Math.floor(d.h / 1.1));
-      for (let f = 0; f < floors; f++) {
-        for (let side = 0; side < 4; side++) {
-          const angle = (side * Math.PI) / 2;
-          for (let col = -1; col <= 1; col += 2) {
-            const win = new THREE.Mesh(new THREE.PlaneGeometry(.24, .28), winMat);
-            win.position.set(
-              Math.sin(angle) * (bw / 2 + 0.01) + Math.cos(angle) * col * 0.38,
-              f * 1.05 + 0.65,
-              Math.cos(angle) * (bw / 2 + 0.01) + Math.sin(angle) * col * 0.38
-            );
-            win.rotation.y = angle;
-            grp.add(win);
-          }
-        }
+function showBanner(title, sub, ms){
+  bannerTitle.textContent = title;
+  bannerSub.textContent = sub;
+  centerBanner.style.display = 'block';
+  clearTimeout(showBanner._t);
+  showBanner._t = setTimeout(() => { centerBanner.style.display = 'none'; }, ms || 2400);
+}
+
+// ============================= SHOP =============================
+const shopOverlay = document.getElementById('shop-overlay');
+const shopItems = document.getElementById('shop-items');
+document.getElementById('shop-close').addEventListener('click', closeShop);
+
+function renderShop(){
+  shopItems.innerHTML = SEED_TYPES.map(s => {
+    const owned = state.inventory[s.id] || 0;
+    const afford = state.coins >= s.cost;
+    return `<div class="shop-item">
+      <div class="icon">${s.icon}</div>
+      <div class="info">
+        <div class="name">${s.name} <span style="color:rgba(255,255,255,.5); font-weight:400;">(own ${owned})</span></div>
+        <div class="desc">${s.desc} → grows ${s.monster.icon} ${s.monster.name}</div>
+        <div class="cost">💰 ${s.cost}</div>
+      </div>
+      <button class="buy-btn" data-id="${s.id}" ${afford ? '' : 'disabled'}>Buy</button>
+    </div>`;
+  }).join('');
+  shopItems.querySelectorAll('.buy-btn').forEach(btn => {
+    btn.addEventListener('click', () => buySeed(btn.dataset.id));
+  });
+}
+
+function buySeed(id){
+  const s = seedById(id);
+  if (!s || state.coins < s.cost) return;
+  state.coins -= s.cost;
+  state.inventory[id] = (state.inventory[id]||0) + 1;
+  updateTopUI(); renderShop(); renderHotbar();
+}
+
+function openShop(){
+  state.shopOpen = true;
+  renderShop();
+  shopOverlay.style.display = 'flex';
+}
+function closeShop(){
+  state.shopOpen = false;
+  shopOverlay.style.display = 'none';
+}
+
+// ============================= HELP =============================
+const helpOverlay = document.getElementById('help-overlay');
+document.getElementById('help-btn').addEventListener('click', () => { helpOverlay.style.display = 'flex'; });
+document.getElementById('help-close').addEventListener('click', () => { helpOverlay.style.display = 'none'; });
+
+// ============================= INTERACT (E) =============================
+function nearNPC(){
+  return dist(player.x+player.w/2, player.y+player.h/2, NPC_POS.x, NPC_POS.y) < 70;
+}
+function findDirtPlotUnderPlayer(){
+  const cx = player.x + player.w/2, cy = player.y + player.h/2;
+  const tx = Math.floor(cx / TILE), ty = Math.floor(cy / TILE);
+  return state.dirt.find(p => p.tx === tx && p.ty === ty);
+}
+
+function handleInteract(){
+  if (state.helpOpen && helpOverlay.style.display !== 'none') return;
+  if (state.shopOpen){ closeShop(); return; }
+  if (nearNPC()){ openShop(); return; }
+  const plot = findDirtPlotUnderPlayer();
+  if (!plot) return;
+  if (plot.status === 'empty'){
+    plantSeed(plot);
+  } else if (plot.status === 'ready'){
+    collectMonster(plot);
+  }
+}
+
+function plantSeed(plot){
+  const seedId = state.selectedSeed;
+  if ((state.inventory[seedId]||0) <= 0) {
+    spawnParticle(plot.tx*TILE+TILE/2, plot.ty*TILE, "No seeds!", '#FF8080');
+    return;
+  }
+  state.inventory[seedId]--;
+  plot.status = 'growing';
+  plot.seedId = seedId;
+  plot.plantedAt = performance.now();
+  plot.growTime = seedById(seedId).growTime;
+  renderHotbar();
+}
+
+function collectMonster(plot){
+  if (state.roster.length >= MAX_ROSTER){
+    spawnParticle(plot.tx*TILE+TILE/2, plot.ty*TILE, "Roster full!", '#FF8080');
+    return;
+  }
+  const s = seedById(plot.seedId);
+  const m = s.monster;
+  state.roster.push({
+    id: state.nextId++, name:m.name, icon:m.icon,
+    hp:m.hp, maxHp:m.hp, atk:m.atk,
+    x: plot.tx*TILE, y: plot.ty*TILE,
+  });
+  plot.status = 'empty'; plot.seedId = null;
+  spawnParticle(plot.tx*TILE+TILE/2, plot.ty*TILE, `+${m.name}!`, '#7CFF9C');
+  renderRoster();
+}
+
+// ============================= PARTICLES =============================
+function spawnParticle(x,y,text,color){
+  state.particles.push({ x,y, text, color, life:1200, born: performance.now() });
+}
+
+// ============================= GROWTH UPDATE =============================
+function updateDirt(now){
+  for (const plot of state.dirt){
+    if (plot.status === 'growing'){
+      const elapsed = now - plot.plantedAt;
+      if (elapsed >= plot.growTime){
+        plot.status = 'ready';
       }
     }
-
-    // Position on grid
-    const { x, z } = cellWorld(gx, gz);
-    grp.position.set(x, 0, z);
-    grp.userData = { type, gx, gz };
-    grp.scale.y  = 0;   // start flat for pop-in
-    scene.add(grp);
-    popIn(grp);
-    return grp;
   }
+}
 
-  function popIn(grp) {
-    const t0 = Date.now();
-    (function tick() {
-      const t = Math.min((Date.now() - t0) / 320, 1);
-      grp.scale.y = 1 - Math.pow(1 - t, 3);
-      if (t < 1) requestAnimationFrame(tick);
-    })();
+// ============================= BATTLE =============================
+function enemyStatsForLevel(level){
+  return {
+    count: Math.min(3 + Math.floor(level*0.8), 10),
+    hp: 14 + level*7,
+    atk: 3 + level*1.3,
+  };
+}
+
+function startBattle(){
+  if (state.battle.active) return;
+  if (state.roster.filter(m=>m.hp>0).length === 0){
+    spawnParticle(player.x, player.y-20, "Grow monsters first!", '#FF8080');
+    return;
   }
+  const cfg = enemyStatsForLevel(state.level);
+  let ox=0, oy=0;
+  if (state.facing==='down') oy=170; else if (state.facing==='up') oy=-170;
+  else if (state.facing==='left') ox=-170; else ox=170;
 
-  function popOut(grp, cb) {
-    const t0 = Date.now();
-    (function tick() {
-      const t = Math.min((Date.now() - t0) / 200, 1);
-      grp.scale.y = 1 - t;
-      if (t < 1) requestAnimationFrame(tick);
-      else cb();
-    })();
-  }
+  const portalX = clamp(player.x+player.w/2+ox, 60, WORLD_W-60);
+  const portalY = clamp(player.y+player.h/2+oy, 60, WORLD_H-60);
 
-  // ═══════════════════════════════════════════════
-  //  ACTIONS
-  // ═══════════════════════════════════════════════
-  function placeBuilding(gx, gz) {
-    const key = `${gx},${gz}`;
-    if (state.grid[key])          { toast('Already occupied!', false); return; }
-    const d = DEFS[state.selected];
-    if (state.money < d.cost)     { toast('Not enough money!', false); return; }
-
-    state.money     -= d.cost;
-    state.income    += d.income;
-    state.buildings += 1;
-    state.grid[key]  = makeBuilding(state.selected, gx, gz);
-    refreshUI();
-    toast(`Built ${d.name}! +${fmt(d.income)}/s`, true);
-  }
-
-  function demolishAt(gx, gz) {
-    const key  = `${gx},${gz}`;
-    const grp  = state.grid[key];
-    if (!grp) return;
-    const d    = DEFS[grp.userData.type];
-    const ref  = Math.floor(d.cost * 0.5);
-    state.money     += ref;
-    state.income    -= d.income;
-    state.buildings -= 1;
-    delete state.grid[key];
-    popOut(grp, () => scene.remove(grp));
-    refreshUI();
-    toast(`Demolished. Refunded ${fmt(ref)}`, true);
-  }
-
-  function clearAll() {
-    Object.keys(state.grid).forEach(key => {
-      const grp = state.grid[key];
-      const d   = DEFS[grp.userData.type];
-      state.income    -= d.income;
-      state.buildings -= 1;
-      popOut(grp, () => scene.remove(grp));
+  state.battle.portal = { x:portalX, y:portalY, life:0, closing:false };
+  state.battle.enemies = [];
+  for (let i=0;i<cfg.count;i++){
+    const angle = (i/cfg.count) * Math.PI*2;
+    state.battle.enemies.push({
+      id: state.nextId++,
+      icon: ENEMY_ICONS[Math.floor(Math.random()*ENEMY_ICONS.length)],
+      hp: cfg.hp, maxHp: cfg.hp, atk: cfg.atk,
+      x: portalX + Math.cos(angle)*10, y: portalY + Math.sin(angle)*10,
+      spawnX: portalX + Math.cos(angle)*10, spawnY: portalY + Math.sin(angle)*10,
+      targetX: portalX + Math.cos(angle)* (100 + Math.random()*40) - ox*0.35,
+      targetY: portalY + Math.sin(angle)* (100 + Math.random()*40) - oy*0.35,
+      moveT: 0, alive:true,
     });
-    state.grid = {};
-    refreshUI();
-    toast('City cleared!', true);
+  }
+  // position player's monsters in a line near the player, facing the portal
+  const alive = state.roster.filter(m=>m.hp>0);
+  alive.forEach((m,i) => {
+    const spread = (i - (alive.length-1)/2) * 42;
+    m.targetX = player.x + (oy!==0?spread:-ox*0.4);
+    m.targetY = player.y + (ox!==0?spread:-oy*0.4);
+    if (oy>0) m.targetY = player.y + 34; else if (oy<0) m.targetY = player.y - 34;
+    if (ox>0) m.targetX = player.x + 34; else if (ox<0) m.targetX = player.x - 34;
+  });
+
+  state.battle.active = true;
+  state.battle.phase = 'spawning';
+  state.battle.timer = performance.now();
+  attackBtn.disabled = true;
+  waveBanner.style.display = 'block';
+  waveBanner.textContent = `Level ${state.level} — Enemies incoming: ${cfg.count}`;
+}
+
+let lastTick = 0;
+function updateBattle(now, dt){
+  const b = state.battle;
+  if (!b.active) return;
+
+  if (b.portal) b.portal.life += dt;
+
+  // move enemies toward target
+  b.enemies.forEach(e => {
+    if (!e.alive) return;
+    e.x += (e.targetX - e.x) * Math.min(1, dt/400);
+    e.y += (e.targetY - e.y) * Math.min(1, dt/400);
+  });
+  // move player monsters toward battle line
+  state.roster.forEach(m => {
+    if (m.targetX == null) return;
+    m.x += (m.targetX - m.x) * Math.min(1, dt/400);
+    m.y += (m.targetY - m.y) * Math.min(1, dt/400);
+  });
+
+  if (b.phase === 'spawning' && b.portal.life > 900){
+    b.phase = 'fighting';
+    lastTick = now;
   }
 
-  // ═══════════════════════════════════════════════
-  //  RAYCASTING HELPERS
-  // ═══════════════════════════════════════════════
-  const rc    = new THREE.Raycaster();
-  const mouse = new THREE.Vector2();
-  const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
-  const hit   = new THREE.Vector3();
-
-  function cellWorld(gx, gz) {
-    return {
-      x: gx * CELL - HALF + CELL / 2,
-      z: gz * CELL - HALF + CELL / 2
-    };
+  if (b.phase === 'fighting'){
+    waveBanner.textContent = `Level ${state.level} — Enemies left: ${b.enemies.filter(e=>e.alive).length}`;
+    if (now - lastTick > 900){
+      lastTick = now;
+      combatTick();
+    }
+    const enemiesLeft = b.enemies.some(e=>e.alive);
+    const monstersLeft = state.roster.some(m=>m.hp>0);
+    if (!enemiesLeft){ endBattle(true); }
+    else if (!monstersLeft){ endBattle(false); }
   }
 
-  function getCell(e) {
-    const r = canvas.getBoundingClientRect();
-    mouse.set(
-      ((e.clientX - r.left) / r.width)  * 2 - 1,
-      -((e.clientY - r.top)  / r.height) * 2 + 1
-    );
-    rc.setFromCamera(mouse, camera);
-    if (!rc.ray.intersectPlane(plane, hit)) return null;
-    const gx = Math.floor((hit.x + HALF) / CELL);
-    const gz = Math.floor((hit.z + HALF) / CELL);
-    if (gx < 0 || gx >= GRID || gz < 0 || gz >= GRID) return null;
-    return { gx, gz };
+  if (b.phase === 'ending'){
+    if (now - b.timer > 1200){
+      b.active = false; b.portal = null; b.enemies = [];
+      waveBanner.style.display = 'none';
+      attackBtn.disabled = false;
+      state.roster.forEach(m => { m.targetX=null; m.targetY=null; });
+    }
   }
+}
 
-  // ═══════════════════════════════════════════════
-  //  MOUSE EVENTS
-  // ═══════════════════════════════════════════════
-  let hoverCell = null, didDrag = false, downPos = { x:0, y:0 };
+function combatTick(){
+  const b = state.battle;
+  const aliveMonsters = state.roster.filter(m => m.hp>0);
+  const aliveEnemies = b.enemies.filter(e => e.alive);
+  if (aliveMonsters.length===0 || aliveEnemies.length===0) return;
 
-  canvas.addEventListener('mousemove', e => {
-    if (Math.hypot(e.clientX - downPos.x, e.clientY - downPos.y) > 4) didDrag = true;
-    const cell = getCell(e);
-    hoverCell  = cell;
-    if (cell) {
-      const { x, z } = cellWorld(cell.gx, cell.gz);
-      hoverMesh.position.set(x, 0.06, z);
-      hoverMesh.visible = true;
-      hoverMesh.material.color.setHex(state.bulldoze ? 0xFF5722 : 0xFFD700);
+  aliveMonsters.forEach(m => {
+    const targets = b.enemies.filter(e=>e.alive);
+    if (targets.length===0) return;
+    const t = targets[Math.floor(Math.random()*targets.length)];
+    const dmg = Math.max(1, Math.round(m.atk * (0.8+Math.random()*0.4)));
+    t.hp -= dmg;
+    spawnParticle(t.x, t.y-10, `-${dmg}`, '#FFD24C');
+    if (t.hp<=0){ t.alive=false; spawnParticle(t.x, t.y-20, '💥', '#fff'); }
+  });
+
+  const remaining = state.roster.filter(m=>m.hp>0);
+  b.enemies.filter(e=>e.alive).forEach(e => {
+    const targets = remaining.filter(m=>m.hp>0);
+    if (targets.length===0) return;
+    const t = targets[Math.floor(Math.random()*targets.length)];
+    const dmg = Math.max(1, Math.round(e.atk * (0.8+Math.random()*0.4)));
+    t.hp -= dmg;
+    spawnParticle(t.x, t.y-10, `-${dmg}`, '#FF6B4C');
+    if (t.hp<=0){ spawnParticle(t.x, t.y-20, '💫', '#fff'); }
+  });
+  state.roster = state.roster.filter(m => m.hp > 0);
+  renderRoster();
+}
+
+function endBattle(won){
+  const b = state.battle;
+  b.phase = 'ending';
+  b.timer = performance.now();
+  if (won){
+    const reward = 20 + state.level*10;
+    state.coins += reward;
+    state.level++;
+    updateTopUI();
+    showBanner('🎉 Level Cleared!', `+${reward} coins — Level ${state.level} unlocked`, 2600);
+  } else {
+    showBanner('💀 Your monsters fainted!', 'Grow more monsters and try again', 2600);
+  }
+  renderRoster();
+}
+
+attackBtn.addEventListener('click', startBattle);
+
+// ============================= MOVEMENT =============================
+function updatePlayer(dt){
+  if (state.shopOpen || helpOverlay.style.display !== 'none') return;
+  let dx=0, dy=0;
+  const k = state.keys;
+  if (k['w']||k['arrowup']) dy -= 1;
+  if (k['s']||k['arrowdown']) dy += 1;
+  if (k['a']||k['arrowleft']) dx -= 1;
+  if (k['d']||k['arrowright']) dx += 1;
+  if (dx===0 && dy===0) return;
+  if (dx>0) state.facing='right'; else if (dx<0) state.facing='left';
+  if (dy>0) state.facing='down'; else if (dy<0) state.facing='up';
+
+  const len = Math.hypot(dx,dy) || 1;
+  const nx = player.x + (dx/len) * player.speed * dt/1000;
+  const ny = player.y + (dy/len) * player.speed * dt/1000;
+
+  const tryRect = (x,y) => ({ x, y, w: player.w, h: player.h });
+  if (!rectsOverlap(tryRect(nx, player.y), SHOP_RECT)) player.x = clamp(nx, 0, WORLD_W-player.w);
+  if (!rectsOverlap(tryRect(player.x, ny), SHOP_RECT)) player.y = clamp(ny, 0, WORLD_H-player.h);
+}
+
+// slow passive regen for idle roster monsters
+let lastRegen = 0;
+function updateRegen(now){
+  if (state.battle.active) return;
+  if (now - lastRegen < 2000) return;
+  lastRegen = now;
+  let changed = false;
+  state.roster.forEach(m => {
+    if (m.hp < m.maxHp){ m.hp = Math.min(m.maxHp, m.hp+1); changed = true; }
+  });
+  if (changed) renderRoster();
+}
+
+// idle wander position for roster monsters (when not in battle)
+function updateIdleRoster(dt){
+  if (state.battle.active) return;
+  state.roster.forEach((m,i) => {
+    const angle = (i / Math.max(1,state.roster.length)) * Math.PI*2 + performance.now()/3000;
+    const homeX = player.x - 50 + Math.cos(angle)*36;
+    const homeY = player.y + 10 + Math.sin(angle)*20;
+    m.x += (homeX - m.x) * Math.min(1, dt/600);
+    m.y += (homeY - m.y) * Math.min(1, dt/600);
+  });
+}
+
+// ============================= CAMERA =============================
+const camera = { x:0, y:0 };
+function updateCamera(){
+  camera.x = clamp(player.x - canvas.width/2, 0, Math.max(0, WORLD_W - canvas.width));
+  camera.y = clamp(player.y - canvas.height/2, 0, Math.max(0, WORLD_H - canvas.height));
+}
+
+// ============================= RENDER =============================
+function isDirtTile(tx,ty){
+  return tx>=DIRT_X0 && tx<DIRT_X0+DIRT_W && ty>=DIRT_Y0 && ty<DIRT_Y0+DIRT_H;
+}
+function plotAt(tx,ty){
+  return state.dirt.find(p=>p.tx===tx && p.ty===ty);
+}
+
+function drawGround(){
+  const startX = Math.floor(camera.x / TILE);
+  const startY = Math.floor(camera.y / TILE);
+  const endX = Math.ceil((camera.x+canvas.width) / TILE);
+  const endY = Math.ceil((camera.y+canvas.height) / TILE);
+  for (let ty=Math.max(0,startY); ty<Math.min(ROWS,endY); ty++){
+    for (let tx=Math.max(0,startX); tx<Math.min(COLS,endX); tx++){
+      const sx = tx*TILE - camera.x, sy = ty*TILE - camera.y;
+      if (isDirtTile(tx,ty)){
+        ctx.fillStyle = ((tx+ty)%2===0) ? '#7a5330' : '#6e4a2a';
+      } else {
+        ctx.fillStyle = ((tx+ty)%2===0) ? '#3f9450' : '#3a8a4a';
+      }
+      ctx.fillRect(sx,sy,TILE,TILE);
+    }
+  }
+}
+
+function drawDirtPlots(){
+  const now = performance.now();
+  for (const plot of state.dirt){
+    const sx = plot.tx*TILE - camera.x, sy = plot.ty*TILE - camera.y;
+    if (sx < -TILE || sy < -TILE || sx > canvas.width || sy > canvas.height) continue;
+    if (plot.status === 'growing'){
+      const pct = clamp((now-plot.plantedAt)/plot.growTime, 0, 1);
+      const stage = pct<0.34?0 : pct<0.67?1 : 2;
+      ctx.font = '22px serif';
+      ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillText(GROWTH_STAGE_ICONS[stage], sx+TILE/2, sy+TILE/2);
+      // progress bar
+      ctx.fillStyle='rgba(0,0,0,.4)'; ctx.fillRect(sx+3, sy+TILE-6, TILE-6, 4);
+      ctx.fillStyle='#7CFF9C'; ctx.fillRect(sx+3, sy+TILE-6, (TILE-6)*pct, 4);
+    } else if (plot.status === 'ready'){
+      const bob = Math.sin(now/220 + plot.tx)*3;
+      ctx.font = '26px serif';
+      ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillText('✨', sx+TILE/2, sy+TILE/2+bob);
+    }
+  }
+}
+
+function drawShop(){
+  const sx = SHOP_RECT.x - camera.x, sy = SHOP_RECT.y - camera.y;
+  // stall base
+  ctx.fillStyle = '#8a5a2e';
+  ctx.fillRect(sx, sy+SHOP_RECT.h*0.4, SHOP_RECT.w, SHOP_RECT.h*0.6);
+  // roof
+  ctx.fillStyle = '#c0392b';
+  ctx.beginPath();
+  ctx.moveTo(sx-6, sy+SHOP_RECT.h*0.45);
+  ctx.lineTo(sx+SHOP_RECT.w/2, sy-14);
+  ctx.lineTo(sx+SHOP_RECT.w+6, sy+SHOP_RECT.h*0.45);
+  ctx.closePath(); ctx.fill();
+  // sign
+  ctx.fillStyle='#fff'; ctx.font='9px sans-serif'; ctx.textAlign='center';
+  ctx.fillText('SEED SHOP', sx+SHOP_RECT.w/2, sy+SHOP_RECT.h*0.55);
+
+  // NPC
+  const npx = NPC_POS.x - camera.x, npy = NPC_POS.y - camera.y;
+  ctx.font='26px serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText('🧔', npx, npy);
+}
+
+function drawPlayer(){
+  const sx = player.x - camera.x, sy = player.y - camera.y;
+  ctx.font = '26px serif';
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText('🧑‍🌾', sx+player.w/2, sy+player.h/2);
+}
+
+function drawRosterOnMap(){
+  state.roster.forEach(m => {
+    const sx = m.x - camera.x, sy = m.y - camera.y;
+    if (sx<-40||sy<-40||sx>canvas.width+40||sy>canvas.height+40) return;
+    ctx.font='22px serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText(m.icon, sx, sy);
+    // hp bar
+    const pct = clamp(m.hp/m.maxHp,0,1);
+    ctx.fillStyle='rgba(0,0,0,.5)'; ctx.fillRect(sx-16, sy-22, 32, 5);
+    ctx.fillStyle = pct>0.5?'#5CE65C':pct>0.25?'#FFD24C':'#FF5A3C';
+    ctx.fillRect(sx-16, sy-22, 32*pct, 5);
+  });
+}
+
+function drawPortalAndEnemies(){
+  const b = state.battle;
+  if (!b.active || !b.portal) return;
+  const px = b.portal.x - camera.x, py = b.portal.y - camera.y;
+  const t = performance.now()/300;
+  const grow = Math.min(1, b.portal.life/600);
+  ctx.save();
+  ctx.translate(px,py);
+  ctx.rotate(t%(Math.PI*2));
+  const r = 46*grow;
+  const grad = ctx.createRadialGradient(0,0,4,0,0,r);
+  grad.addColorStop(0,'#c39bff'); grad.addColorStop(0.6,'#6a2fbf'); grad.addColorStop(1,'rgba(80,20,140,0)');
+  ctx.fillStyle = grad;
+  ctx.beginPath(); ctx.ellipse(0,0,r,r*0.9,0,0,Math.PI*2); ctx.fill();
+  ctx.strokeStyle='rgba(255,255,255,.6)'; ctx.lineWidth=3; ctx.setLineDash([8,6]);
+  ctx.beginPath(); ctx.ellipse(0,0,r*0.75,r*0.65,0,0,Math.PI*2); ctx.stroke();
+  ctx.restore();
+
+  b.enemies.forEach(e => {
+    if (!e.alive) return;
+    const ex = e.x - camera.x, ey = e.y - camera.y;
+    ctx.font='22px serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText(e.icon, ex, ey);
+    const pct = clamp(e.hp/e.maxHp,0,1);
+    ctx.fillStyle='rgba(0,0,0,.5)'; ctx.fillRect(ex-16, ey-22, 32, 5);
+    ctx.fillStyle = pct>0.5?'#FF8A65':pct>0.25?'#FFD24C':'#FF5A3C';
+    ctx.fillRect(ex-16, ey-22, 32*pct, 5);
+  });
+}
+
+function drawParticles(now){
+  state.particles = state.particles.filter(p => now - p.born < p.life);
+  state.particles.forEach(p => {
+    const age = (now-p.born)/p.life;
+    const sx = p.x - camera.x, sy = p.y - camera.y - age*30;
+    ctx.globalAlpha = 1-age;
+    ctx.fillStyle = p.color;
+    ctx.font = 'bold 13px sans-serif'; ctx.textAlign='center';
+    ctx.fillText(p.text, sx, sy);
+    ctx.globalAlpha = 1;
+  });
+}
+
+function drawSpeechAndPrompt(){
+  const npx = NPC_POS.x - camera.x, npy = NPC_POS.y - camera.y;
+  const near = nearNPC();
+  const plot = findDirtPlotUnderPlayer();
+  if (near && !state.shopOpen){
+    speechEl.style.left = npx+'px'; speechEl.style.top = (npy-22)+'px';
+    speechEl.style.display = 'block';
+    promptEl.style.left = npx+'px'; promptEl.style.top = (npy+34)+'px';
+    promptEl.style.display = 'block';
+  } else {
+    speechEl.style.display = 'none';
+    if (plot && (plot.status==='empty' || plot.status==='ready')){
+      const psx = plot.tx*TILE+TILE/2-camera.x, psy = plot.ty*TILE-camera.y;
+      promptEl.textContent = plot.status==='empty' ? '[E] Plant Seed' : '[E] Collect Monster';
+      promptEl.style.left = psx+'px'; promptEl.style.top = (psy-4)+'px';
+      promptEl.style.display = 'block';
     } else {
-      hoverMesh.visible = false;
+      promptEl.style.display = 'none';
     }
-  });
-
-  canvas.addEventListener('mousedown', e => { downPos = { x:e.clientX, y:e.clientY }; didDrag = false; });
-  canvas.addEventListener('mouseup',   () => {
-    if (!didDrag && hoverCell) {
-      state.bulldoze ? demolishAt(hoverCell.gx, hoverCell.gz)
-                     : placeBuilding(hoverCell.gx, hoverCell.gz);
-    }
-  });
-  canvas.addEventListener('mouseleave', () => { hoverMesh.visible = false; hoverCell = null; });
-
-  // ═══════════════════════════════════════════════
-  //  TOOLBAR
-  // ═══════════════════════════════════════════════
-  document.getElementById('btn-bulldoze').addEventListener('click', () => {
-    state.bulldoze = !state.bulldoze;
-    document.getElementById('btn-bulldoze').classList.toggle('active', state.bulldoze);
-  });
-
-  document.getElementById('btn-clear').addEventListener('click', () => {
-    if (confirm('Clear all buildings? You\'ll receive 50% refund.')) clearAll();
-  });
-
-  // ═══════════════════════════════════════════════
-  //  BUILDING BUTTONS
-  // ═══════════════════════════════════════════════
-  const panel = document.getElementById('building-panel');
-  Object.entries(DEFS).forEach(([key, d]) => {
-    const btn = document.createElement('div');
-    btn.className = 'bld-btn' + (key === state.selected ? ' selected' : '');
-    btn.id        = `b-${key}`;
-    btn.innerHTML = `
-      <div class="bld-icon">${d.icon}</div>
-      <div class="bld-name">${d.name}</div>
-      <div class="bld-cost">${fmt(d.cost)}</div>
-      <div class="bld-inc">+${fmt(d.income)}/s</div>
-    `;
-    btn.addEventListener('click', () => {
-      state.selected  = key;
-      state.bulldoze  = false;
-      document.getElementById('btn-bulldoze').classList.remove('active');
-      document.querySelectorAll('.bld-btn').forEach(b => b.classList.remove('selected'));
-      btn.classList.add('selected');
-      // Update info card
-      const ic = document.getElementById('info-card');
-      ic.style.display = 'block';
-      document.getElementById('ic-name').textContent   = `${d.icon} ${d.name}`;
-      document.getElementById('ic-desc').textContent   = d.desc;
-      document.getElementById('ic-cost').textContent   = fmt(d.cost);
-      document.getElementById('ic-income').textContent = `+${fmt(d.income)}/s`;
-      const roi = Math.ceil(d.cost / d.income);
-      document.getElementById('ic-roi').textContent    = `${roi}s payback`;
-    });
-    panel.appendChild(btn);
-  });
-
-  // ═══════════════════════════════════════════════
-  //  ECONOMY TICK
-  // ═══════════════════════════════════════════════
-  setInterval(() => {
-    state.seconds++;
-    if (state.income > 0) {
-      state.money  += state.income;
-      state.earned += state.income;
-    }
-    refreshUI();
-  }, 1000);
-
-  // ═══════════════════════════════════════════════
-  //  UI HELPERS
-  // ═══════════════════════════════════════════════
-  function fmt(n) {
-    if (n >= 1e9)  return `$${(n/1e9).toFixed(2)}B`;
-    if (n >= 1e6)  return `$${(n/1e6).toFixed(1)}M`;
-    if (n >= 1000) return `$${(n/1000).toFixed(1)}K`;
-    return `$${Math.floor(n)}`;
   }
+}
 
-  function refreshUI() {
-    document.getElementById('money').textContent    = fmt(state.money);
-    document.getElementById('income').textContent   = `${fmt(state.income)}/s`;
-    document.getElementById('s-buildings').textContent = state.buildings;
-    document.getElementById('s-earned').textContent    = fmt(state.earned);
-    const m = Math.floor(state.seconds / 60), s = state.seconds % 60;
-    document.getElementById('s-time').textContent =
-      m > 0 ? `${m}m ${s}s` : `${s}s`;
-    // Grey out unaffordable buttons
-    Object.keys(DEFS).forEach(key => {
-      const btn = document.getElementById(`b-${key}`);
-      if (btn) btn.classList.toggle('cant-afford', state.money < DEFS[key].cost);
-    });
-  }
+function render(now){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  drawGround();
+  drawDirtPlots();
+  drawShop();
+  drawRosterOnMap();
+  drawPlayer();
+  drawPortalAndEnemies();
+  drawParticles(now);
+  drawSpeechAndPrompt();
+}
 
-  let toastTimer;
-  function toast(msg, ok) {
-    clearTimeout(toastTimer);
-    const el = document.getElementById('toast');
-    el.textContent   = msg;
-    el.style.background = ok ? 'rgba(46,125,50,.92)' : 'rgba(198,40,40,.92)';
-    el.style.opacity = '1';
-    toastTimer = setTimeout(() => el.style.opacity = '0', 2200);
-  }
+// ============================= MAIN LOOP =============================
+let lastFrame = performance.now();
+function loop(now){
+  const dt = Math.min(50, now - lastFrame);
+  lastFrame = now;
 
-  // ═══════════════════════════════════════════════
-  //  RESIZE
-  // ═══════════════════════════════════════════════
-  window.addEventListener('resize', () => {
-    camera.aspect = innerWidth / innerHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(innerWidth, innerHeight);
-  });
+  updatePlayer(dt);
+  updateDirt(now);
+  updateBattle(now, dt);
+  updateRegen(now);
+  updateIdleRoster(dt);
+  updateCamera();
+  render(now);
 
-  // ═══════════════════════════════════════════════
-  //  RENDER LOOP
-  // ═══════════════════════════════════════════════
-  (function loop() {
-    requestAnimationFrame(loop);
-    controls.update();
-    clouds.forEach(c => {
-      c.mesh.position.x += c.speed;
-      if (c.mesh.position.x >  80) c.mesh.position.x = -80;
-      if (c.mesh.position.x < -80) c.mesh.position.x =  80;
-    });
-    renderer.render(scene, camera);
-  })();
+  requestAnimationFrame(loop);
+}
 
-  refreshUI();
-  </script>
+// ============================= INIT =============================
+updateTopUI();
+renderRoster();
+renderHotbar();
+requestAnimationFrame(loop);
+
+})();
+</script>
 </body>
 </html>
