@@ -10,9 +10,9 @@ Built with [Three.js](https://threejs.org/) — **no build step, no install**.
 
 ## ▶️ Play
 
-The game loads Three.js from a CDN, so it needs to be served over HTTP (opening
-the file directly with `file://` will be blocked by the browser's module/CORS
-rules). From the project root:
+Three.js is **vendored into `vendor/` — no CDN, no install, works fully
+offline**. You only need to serve the folder over HTTP (browsers block ES
+modules loaded via `file://`). From the project root:
 
 ```bash
 # Python (any 3.x)
@@ -56,15 +56,16 @@ exit. Use **💾 Save** to save manually or **♻️ Reset** to start over.
 ## 📁 Project structure
 
 ```
-index.html        — markup, HUD, import map for Three.js
+index.html         — markup, HUD, local import map for Three.js
 src/styles.css     — UI styling
 src/buildings.js   — building catalogue (economics + appearance)
 src/main.js        — scene, rendering, interaction, economy loop
+vendor/three/       — vendored Three.js r160 (offline, no CDN)
 ```
 
 ## 🛠️ Tech
 
-- Three.js r160 (ES modules via CDN import map)
+- Three.js r160, vendored in `vendor/three/` (ES modules via local import map — no CDN)
 - `OrbitControls` for camera, raycasting for tile placement
 - Soft shadows, hemisphere + directional lighting, slow day/night sun drift
 - Pure vanilla JS — no framework, no bundler
