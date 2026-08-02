@@ -315,10 +315,24 @@ scene.add(new THREE.DirectionalLight(0xbfe3ff, 0.25));
 // ---- helpers ----
 function makeCanvas(w,h){ const c=document.createElement('canvas'); c.width=w; c.height=h; return c; }
 
-function makeEmojiSprite(emoji, px=96){
+const EMOJI_FONT_STACK = `"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji","Segoe UI Symbol",sans-serif`;
+
+function makeEmojiSprite(emoji, px=96, badgeColor=null){
   const c = makeCanvas(px,px);
   const ctx = c.getContext('2d');
-  ctx.font = `${px*0.78}px serif`;
+  // Draw a solid colored badge behind the glyph first: on systems with no
+  // color-emoji font the glyph can fail to rasterize entirely, and without
+  // this the sprite would be fully transparent (a character-shaped hole).
+  if (badgeColor){
+    ctx.beginPath();
+    ctx.arc(px/2, px/2, px*0.42, 0, Math.PI*2);
+    ctx.fillStyle = badgeColor;
+    ctx.fill();
+    ctx.lineWidth = px*0.04;
+    ctx.strokeStyle = 'rgba(0,0,0,.28)';
+    ctx.stroke();
+  }
+  ctx.font = `${px*0.72}px ${EMOJI_FONT_STACK}`;
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   ctx.fillText(emoji, px/2, px/2 + px*0.04);
   const tex = new THREE.CanvasTexture(c);
@@ -499,11 +513,11 @@ for (let gx=0; gx<DIRT_W; gx++){
 })();
 
 // ============================= ENTITY GROUPS (player / NPC / monsters) =============================
-function makeCharacter(emoji, spriteScale=1.15){
+function makeCharacter(emoji, spriteScale=1.15, badgeColor=null){
   const group = new THREE.Group();
   const shadow = makeShadowBlob(0.4);
   group.add(shadow);
-  const spr = makeEmojiSprite(emoji);
+  const spr = makeEmojiSprite(emoji, 96, badgeColor);
   spr.position.y = 0.85;
   spr.scale.set(spriteScale, spriteScale, 1);
   spr.castShadow = false;
@@ -511,11 +525,11 @@ function makeCharacter(emoji, spriteScale=1.15){
   return { group, sprite: spr, shadow };
 }
 
-const playerChar = makeCharacter('🧑‍🌾', 1.2);
+const playerChar = makeCharacter('🧑‍🌾', 1.2, '#FFD24C');
 playerChar.group.position.set(player.x, 0, player.z);
 scene.add(playerChar.group);
 
-const npcChar = makeCharacter('🧔', 1.1);
+const npcChar = makeCharacter('🧔', 1.1, '#C98A4B');
 npcChar.group.position.set(NPC_POS.x, 0, NPC_POS.z);
 scene.add(npcChar.group);
 
@@ -710,7 +724,7 @@ function collectMonster(plot){
   }
   const s = seedById(plot.seedId);
   const m = s.monster;
-  const char = makeCharacter(m.icon, 1.0);
+  const char = makeCharacter(m.icon, 1.0, '#8FE38F');
   const hpBar = makeHpBarSprite();
   hpBar.position.y = 1.55;
   char.group.add(hpBar);
@@ -866,7 +880,7 @@ function startBattle(){
   for (let i=0;i<cfg.count;i++){
     const angle = (i/cfg.count) * Math.PI*2;
     const icon = ENEMY_ICONS[Math.floor(Math.random()*ENEMY_ICONS.length)];
-    const char = makeCharacter(icon, 1.0);
+    const char = makeCharacter(icon, 1.0, '#FF8A73');
     const hpBar = makeHpBarSprite();
     hpBar.position.y = 1.55;
     char.group.add(hpBar);
