@@ -88,9 +88,13 @@
     .speech-btn:hover { background: #eaeaea; }
     .speech-btn:active { transform: scale(.97); }
     .speech-btn.cancel { color: #a33; }
-    .speech-btn.buy { background: #e3f4e3; border-color: #b9dcb9; color: #1d6b2a; }
-    .speech-btn.buy:hover { background: #d5eed5; }
-    .speech-btn.buy.maxed { opacity: .45; cursor: default; }
+
+    #toast {
+      position: fixed; top: 64px; left: 50%; transform: translateX(-50%);
+      padding: 9px 20px; border-radius: 9px; font-size: 13px; font-weight: 700;
+      color: #fff; z-index: 200; opacity: 0;
+      transition: opacity .3s; pointer-events: none; white-space: nowrap;
+    }
   </style>
 </head>
 <body>
@@ -108,10 +112,11 @@
     <div id="speech-buttons">
       <div class="speech-btn" data-action="all">All my inventory</div>
       <div class="speech-btn" data-action="hand">This thing on your hand</div>
-      <div class="speech-btn buy" data-action="land" id="btn-buy-land">Buy more land</div>
       <div class="speech-btn cancel" data-action="cancel">Cancel</div>
     </div>
   </div>
+
+  <div id="toast"></div>
 
   <script type="module">
   import * as THREE from './vendor/three/three.module.min.js';
@@ -129,8 +134,12 @@
   const SHOP_RANGE   = 2.6;   // how close, and in front of, the shop CUBEY needs to be
   const COCONUT_PRICE = 10;   // cubecoins per coconut
   const SHOP_WALK_MS = 1100;  // how long the shopkeeper takes to walk in/out
-  const MAX_ISLAND_R = 9;     // the island can grow this many rings big
-  const LAND_PRICE_BASE = 100; // first ring costs this; each ring after doubles
+  const LAND_PRICE_BASE = 100; // first patch of land costs this
+  const LAND_PRICE_STEP = 50;  // each later patch costs this much more
+  const PATCH_DEPTH = 3;       // how many cells deep each purchased patch extends outward
+  const PATCH_HALFW = 2;       // patches are (2*PATCH_HALFW + 1) cells wide
+  const MAX_EXPANSIONS_PER_DIR = 3; // each side of the island can grow this many times
+  const BUTTON_RANGE = 1.4;    // how close CUBEY must get to a red button to buy its land
 
   function cellWorld(gx, gz) { return { x: gx * CELL, z: gz * CELL }; }
   const isTouch = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
@@ -221,7 +230,7 @@
   sun.position.set(14, 20, 10);
   sun.castShadow = true;
   sun.shadow.mapSize.set(1024, 1024);
-  Object.assign(sun.shadow.camera, { near: 1, far: 80, left: -24, right: 24, top: 24, bottom: -24 }); // sized for the fully-grown island
+  Object.assign(sun.shadow.camera, { near: 1, far: 110, left: -32, right: 32, top: 32, bottom: -32 }); // sized for the fully-grown island
   scene.add(sun);
 
   // ═══════════════════════════════════════════════
@@ -260,16 +269,31 @@
   }
 
   // ═══════════════════════════════════════════════
-  //  ISLAND — small voxel island (grass core / sand coast), rebuildable so
-  //  buying land from the shopkeeper can grow it a ring at a time.
+  //  ISLAND — voxel island stored as a set of owned cells, so purchased
+  //  patches can grow it in any direction. Coastline (sand) is any cell
+  //  touching the ocean; interior cells are grass.
   // ═══════════════════════════════════════════════
   const cubeGeo = new THREE.BoxGeometry(CELL * 0.98, CELL, CELL * 0.98);
   const grassMat = new THREE.MeshStandardMaterial({ color: 0xffffff, flatShading: true, roughness: 0.9 });
   const sandMat  = new THREE.MeshStandardMaterial({ color: 0xffffff, flatShading: true, roughness: 0.9 });
 
-  let islandRadius = ISLAND_R;
   const landSet = new Set();
   let grassMesh = null, sandMesh = null;
+  const cellKey = (gx, gz) => `${gx},${gz}`;
+
+  // Seed: the little round starting island.
+  for (let gx = -ISLAND_R; gx <= ISLAND_R; gx++) {
+    for (let gz = -ISLAND_R; gz <= ISLAND_R; gz++) {
+      if (Math.sqrt(gx * gx + gz * gz) <= ISLAND_R) landSet.add(cellKey(gx, gz));
+    }
+  }
+
+  function isCoast(gx, gz) {
+    for (let dx = -1; dx <= 1; dx++)
+      for (let dz = -1; dz <= 1; dz++)
+        if ((dx || dz) && !landSet.has(cellKey(gx + dx, gz + dz))) return true;
+    return false;
+  }
 
   function buildVoxelMesh(cells, mat, baseColor) {
     const mesh = new THREE.InstancedMesh(cubeGeo, mat, Math.max(cells.length, 1));
@@ -290,27 +314,22 @@
     return mesh;
   }
 
-  function buildIsland(radius) {
+  function rebuildIslandMeshes() {
     if (grassMesh) { scene.remove(grassMesh); grassMesh.dispose(); }
     if (sandMesh)  { scene.remove(sandMesh);  sandMesh.dispose(); }
-    landSet.clear();
-    const cells = [];
-    for (let gx = -radius; gx <= radius; gx++) {
-      for (let gz = -radius; gz <= radius; gz++) {
-        const dist = Math.sqrt(gx * gx + gz * gz);
-        if (dist > radius) continue;
-        cells.push({ gx, gz, sand: dist > radius - 1.4 });
-        landSet.add(`${gx},${gz}`);
-      }
+    const grass = [], sand = [];
+    for (const key of landSet) {
+      const [gx, gz] = key.split(',').map(Number);
+      (isCoast(gx, gz) ? sand : grass).push({ gx, gz });
     }
-    grassMesh = buildVoxelMesh(cells.filter(c => !c.sand), grassMat, new THREE.Color(0x7CC576));
-    sandMesh  = buildVoxelMesh(cells.filter(c => c.sand),  sandMat,  new THREE.Color(0xE8D18C));
+    grassMesh = buildVoxelMesh(grass, grassMat, new THREE.Color(0x7CC576));
+    sandMesh  = buildVoxelMesh(sand,  sandMat,  new THREE.Color(0xE8D18C));
   }
-  buildIsland(islandRadius);
+  rebuildIslandMeshes();
 
   function isLand(x, z) {
     const gx = Math.round(x / CELL), gz = Math.round(z / CELL);
-    return landSet.has(`${gx},${gz}`);
+    return landSet.has(cellKey(gx, gz));
   }
 
   // ═══════════════════════════════════════════════
@@ -526,10 +545,20 @@
   // ═══════════════════════════════════════════════
   //  PLACE THE SCENE
   // ═══════════════════════════════════════════════
-  const tree = makeCoconutTree();
+  // Every coconut tree on the island is harvestable; new land grows more of them.
+  const trees = []; // { group, x, z, ready, regrowAt, coconutMeshes }
+  function addTree(x, z, randomYaw = false) {
+    const group = makeCoconutTree();
+    group.position.set(x, LAND_Y, z);
+    if (randomYaw) group.rotation.y = Math.random() * Math.PI * 2;
+    scene.add(group);
+    const t = { group, x, z, ready: true, regrowAt: 0, coconutMeshes: group.userData.coconutMeshes };
+    trees.push(t);
+    return t;
+  }
+
   const treePos = cellWorld(1, -2);
-  tree.position.set(treePos.x, LAND_Y, treePos.z);
-  scene.add(tree);
+  addTree(treePos.x, treePos.z); // trees[0] — the intro tree with the "Hit!" marker
 
   const shop = makeWoodenShop();
   const shopPos = cellWorld(-1, -1);
@@ -566,6 +595,208 @@
   shadowBlob.rotation.x = -Math.PI / 2;
   shadowBlob.visible = false;
   scene.add(shadowBlob);
+
+  // ═══════════════════════════════════════════════
+  //  PROPS & ANIMALS — spawned on newly purchased land
+  // ═══════════════════════════════════════════════
+  function makeBamboo() {
+    const g = new THREE.Group();
+    const stalkMat = new THREE.MeshStandardMaterial({ color: 0x8BC34A, flatShading: true, roughness: 0.8 });
+    const nodeMat  = new THREE.MeshStandardMaterial({ color: 0x689F38, flatShading: true, roughness: 0.8 });
+    const count = 3 + Math.floor(Math.random() * 3);
+    for (let i = 0; i < count; i++) {
+      const h = 1.8 + Math.random() * 1.6;
+      const stalk = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.075, h, 5), stalkMat);
+      const px = (Math.random() - 0.5) * 0.9, pz = (Math.random() - 0.5) * 0.9;
+      stalk.position.set(px, h / 2, pz);
+      stalk.rotation.z = (Math.random() - 0.5) * 0.12;
+      stalk.castShadow = true;
+      g.add(stalk);
+      for (const frac of [0.35, 0.7]) { // node rings give it the segmented bamboo look
+        const ring = new THREE.Mesh(new THREE.CylinderGeometry(0.085, 0.085, 0.05, 5), nodeMat);
+        ring.position.set(px, h * frac, pz);
+        g.add(ring);
+      }
+    }
+    return g;
+  }
+
+  function makeBarn() {
+    const g = new THREE.Group();
+    const wallMat = new THREE.MeshStandardMaterial({ color: 0xC62828, flatShading: true, roughness: 0.85 });
+    const trimMat = new THREE.MeshStandardMaterial({ color: 0xF5F0E8, flatShading: true, roughness: 0.85 });
+    const roofMat = new THREE.MeshStandardMaterial({ color: 0x5D4037, flatShading: true, roughness: 0.9 });
+    const w = 2.0, h = 1.4, d = 1.6;
+    const body = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), wallMat);
+    body.position.y = h / 2;
+    body.castShadow = true; body.receiveShadow = true;
+    g.add(body);
+    const roofL = new THREE.Mesh(new THREE.BoxGeometry(w + 0.3, 0.1, d * 0.65), roofMat);
+    roofL.position.set(0, h + 0.32, d * 0.17);
+    roofL.rotation.x = 0.5; roofL.castShadow = true;
+    const roofR = roofL.clone();
+    roofR.position.z = -d * 0.17; roofR.rotation.x = -0.5;
+    g.add(roofL, roofR);
+    const door = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.9, 0.06), trimMat);
+    door.position.set(0, 0.45, d / 2 + 0.03);
+    g.add(door);
+    const cross1 = new THREE.Mesh(new THREE.BoxGeometry(0.08, 1.0, 0.07), wallMat);
+    cross1.rotation.z = 0.65; cross1.position.set(0, 0.45, d / 2 + 0.07);
+    const cross2 = cross1.clone(); cross2.rotation.z = -0.65;
+    g.add(cross1, cross2);
+    return g;
+  }
+
+  const beeHives = []; // { orbit } — animated in the render loop
+  function makeBeehive() {
+    const g = new THREE.Group();
+    const post = new THREE.Mesh(
+      new THREE.BoxGeometry(0.12, 0.8, 0.12),
+      new THREE.MeshStandardMaterial({ color: 0x6D4C41, flatShading: true })
+    );
+    post.position.y = 0.4; post.castShadow = true;
+    const hive = new THREE.Mesh(
+      new THREE.BoxGeometry(0.5, 0.45, 0.5),
+      new THREE.MeshStandardMaterial({ color: 0xFFB300, flatShading: true, roughness: 0.8 })
+    );
+    hive.position.y = 1.0; hive.castShadow = true;
+    const slot = new THREE.Mesh(
+      new THREE.BoxGeometry(0.2, 0.05, 0.02),
+      new THREE.MeshStandardMaterial({ color: 0x4E342E })
+    );
+    slot.position.set(0, 0.92, 0.26);
+    g.add(post, hive, slot);
+
+    const orbit = new THREE.Group();
+    orbit.position.y = 1.1;
+    const beeMat = new THREE.MeshStandardMaterial({ color: 0xFFEB3B, flatShading: true });
+    for (let i = 0; i < 3; i++) {
+      const bee = new THREE.Mesh(new THREE.SphereGeometry(0.05, 6, 6), beeMat);
+      const a = (i / 3) * Math.PI * 2;
+      bee.position.set(Math.cos(a) * 0.55, (Math.random() - 0.5) * 0.2, Math.sin(a) * 0.55);
+      orbit.add(bee);
+    }
+    g.add(orbit);
+    beeHives.push({ orbit });
+    return g;
+  }
+
+  const chickens = []; // { group, tx, tz, pauseUntil, phase }
+  function makeChicken() {
+    const g = new THREE.Group();
+    const bodyMat = new THREE.MeshStandardMaterial({ color: 0xFAFAFA, flatShading: true, roughness: 0.8 });
+    const body = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.34, 0.5), bodyMat);
+    body.position.y = 0.34; body.castShadow = true;
+    const head = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.24, 0.22), bodyMat);
+    head.position.set(0, 0.62, 0.22); head.castShadow = true;
+    const beak = new THREE.Mesh(
+      new THREE.BoxGeometry(0.07, 0.06, 0.12),
+      new THREE.MeshStandardMaterial({ color: 0xFF9800, flatShading: true })
+    );
+    beak.position.set(0, 0.6, 0.38);
+    const comb = new THREE.Mesh(
+      new THREE.BoxGeometry(0.07, 0.1, 0.14),
+      new THREE.MeshStandardMaterial({ color: 0xE53935, flatShading: true })
+    );
+    comb.position.set(0, 0.78, 0.22);
+    const eyeMat2 = new THREE.MeshStandardMaterial({ color: 0x2d2d2d });
+    [-0.12, 0.12].forEach(ex => {
+      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.03, 6, 6), eyeMat2);
+      eye.position.set(ex, 0.66, 0.3);
+      g.add(eye);
+    });
+    const legMat = new THREE.MeshStandardMaterial({ color: 0xFF9800, flatShading: true });
+    [-0.1, 0.1].forEach(lx => {
+      const leg = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.18, 0.05), legMat);
+      leg.position.set(lx, 0.09, 0);
+      g.add(leg);
+    });
+    g.add(body, head, beak, comb);
+    return g;
+  }
+
+  function addChicken(x, z) {
+    const group = makeChicken();
+    group.position.set(x, LAND_Y, z);
+    group.rotation.y = Math.random() * Math.PI * 2;
+    scene.add(group);
+    chickens.push({ group, tx: x, tz: z, pauseUntil: 0, phase: Math.random() * 10 });
+  }
+
+  const CHICKEN_SPEED = 0.9;
+  function updateChickens(delta, t) {
+    const now = performance.now();
+    for (const c of chickens) {
+      const g = c.group;
+      const dx = c.tx - g.position.x, dz = c.tz - g.position.z;
+      const dist = Math.hypot(dx, dz);
+      if (dist < 0.08) {
+        if (!c.pauseUntil) c.pauseUntil = now + 700 + Math.random() * 2300;
+        if (now > c.pauseUntil) {
+          // wander somewhere nearby that's still on the island
+          for (let tries = 0; tries < 6; tries++) {
+            const a = Math.random() * Math.PI * 2;
+            const r = 1.5 + Math.random() * 3;
+            const nx = g.position.x + Math.cos(a) * r, nz = g.position.z + Math.sin(a) * r;
+            if (isLand(nx, nz)) { c.tx = nx; c.tz = nz; break; }
+          }
+          c.pauseUntil = 0;
+        }
+      } else {
+        const step = Math.min(CHICKEN_SPEED * delta, dist);
+        g.position.x += (dx / dist) * step;
+        g.position.z += (dz / dist) * step;
+        g.rotation.y = Math.atan2(dx, dz);
+        g.position.y = LAND_Y + Math.abs(Math.sin(t * 9 + c.phase)) * 0.05;
+      }
+    }
+  }
+
+  function updateBees(delta, t) {
+    for (const h of beeHives) {
+      h.orbit.rotation.y += delta * 1.6;
+      h.orbit.children.forEach((bee, i) => {
+        bee.position.y = Math.sin(t * 5 + i * 2.1) * 0.12;
+      });
+    }
+  }
+
+  // What each new patch of land gets, in order of purchase.
+  let patchCounter = 0;
+  function spawnPatchProps(newCells) {
+    // Prefer interior cells (not on the new coastline) so props stay off the beach.
+    const candidates = newCells.filter(c => !isCoast(c.gx, c.gz));
+    for (let i = candidates.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [candidates[i], candidates[j]] = [candidates[j], candidates[i]];
+    }
+    let idx = 0;
+    const takeSpot = () => {
+      if (idx >= candidates.length) return null;
+      const c = candidates[idx++];
+      const { x, z } = cellWorld(c.gx, c.gz);
+      return { x: x + (Math.random() - 0.5) * 0.5, z: z + (Math.random() - 0.5) * 0.5 };
+    };
+
+    const plan = ['tree', 'bamboo', 'chicken'];
+    if (Math.random() < 0.5) plan.push('tree');
+    if (Math.random() < 0.5) plan.push('chicken');
+    plan.push(['barn', 'hive', 'shop'][patchCounter % 3]); // one landmark per patch, cycling
+    patchCounter++;
+
+    for (const what of plan) {
+      const spot = takeSpot();
+      if (!spot) break;
+      if (what === 'tree') addTree(spot.x, spot.z, true);
+      else if (what === 'chicken') addChicken(spot.x, spot.z);
+      else {
+        const prop = what === 'bamboo' ? makeBamboo() : what === 'barn' ? makeBarn() : what === 'hive' ? makeBeehive() : makeWoodenShop();
+        prop.position.set(spot.x, LAND_Y, spot.z);
+        prop.rotation.y = Math.random() * Math.PI * 2;
+        scene.add(prop);
+      }
+    }
+  }
 
   // ═══════════════════════════════════════════════
   //  "HIT" MARKER — arrow + sign above the coconut tree
@@ -676,13 +907,135 @@
   shopMarkerGroup.add(shopSignSprite);
 
   // ═══════════════════════════════════════════════
+  //  RED BUY-LAND BUTTONS — one at each edge of the island; walk onto one
+  //  and it buys the patch of land right there, next to that button.
+  // ═══════════════════════════════════════════════
+  const DIR_DEFS = {
+    px: { dx: 1, dz: 0 }, nx: { dx: -1, dz: 0 },
+    pz: { dx: 0, dz: 1 }, nz: { dx: 0, dz: -1 },
+  };
+  const extents = { px: ISLAND_R, nx: ISLAND_R, pz: ISLAND_R, nz: ISLAND_R };
+  const expansions = { px: 0, nx: 0, pz: 0, nz: 0 };
+  let totalLandPurchases = 0;
+  function landPrice() { return LAND_PRICE_BASE + LAND_PRICE_STEP * totalLandPurchases; }
+
+  const buyButtons = {}; // dir -> { group, sprite, x, z, wasNear }
+
+  function makeBuyButtonGroup() {
+    const g = new THREE.Group();
+    const rim = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.72, 0.78, 0.1, 16),
+      new THREE.MeshStandardMaterial({ color: 0x8E0000, flatShading: true, roughness: 0.7 })
+    );
+    rim.position.y = 0.05;
+    const pad = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.55, 0.55, 0.14, 16),
+      new THREE.MeshStandardMaterial({ color: 0xE53935, flatShading: true, roughness: 0.5, emissive: 0x550000 })
+    );
+    pad.position.y = 0.12;
+    rim.castShadow = true; pad.castShadow = true;
+    g.add(rim, pad);
+    return g;
+  }
+
+  function buttonCell(dir) {
+    const d = DIR_DEFS[dir];
+    return { gx: extents[dir] * d.dx, gz: extents[dir] * d.dz };
+  }
+
+  function placeBuyButton(dir) {
+    let btn = buyButtons[dir];
+    if (!btn) {
+      btn = buyButtons[dir] = { group: makeBuyButtonGroup(), sprite: null, x: 0, z: 0, wasNear: false };
+      scene.add(btn.group);
+    }
+    const { gx, gz } = buttonCell(dir);
+    const { x, z } = cellWorld(gx, gz);
+    btn.x = x; btn.z = z;
+    btn.group.position.set(x, LAND_Y, z);
+    btn.wasNear = false;
+  }
+
+  function removeBuyButton(dir) {
+    const btn = buyButtons[dir];
+    if (!btn) return;
+    scene.remove(btn.group);
+    delete buyButtons[dir];
+  }
+
+  function refreshButtonSprites() {
+    for (const dir of Object.keys(buyButtons)) {
+      const btn = buyButtons[dir];
+      if (btn.sprite) {
+        btn.group.remove(btn.sprite);
+        btn.sprite.material.map.dispose();
+        btn.sprite.material.dispose();
+      }
+      btn.sprite = makeTextSprite(`Buy land · ${landPrice()} 🪙`, { color: '#FF8A80' });
+      btn.sprite.position.y = 1.5;
+      btn.group.add(btn.sprite);
+    }
+  }
+
+  for (const dir of Object.keys(DIR_DEFS)) placeBuyButton(dir);
+  refreshButtonSprites();
+  Object.values(buyButtons).forEach(b => (b.group.visible = false)); // shown after the first coconut harvest
+
+  function buyLandAt(dir) {
+    const price = landPrice();
+    if (cubeCoins < price) { toast(`You need ${price} cubecoins to buy this land`, false); return; }
+    cubeCoins -= price;
+    totalLandPurchases++;
+    expansions[dir]++;
+
+    const d = DIR_DEFS[dir];
+    const e = extents[dir];
+    const newCells = [];
+    for (let depth = 1; depth <= PATCH_DEPTH; depth++) {
+      for (let w = -PATCH_HALFW; w <= PATCH_HALFW; w++) {
+        const gx = d.dx !== 0 ? (e + depth) * d.dx : w;
+        const gz = d.dz !== 0 ? (e + depth) * d.dz : w;
+        if (!landSet.has(cellKey(gx, gz))) {
+          landSet.add(cellKey(gx, gz));
+          newCells.push({ gx, gz });
+        }
+      }
+    }
+    extents[dir] += PATCH_DEPTH;
+
+    rebuildIslandMeshes();
+    spawnPatchProps(newCells);
+
+    if (expansions[dir] >= MAX_EXPANSIONS_PER_DIR) removeBuyButton(dir);
+    else placeBuyButton(dir);
+    refreshButtonSprites();
+    refreshInventory();
+    toast(`Land purchased for ${price} 🪙!`, true);
+  }
+
+  function updateBuyButtons() {
+    if (!treeIntroduced) return; // buttons only exist for the player after the first harvest
+    for (const dir of Object.keys(buyButtons)) {
+      const btn = buyButtons[dir];
+      const dist = Math.hypot(player.position.x - btn.x, player.position.z - btn.z);
+      if (dist <= BUTTON_RANGE) {
+        if (!btn.wasNear) {
+          btn.wasNear = true; // one attempt per visit — step away and back to retry
+          buyLandAt(dir);
+        }
+      } else if (dist > BUTTON_RANGE + 0.8) {
+        btn.wasNear = false;
+      }
+    }
+  }
+
+  // ═══════════════════════════════════════════════
   //  COCONUT HARVEST — hit the tree, coconuts fall, inventory grows
   // ═══════════════════════════════════════════════
   let coconutCount = 0;
   let cubeCoins = 0;
-  let coconutsReady = false; // becomes true once the intro→fps transition completes
-  let treeIntroduced = false; // once true, the tree's own arrow retires for good
-  let regrowAt = 0;
+  let harvestEnabled = false; // becomes true once the intro→fps transition completes
+  let treeIntroduced = false; // once true, the intro tree's arrow retires for good
   const fallingCoconuts = []; // { mesh, vel, bounces }
   const nutMat2 = new THREE.MeshStandardMaterial({ color: 0x6D4C41, flatShading: true, roughness: 0.85 });
 
@@ -691,28 +1044,49 @@
   const coinCountEl = document.getElementById('coin-count');
   const hitPromptEl = document.getElementById('hit-prompt');
   const hitBtnEl = document.getElementById('hit-btn');
+  const toastEl = document.getElementById('toast');
 
   function refreshInventory() {
     coconutCountEl.textContent = coconutCount;
     coinCountEl.textContent = cubeCoins;
   }
 
-  let nearTree = false;
+  let toastTimer;
+  function toast(msg, ok) {
+    clearTimeout(toastTimer);
+    toastEl.textContent = msg;
+    toastEl.style.background = ok ? 'rgba(46,125,50,.92)' : 'rgba(198,40,40,.92)';
+    toastEl.style.opacity = '1';
+    toastTimer = setTimeout(() => (toastEl.style.opacity = '0'), 2200);
+  }
+
+  let targetTree = null; // the nearest ready tree within reach, if any
+
+  function findTargetTree() {
+    if (!harvestEnabled) return null;
+    let best = null, bestDist = HIT_RANGE;
+    for (const t of trees) {
+      if (!t.ready) continue;
+      const d = Math.hypot(player.position.x - t.x, player.position.z - t.z);
+      if (d <= bestDist) { best = t; bestDist = d; }
+    }
+    return best;
+  }
 
   function hitTree() {
-    if (!coconutsReady || !nearTree) return;
-    coconutsReady = false;
-    regrowAt = performance.now() + REGROW_MS;
-    tree.userData.coconutMeshes.forEach(m => (m.visible = false));
-    glowPad.visible = false;
-    markerGroup.visible = false;
+    const t = targetTree;
+    if (!t) return;
+    t.ready = false;
+    t.regrowAt = performance.now() + REGROW_MS;
+    t.coconutMeshes.forEach(m => (m.visible = false));
+    if (t === trees[0]) { glowPad.visible = false; markerGroup.visible = false; }
 
     for (let i = 0; i < 3; i++) {
       const nut = new THREE.Mesh(new THREE.SphereGeometry(0.13, 8, 8), nutMat2);
       nut.position.set(
-        treePos.x + (Math.random() - 0.5) * 0.3,
+        t.x + (Math.random() - 0.5) * 0.3,
         LAND_Y + CROWN_HEIGHT - 0.2,
-        treePos.z + (Math.random() - 0.5) * 0.3
+        t.z + (Math.random() - 0.5) * 0.3
       );
       nut.castShadow = true;
       scene.add(nut);
@@ -727,12 +1101,13 @@
     coconutCount += 3;
     refreshInventory();
 
-    // The tree's own "Hit!" marker has done its job — retire it for good, and
-    // point the player at the shop instead.
+    // The intro tree's "Hit!" marker has done its job — retire it for good, and
+    // point the player at the shop instead. The red buy-land buttons appear too.
     if (!treeIntroduced) {
       treeIntroduced = true;
       shopMarkerGroup.visible = true;
       shopGlowPad.visible = true;
+      Object.values(buyButtons).forEach(b => (b.group.visible = true));
     }
   }
 
@@ -778,24 +1153,10 @@
   let dialogRevertAt = 0;
   let nearShop = false;
 
-  const buyLandBtn = document.getElementById('btn-buy-land');
-
-  function landPrice() {
-    // 100, 200, 400, 800 for each successive ring
-    return LAND_PRICE_BASE * Math.pow(2, islandRadius - ISLAND_R);
-  }
-
   function showPrompt() {
     dialogMode = 'prompt';
     speechTextEl.textContent = 'What do you want to sell?';
     speechButtonsEl.style.display = 'flex';
-    if (islandRadius >= MAX_ISLAND_R) {
-      buyLandBtn.textContent = 'No more land for sale';
-      buyLandBtn.classList.add('maxed');
-    } else {
-      buyLandBtn.textContent = `Buy more land (${landPrice()} 🪙)`;
-      buyLandBtn.classList.remove('maxed');
-    }
   }
 
   function showMessage(text, revertMs = 1900) {
@@ -838,22 +1199,10 @@
     showMessage(`Sold 1 coconut for ${COCONUT_PRICE} cubecoins!`);
   }
 
-  function buyLand() {
-    if (islandRadius >= MAX_ISLAND_R) { showMessage('Sorry, there is no more land for sale!'); return; }
-    const price = landPrice();
-    if (cubeCoins < price) { showMessage(`You need ${price} cubecoins to buy more land.`); return; }
-    cubeCoins -= price;
-    islandRadius += 1;
-    buildIsland(islandRadius);
-    refreshInventory();
-    showMessage('Deal! Your island just got bigger. 🏝️');
-  }
-
   speechButtonsEl.addEventListener('click', e => {
     const action = e.target.dataset.action;
     if (action === 'all') sellAll();
     else if (action === 'hand') sellHand();
-    else if (action === 'land') buyLand();
     else if (action === 'cancel') shopExit();
   });
 
@@ -920,7 +1269,7 @@
       player.userData.faceBits.forEach(o => (o.visible = false));
       shadowBlob.visible = true;
 
-      coconutsReady = true;
+      harvestEnabled = true;
       glowPad.visible = true;
       markerGroup.visible = true;
 
@@ -1095,10 +1444,10 @@
     feet[1].position.y = 0.11 + Math.max(0, -Math.sin(walkCycle)) * 0.08;
     shadowBlob.position.set(player.position.x, LAND_Y + 0.02, player.position.z);
 
-    const dx = player.position.x - treePos.x, dz = player.position.z - treePos.z;
-    nearTree = Math.hypot(dx, dz) <= HIT_RANGE;
-    hitPromptEl.classList.toggle('show', nearTree && coconutsReady && !isTouch);
-    hitBtnEl.classList.toggle('ready', nearTree && coconutsReady && isTouch);
+    targetTree = findTargetTree();
+    hitPromptEl.classList.toggle('show', !!targetTree && !isTouch);
+    hitBtnEl.classList.toggle('ready', !!targetTree && isTouch);
+    updateBuyButtons();
 
     if (treeIntroduced) {
       const sdx = player.position.x - shopPos.x, sdz = player.position.z - shopPos.z;
@@ -1131,15 +1480,23 @@
       updateFallingCoconuts(delta);
       updateShopkeeper(delta);
 
-      if (!coconutsReady && performance.now() > regrowAt) {
-        coconutsReady = true;
-        tree.userData.coconutMeshes.forEach(m => (m.visible = true));
-        glowPad.visible = true;
-        if (!treeIntroduced) markerGroup.visible = true;
+      const now = performance.now();
+      for (const tr of trees) {
+        if (!tr.ready && now > tr.regrowAt) {
+          tr.ready = true;
+          tr.coconutMeshes.forEach(m => (m.visible = true));
+          if (tr === trees[0]) {
+            glowPad.visible = true;
+            if (!treeIntroduced) markerGroup.visible = true;
+          }
+        }
       }
       glowPad.material.opacity = 0.4 + Math.sin(t * 3) * 0.15;
       arrowGroup.position.y = 1.0 + Math.sin(t * 2.2) * 0.25;
       markerGroup.rotation.y += delta * 0.6;
+
+      updateChickens(delta, t);
+      updateBees(delta, t);
 
       if (shopMarkerGroup.visible) {
         shopGlowPad.material.opacity = 0.4 + Math.sin(t * 3) * 0.15;
