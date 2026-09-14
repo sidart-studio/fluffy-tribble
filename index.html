@@ -28,7 +28,7 @@
       position: fixed; top: 16px; left: 16px; z-index: 120;
       background: rgba(0,0,0,.4); border: 1.5px solid rgba(255,255,255,.25); border-radius: 14px;
       padding: 8px 16px; color: #fff; font-weight: 800; font-size: 16px;
-      display: flex; align-items: center; gap: 8px;
+      display: flex; align-items: center; gap: 8px; flex-wrap: wrap; max-width: 72vw;
       opacity: 0; transition: opacity .6s ease;
     }
     #inventory.show { opacity: 1; }
@@ -130,6 +130,7 @@
     <div id="speech-buttons">
       <div class="speech-btn" data-action="all">All my inventory</div>
       <div class="speech-btn" data-action="hand">This thing on your hand</div>
+      <div class="speech-btn" data-action="house">Buy worker house · 3 ⛏️ + 3 🧊</div>
       <div class="speech-btn cancel" data-action="cancel">Cancel</div>
     </div>
   </div>
@@ -157,6 +158,11 @@
     egg:     { emoji: '🥚', price: 15, plural: 'eggs' },
     wood:    { emoji: '🪵', price: 7,  plural: 'wood' },
     corn:    { emoji: '🌽', price: 8,  plural: 'corn' },
+    flower:  { emoji: '🌸', price: 4,  plural: 'flowers' },
+    berry:   { emoji: '🫐', price: 9,  plural: 'berries' },
+    pumpkin: { emoji: '🎃', price: 11, plural: 'pumpkins' },
+    milk:    { emoji: '🥛', price: 18, plural: 'milk' },
+    wool:    { emoji: '🧶', price: 16, plural: 'wool' },
     honey:   { emoji: '🍯', price: 20, plural: 'honey' },
     rock:    { emoji: '🪨', price: 6,  plural: 'rocks' },
     ice:     { emoji: '🧊', price: 12, plural: 'ice' },
@@ -168,20 +174,39 @@
   // whether the whole model hides while regrowing, how high drops spawn, and
   // whether it's hard enough to need the hammer.
   const HARVEST_DEFS = {
-    tree:   { resource: 'coconut', yield: 3, regrowMs: 8000,  hide: false, dropHeight: 2.85 },
-    bamboo: { resource: 'bamboo',  yield: 2, regrowMs: 12000, hide: true,  dropHeight: 1.6 },
-    corn:   { resource: 'corn',    yield: 2, regrowMs: 15000, hide: true,  dropHeight: 0.9 },
-    hive:   { resource: 'honey',   yield: 1, regrowMs: 20000, hide: false, dropHeight: 1.2 },
-    rock:   { resource: 'rock',    yield: 2, regrowMs: 18000, hide: true,  dropHeight: 0.7, tool: 'hammer' },
-    ice:    { resource: 'ice',     yield: 2, regrowMs: 18000, hide: true,  dropHeight: 0.7, tool: 'hammer' },
-    iron:   { resource: 'iron',    yield: 1, regrowMs: 25000, hide: true,  dropHeight: 0.7, tool: 'hammer' },
+    tree:    { resource: 'coconut', yield: 3, regrowMs: 8000,  hide: false, dropHeight: 2.85 },
+    bamboo:  { resource: 'bamboo',  yield: 2, regrowMs: 12000, hide: true,  dropHeight: 1.6 },
+    corn:    { resource: 'corn',    yield: 2, regrowMs: 15000, hide: true,  dropHeight: 0.9 },
+    flower:  { resource: 'flower',  yield: 2, regrowMs: 10000, hide: true,  dropHeight: 0.5 },
+    berry:   { resource: 'berry',   yield: 2, regrowMs: 14000, hide: true,  dropHeight: 0.8 },
+    pumpkin: { resource: 'pumpkin', yield: 1, regrowMs: 20000, hide: true,  dropHeight: 0.6 },
+    hive:    { resource: 'honey',   yield: 1, regrowMs: 0,     hide: false, dropHeight: 1.2 }, // gated by fill %, not regrow
+    rock:    { resource: 'rock',    yield: 2, regrowMs: 18000, hide: true,  dropHeight: 0.7, tool: 'hammer' },
+    ice:     { resource: 'ice',     yield: 2, regrowMs: 18000, hide: true,  dropHeight: 0.7, tool: 'hammer' },
+    iron:    { resource: 'iron',    yield: 1, regrowMs: 25000, hide: true,  dropHeight: 0.7, tool: 'hammer' },
   };
   // Chopping a tree with the hammer out fells the whole tree for wood instead
   // of shaking coconuts loose.
   const WOOD_PER_TREE = 2;
-  const EGG_MIN_MS = 15000, EGG_MAX_MS = 30000; // how often each chicken lays an egg
-  const MAX_GROUND_EGGS = 8;  // eggs lying around at once, island-wide
+
+  // Animals wander the island and leave their product on the ground.
+  // Uncollected eggs hatch into a random new animal after a while.
+  const ANIMAL_DEFS = {
+    chicken: { product: 'egg',  minMs: 15000, maxMs: 30000, speed: 0.9 },
+    cow:     { product: 'milk', minMs: 25000, maxMs: 45000, speed: 0.65 },
+    sheep:   { product: 'wool', minMs: 25000, maxMs: 45000, speed: 0.75 },
+  };
+  const EGG_HATCH_MS = 5 * 60 * 1000; // an uncollected egg hatches after 5 minutes
+  const MAX_GROUND_ITEMS = 14; // products lying around at once, island-wide
+
+  // Bees carry nectar from flowers back to their hive: each round trip fills
+  // the hive a little, and it can be harvested once full enough.
+  const HIVE_FILL_PER_TRIP = 10;  // percent per completed flower trip
+  const HIVE_COLLECT_PCT   = 60;  // hive can be harvested at this fill level
+  const BEE_TRIP_MS        = 3200; // one leg of the flight
+
   const SHOP_WALK_MS = 1100;  // how long the shopkeeper takes to walk in/out
+  const HOUSE_COST = { iron: 3, ice: 3 }; // a worker house, bought at the shop
   // What each land purchase costs, in purchase order — always 2 or 3 things
   // after the first, and often no coins at all, just resources. Each cost only
   // asks for things earlier patches (or the hammer) can already produce.
@@ -191,13 +216,18 @@
     { egg: 3, bamboo: 4 },
     { coins: 150, rock: 3, bamboo: 2 },
     { corn: 4, rock: 2 },
-    { coins: 200, ice: 2, corn: 3 },
-    { honey: 2, ice: 3, wood: 4 },
-    { coins: 250, iron: 1, honey: 1 },
+    { coins: 200, flower: 5, corn: 3 },
+    { ice: 3, wood: 4, flower: 2 },
+    { coins: 250, honey: 1, ice: 2 },
+    { iron: 2, honey: 1 },
+    { coins: 300, berry: 4, egg: 3 },
+    { pumpkin: 2, iron: 1, wood: 5 },
+    { coins: 350, milk: 2, berry: 3 },
+    { wool: 2, milk: 2, pumpkin: 2 },
   ];
   const PATCH_DEPTH = 3;       // how many cells deep each purchased patch extends outward
   const PATCH_HALFW = 2;       // patches are (2*PATCH_HALFW + 1) cells wide
-  const MAX_EXPANSIONS_PER_DIR = 3; // each side of the island can grow this many times
+  const MAX_EXPANSIONS_PER_DIR = 24; // ~a hundred patches — the island can grow for a very long time
   const BUTTON_RANGE = 1.4;    // how close CUBEY must get to a red button to buy its land
 
   function cellWorld(gx, gz) { return { x: gx * CELL, z: gz * CELL }; }
@@ -286,16 +316,27 @@
   scene.add(new THREE.AmbientLight(0xffffff, 0.25));
 
   const sun = new THREE.DirectionalLight(0xFFF6DF, 1.3);
+  const SUN_DIR = new THREE.Vector3(14, 20, 10).normalize();
   sun.position.set(14, 20, 10);
   sun.castShadow = true;
-  sun.shadow.mapSize.set(1024, 1024);
-  Object.assign(sun.shadow.camera, { near: 1, far: 110, left: -32, right: 32, top: 32, bottom: -32 }); // sized for the fully-grown island
+  sun.shadow.mapSize.set(2048, 2048);
+  Object.assign(sun.shadow.camera, { near: 1, far: 110, left: -32, right: 32, top: 32, bottom: -32 });
   scene.add(sun);
+
+  // The island can grow far beyond its starting size — widen the sun's shadow
+  // box (and back the light off) to keep the whole island shadowed.
+  function fitSunToIsland(maxExtentCells) {
+    const s = maxExtentCells * CELL + 10;
+    if (s <= sun.shadow.camera.right) return;
+    sun.position.copy(SUN_DIR).multiplyScalar(30 + s);
+    Object.assign(sun.shadow.camera, { left: -s, right: s, top: s, bottom: -s, far: (30 + s) * 2 + 60 });
+    sun.shadow.camera.updateProjectionMatrix();
+  }
 
   // ═══════════════════════════════════════════════
   //  OCEAN — flat-shaded low-poly waves, depth-tinted
   // ═══════════════════════════════════════════════
-  const oceanGeo = new THREE.PlaneGeometry(300, 300, 50, 50);
+  const oceanGeo = new THREE.PlaneGeometry(700, 700, 70, 70);
   oceanGeo.rotateX(-Math.PI / 2);
   const oceanBase = oceanGeo.attributes.position.array.slice();
 
@@ -608,13 +649,16 @@
   // Builders are function declarations further down, so they're hoisted and usable here.
   const harvestables = []; // { kind, group, x, z, ready, regrowAt, coconutMeshes? }
   const HARVEST_MAKERS = {
-    tree:   () => makeCoconutTree(),
-    bamboo: () => makeBamboo(),
-    corn:   () => makeCornPatch(),
-    hive:   () => makeBeehive(),
-    rock:   () => makeRockPile(),
-    ice:    () => makeIceBlock(),
-    iron:   () => makeIronOre(),
+    tree:    () => makeCoconutTree(),
+    bamboo:  () => makeBamboo(),
+    corn:    () => makeCornPatch(),
+    flower:  () => makeFlowerPatch(),
+    berry:   () => makeBerryBush(),
+    pumpkin: () => makePumpkinPatch(),
+    hive:    () => makeBeehive(),
+    rock:    () => makeRockPile(),
+    ice:     () => makeIceBlock(),
+    iron:    () => makeIronOre(),
   };
   function addHarvestable(kind, x, z, randomYaw = true) {
     const group = HARVEST_MAKERS[kind]();
@@ -718,6 +762,67 @@
     return g;
   }
 
+  function makeFlowerPatch() {
+    const g = new THREE.Group();
+    const stemMat = new THREE.MeshStandardMaterial({ color: 0x66BB6A, flatShading: true, roughness: 0.85 });
+    const petalCols = [0xF48FB1, 0xFFF176, 0xBA68C8, 0xFF8A65, 0x90CAF9];
+    const count = 4 + Math.floor(Math.random() * 3);
+    for (let i = 0; i < count; i++) {
+      const h = 0.35 + Math.random() * 0.25;
+      const px = (Math.random() - 0.5) * 1.1, pz = (Math.random() - 0.5) * 1.1;
+      const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.025, h, 5), stemMat);
+      stem.position.set(px, h / 2, pz);
+      g.add(stem);
+      const petalMat = new THREE.MeshStandardMaterial({
+        color: petalCols[Math.floor(Math.random() * petalCols.length)],
+        flatShading: true, roughness: 0.7,
+      });
+      const bloom = new THREE.Mesh(new THREE.DodecahedronGeometry(0.09, 0), petalMat);
+      bloom.position.set(px, h + 0.06, pz);
+      bloom.castShadow = true;
+      g.add(bloom);
+    }
+    return g;
+  }
+
+  function makeBerryBush() {
+    const g = new THREE.Group();
+    const bushMat  = new THREE.MeshStandardMaterial({ color: 0x2E7D32, flatShading: true, roughness: 0.9 });
+    const berryMat = new THREE.MeshStandardMaterial({ color: 0x5C6BC0, flatShading: true, roughness: 0.5 });
+    const bush = new THREE.Mesh(new THREE.DodecahedronGeometry(0.55, 0), bushMat);
+    bush.position.y = 0.42;
+    bush.scale.y = 0.8;
+    bush.castShadow = true;
+    g.add(bush);
+    for (let i = 0; i < 6; i++) {
+      const berry = new THREE.Mesh(new THREE.SphereGeometry(0.07, 6, 6), berryMat);
+      const a = Math.random() * Math.PI * 2;
+      berry.position.set(Math.cos(a) * 0.45, 0.3 + Math.random() * 0.35, Math.sin(a) * 0.45);
+      g.add(berry);
+    }
+    return g;
+  }
+
+  function makePumpkinPatch() {
+    const g = new THREE.Group();
+    const pumpkinMat = new THREE.MeshStandardMaterial({ color: 0xEF6C00, flatShading: true, roughness: 0.75 });
+    const stemMat    = new THREE.MeshStandardMaterial({ color: 0x33691E, flatShading: true, roughness: 0.85 });
+    const count = 2 + Math.floor(Math.random() * 2);
+    for (let i = 0; i < count; i++) {
+      const s = 0.22 + Math.random() * 0.14;
+      const px = (Math.random() - 0.5) * 0.9, pz = (Math.random() - 0.5) * 0.9;
+      const p = new THREE.Mesh(new THREE.SphereGeometry(s, 7, 6), pumpkinMat);
+      p.scale.y = 0.75;
+      p.position.set(px, s * 0.7, pz);
+      p.castShadow = true;
+      g.add(p);
+      const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.045, 0.12, 5), stemMat);
+      stem.position.set(px, s * 1.35, pz);
+      g.add(stem);
+    }
+    return g;
+  }
+
   function makeRockPile() {
     const g = new THREE.Group();
     const rockMat = new THREE.MeshStandardMaterial({ color: 0x9E9E9E, flatShading: true, roughness: 0.95 });
@@ -796,7 +901,21 @@
     return g;
   }
 
-  const beeHives = []; // { orbit } — animated in the render loop
+  // Hives fill with honey as their scout bee makes round trips to flowers.
+  const beeHives = []; // { group, orbit, bee, honeyPct, state, t0, target, sprite }
+  function updateHiveSprite(hv) {
+    if (hv.sprite) {
+      hv.group.remove(hv.sprite);
+      hv.sprite.material.map.dispose();
+      hv.sprite.material.dispose();
+    }
+    hv.sprite = makeTextSprite(`🍯 ${hv.honeyPct}%`, {
+      color: hv.honeyPct >= HIVE_COLLECT_PCT ? '#FFD54F' : '#ffffff',
+    });
+    hv.sprite.scale.multiplyScalar(0.55);
+    hv.sprite.position.y = 1.75;
+    hv.group.add(hv.sprite);
+  }
   function makeBeehive() {
     const g = new THREE.Group();
     const post = new THREE.Mesh(
@@ -826,11 +945,80 @@
       orbit.add(bee);
     }
     g.add(orbit);
-    beeHives.push({ orbit });
+
+    const scout = new THREE.Mesh(new THREE.SphereGeometry(0.06, 6, 6), beeMat);
+    scout.visible = false;
+    scene.add(scout); // flies in world space, between this hive and a flower
+
+    const hv = { group: g, orbit, bee: scout, honeyPct: 0, state: 'wait', t0: performance.now(), target: null, sprite: null };
+    updateHiveSprite(hv);
+    beeHives.push(hv);
     return g;
   }
 
-  const chickens = []; // { group, tx, tz, pauseUntil, phase }
+  function makeCow() {
+    const g = new THREE.Group();
+    const hideMat  = new THREE.MeshStandardMaterial({ color: 0xFAFAFA, flatShading: true, roughness: 0.85 });
+    const spotMat  = new THREE.MeshStandardMaterial({ color: 0x3E2723, flatShading: true, roughness: 0.85 });
+    const body = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.5, 0.95), hideMat);
+    body.position.y = 0.62; body.castShadow = true;
+    g.add(body);
+    for (let i = 0; i < 3; i++) { // patches on the hide
+      const spot = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.2, 0.24), spotMat);
+      spot.position.set(
+        (i % 2 ? 0.26 : -0.26), 0.55 + Math.random() * 0.2, (Math.random() - 0.5) * 0.6
+      );
+      g.add(spot);
+    }
+    const head = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.32, 0.3), hideMat);
+    head.position.set(0, 0.95, 0.58); head.castShadow = true;
+    const muzzle = new THREE.Mesh(
+      new THREE.BoxGeometry(0.26, 0.14, 0.1),
+      new THREE.MeshStandardMaterial({ color: 0xF8BBD0, flatShading: true })
+    );
+    muzzle.position.set(0, 0.86, 0.75);
+    g.add(head, muzzle);
+    const eyeMatC = new THREE.MeshStandardMaterial({ color: 0x2d2d2d });
+    [-0.12, 0.12].forEach(ex => {
+      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.035, 6, 6), eyeMatC);
+      eye.position.set(ex, 1.0, 0.72);
+      g.add(eye);
+    });
+    const legMat = new THREE.MeshStandardMaterial({ color: 0xEEEEEE, flatShading: true });
+    [[-0.2, 0.32], [0.2, 0.32], [-0.2, -0.32], [0.2, -0.32]].forEach(([lx, lz]) => {
+      const leg = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.38, 0.12), legMat);
+      leg.position.set(lx, 0.19, lz);
+      g.add(leg);
+    });
+    return g;
+  }
+
+  function makeSheep() {
+    const g = new THREE.Group();
+    const fluffMat = new THREE.MeshStandardMaterial({ color: 0xF5F5F5, flatShading: true, roughness: 1 });
+    const skinMat  = new THREE.MeshStandardMaterial({ color: 0x4E342E, flatShading: true, roughness: 0.8 });
+    const body = new THREE.Mesh(new THREE.DodecahedronGeometry(0.42, 0), fluffMat);
+    body.scale.set(1, 0.85, 1.25);
+    body.position.y = 0.52; body.castShadow = true;
+    g.add(body);
+    const head = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.24, 0.26), skinMat);
+    head.position.set(0, 0.68, 0.5); head.castShadow = true;
+    g.add(head);
+    const eyeMatS = new THREE.MeshStandardMaterial({ color: 0xFAFAFA });
+    [-0.08, 0.08].forEach(ex => {
+      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.03, 6, 6), eyeMatS);
+      eye.position.set(ex, 0.72, 0.62);
+      g.add(eye);
+    });
+    [[-0.15, 0.22], [0.15, 0.22], [-0.15, -0.22], [0.15, -0.22]].forEach(([lx, lz]) => {
+      const leg = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.28, 0.09), skinMat);
+      leg.position.set(lx, 0.14, lz);
+      g.add(leg);
+    });
+    return g;
+  }
+
+  const animals = []; // { type, group, tx, tz, pauseUntil, phase, nextProductAt }
   function makeChicken() {
     const g = new THREE.Group();
     const bodyMat = new THREE.MeshStandardMaterial({ color: 0xFAFAFA, flatShading: true, roughness: 0.8 });
@@ -864,46 +1052,56 @@
     return g;
   }
 
-  function addChicken(x, z) {
-    const group = makeChicken();
+  const ANIMAL_MAKERS = { chicken: makeChicken, cow: makeCow, sheep: makeSheep };
+  function addAnimal(type, x, z) {
+    const def = ANIMAL_DEFS[type];
+    const group = ANIMAL_MAKERS[type]();
     group.position.set(x, LAND_Y, z);
     group.rotation.y = Math.random() * Math.PI * 2;
     scene.add(group);
-    chickens.push({
-      group, tx: x, tz: z, pauseUntil: 0, phase: Math.random() * 10,
-      nextEggAt: performance.now() + EGG_MIN_MS + Math.random() * (EGG_MAX_MS - EGG_MIN_MS),
+    animals.push({
+      type, group, tx: x, tz: z, pauseUntil: 0, phase: Math.random() * 10,
+      nextProductAt: performance.now() + def.minMs + Math.random() * (def.maxMs - def.minMs),
     });
   }
 
-  // Eggs the chickens leave behind — walk over one to pick it up.
-  const eggs = []; // { mesh, x, z }
-  const eggMat = new THREE.MeshStandardMaterial({ color: 0xFFF8E1, flatShading: true, roughness: 0.6 });
-  function layEgg(x, z) {
-    const mesh = new THREE.Mesh(new THREE.SphereGeometry(0.11, 8, 8), eggMat);
-    mesh.scale.y = 1.25;
+  // Products the animals leave behind — walk over one to pick it up.
+  // Eggs that nobody collects hatch into a random new animal.
+  const groundItems = []; // { mesh, x, z, resource, hatchAt? }
+  function dropGroundItem(resource, x, z) {
+    const mesh = makeDropMesh(resource);
     mesh.position.set(x, LAND_Y + 0.12, z);
     mesh.castShadow = true;
     scene.add(mesh);
-    eggs.push({ mesh, x, z });
+    const item = { mesh, x, z, resource };
+    if (resource === 'egg') item.hatchAt = performance.now() + EGG_HATCH_MS;
+    groundItems.push(item);
   }
 
-  function updateEggs() {
-    for (let i = eggs.length - 1; i >= 0; i--) {
-      const e = eggs[i];
-      if (Math.hypot(player.position.x - e.x, player.position.z - e.z) < 0.9) {
-        scene.remove(e.mesh);
-        eggs.splice(i, 1);
-        inv.egg += 1;
+  function updateGroundItems() {
+    const now = performance.now();
+    for (let i = groundItems.length - 1; i >= 0; i--) {
+      const it = groundItems[i];
+      if (Math.hypot(player.position.x - it.x, player.position.z - it.z) < 0.9) {
+        scene.remove(it.mesh);
+        groundItems.splice(i, 1);
+        inv[it.resource] += 1;
         refreshInventory();
-        toast('🥚 Picked up an egg!', true);
+        toast(`${RESOURCES[it.resource].emoji} Picked up ${it.resource === 'egg' ? 'an egg' : it.resource}!`, true);
+      } else if (it.hatchAt && now > it.hatchAt) {
+        scene.remove(it.mesh);
+        groundItems.splice(i, 1);
+        const type = ['chicken', 'cow', 'sheep'][Math.floor(Math.random() * 3)];
+        addAnimal(type, it.x, it.z);
+        toast(`🐣 An egg hatched — a ${type} joined your island!`, true);
       }
     }
   }
 
-  const CHICKEN_SPEED = 0.9;
-  function updateChickens(delta, t) {
+  function updateAnimals(delta, t) {
     const now = performance.now();
-    for (const c of chickens) {
+    for (const c of animals) {
+      const def = ANIMAL_DEFS[c.type];
       const g = c.group;
       const dx = c.tx - g.position.x, dz = c.tz - g.position.z;
       const dist = Math.hypot(dx, dz);
@@ -920,26 +1118,237 @@
           c.pauseUntil = 0;
         }
       } else {
-        const step = Math.min(CHICKEN_SPEED * delta, dist);
+        const step = Math.min(def.speed * delta, dist);
         g.position.x += (dx / dist) * step;
         g.position.z += (dz / dist) * step;
         g.rotation.y = Math.atan2(dx, dz);
         g.position.y = LAND_Y + Math.abs(Math.sin(t * 9 + c.phase)) * 0.05;
       }
 
-      if (now > c.nextEggAt) {
-        c.nextEggAt = now + EGG_MIN_MS + Math.random() * (EGG_MAX_MS - EGG_MIN_MS);
-        if (eggs.length < MAX_GROUND_EGGS) layEgg(g.position.x, g.position.z);
+      if (now > c.nextProductAt) {
+        c.nextProductAt = now + def.minMs + Math.random() * (def.maxMs - def.minMs);
+        if (groundItems.length < MAX_GROUND_ITEMS) dropGroundItem(def.product, g.position.x, g.position.z);
       }
     }
   }
 
+  function nearestFlower(x, z) {
+    let best = null, bd = Infinity;
+    for (const h of harvestables) {
+      if (h.kind !== 'flower' || !h.group.visible) continue;
+      const d = Math.hypot(h.x - x, h.z - z);
+      if (d < bd) { bd = d; best = h; }
+    }
+    return best;
+  }
+
   function updateBees(delta, t) {
-    for (const h of beeHives) {
-      h.orbit.rotation.y += delta * 1.6;
-      h.orbit.children.forEach((bee, i) => {
+    const now = performance.now();
+    for (const hv of beeHives) {
+      hv.orbit.rotation.y += delta * 1.6;
+      hv.orbit.children.forEach((bee, i) => {
         bee.position.y = Math.sin(t * 5 + i * 2.1) * 0.12;
       });
+
+      // The scout: hive -> flower -> hive; each completed trip fills the hive.
+      const hx = hv.group.position.x, hz = hv.group.position.z;
+      if (hv.state === 'wait') {
+        if (now - hv.t0 > 1500 && hv.honeyPct < 100) {
+          const flower = nearestFlower(hx, hz);
+          if (flower) {
+            hv.target = flower;
+            hv.state = 'to';
+            hv.t0 = now;
+            hv.bee.visible = true;
+          }
+        }
+      } else {
+        const k = Math.min((now - hv.t0) / BEE_TRIP_MS, 1);
+        const kk = hv.state === 'to' ? k : 1 - k; // 0 = at hive, 1 = at flower
+        hv.bee.position.set(
+          hx + (hv.target.x - hx) * kk,
+          LAND_Y + 1.15 + Math.sin(kk * Math.PI) * 0.6 + Math.sin(t * 22) * 0.04,
+          hz + (hv.target.z - hz) * kk
+        );
+        if (k >= 1) {
+          if (hv.state === 'to') {
+            hv.state = 'back';
+            hv.t0 = now;
+          } else {
+            hv.state = 'wait';
+            hv.t0 = now;
+            hv.bee.visible = false;
+            hv.honeyPct = Math.min(100, hv.honeyPct + HIVE_FILL_PER_TRIP);
+            updateHiveSprite(hv);
+          }
+        }
+      }
+    }
+  }
+
+  // ── Worker houses — bought at the shop with iron and ice. A worker lives in
+  // each: they walk out, gather up to three things (loose items first, then
+  // anything soft enough to pick), carry them home, and add them to YOUR
+  // inventory.
+  const villagers = []; // { group, home, state, t0, target, carried, stops }
+  const VILLAGER_SPEED = 1.8;
+  const VILLAGER_KINDS = ['tree', 'bamboo', 'corn', 'flower', 'berry', 'pumpkin']; // no hammer, no hive smarts
+
+  function makeHouse() {
+    const g = new THREE.Group();
+    const cols = [0x90CAF9, 0xFFCC80, 0xCE93D8, 0xA5D6A7];
+    const wallMat = new THREE.MeshStandardMaterial({
+      color: cols[Math.floor(Math.random() * cols.length)], flatShading: true, roughness: 0.85,
+    });
+    const roofMat = new THREE.MeshStandardMaterial({ color: 0x8D6E63, flatShading: true, roughness: 0.9 });
+    const body = new THREE.Mesh(new THREE.BoxGeometry(1.5, 1.2, 1.5), wallMat);
+    body.position.y = 0.6;
+    body.castShadow = true; body.receiveShadow = true;
+    const roof = new THREE.Mesh(new THREE.ConeGeometry(1.35, 0.85, 4), roofMat);
+    roof.position.y = 1.62;
+    roof.rotation.y = Math.PI / 4;
+    roof.castShadow = true;
+    const door = new THREE.Mesh(
+      new THREE.BoxGeometry(0.5, 0.75, 0.06),
+      new THREE.MeshStandardMaterial({ color: 0x5D4037, flatShading: true })
+    );
+    door.position.set(0, 0.38, 0.78);
+    g.add(body, roof, door);
+    return g;
+  }
+
+  function makeVillager() {
+    const g = new THREE.Group();
+    const cols = [0xEF9A9A, 0x80CBC4, 0xFFE082, 0x9FA8DA];
+    const bodyMat = new THREE.MeshStandardMaterial({
+      color: cols[Math.floor(Math.random() * cols.length)], flatShading: true, roughness: 0.7,
+    });
+    const skinMat = new THREE.MeshStandardMaterial({ color: 0xFFCC99, flatShading: true, roughness: 0.8 });
+    const body = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.4, 0.24), bodyMat);
+    body.position.y = 0.42; body.castShadow = true;
+    const head = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.28, 0.28), skinMat);
+    head.position.y = 0.78; head.castShadow = true;
+    const eyeMatV = new THREE.MeshStandardMaterial({ color: 0x2d2d2d });
+    [-0.07, 0.07].forEach(ex => {
+      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.025, 6, 6), eyeMatV);
+      eye.position.set(ex, 0.8, 0.15);
+      g.add(eye);
+    });
+    [-0.09, 0.09].forEach(lx => {
+      const leg = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.22, 0.13), bodyMat);
+      leg.position.set(lx, 0.11, 0);
+      g.add(leg);
+    });
+    g.add(body, head);
+    return g;
+  }
+
+  function buildHouse() {
+    const cells = [...landSet];
+    for (let tries = 0; tries < 80; tries++) {
+      const [gx, gz] = cells[Math.floor(Math.random() * cells.length)].split(',').map(Number);
+      const { x, z } = cellWorld(gx, gz);
+      if (Math.hypot(x - shopPos.x, z - shopPos.z) < 5) continue;
+      if (Math.hypot(x - player.position.x, z - player.position.z) < 3) continue;
+      if (harvestables.some(h => Math.hypot(h.x - x, h.z - z) < 2)) continue;
+      if (villagers.some(v => Math.hypot(v.home.x - x, v.home.z - z) < 3.5)) continue;
+      const house = makeHouse();
+      house.position.set(x, LAND_Y, z);
+      house.rotation.y = Math.random() * Math.PI * 2;
+      scene.add(house);
+      const g = makeVillager();
+      g.position.set(x, LAND_Y, z);
+      g.visible = false; // starts indoors
+      scene.add(g);
+      villagers.push({
+        group: g, home: { x, z }, state: 'rest', t0: performance.now(),
+        target: null, carried: {}, stops: 0,
+      });
+      return true;
+    }
+    return false;
+  }
+
+  function villagerFindTarget(v) {
+    const px = v.group.position.x, pz = v.group.position.z;
+    let best = null, bd = Infinity;
+    for (const it of groundItems) {
+      const d = Math.hypot(it.x - px, it.z - pz);
+      if (d < bd) { bd = d; best = { item: it }; }
+    }
+    if (best) return best;
+    for (const h of harvestables) {
+      if (!h.ready || !VILLAGER_KINDS.includes(h.kind)) continue;
+      const d = Math.hypot(h.x - px, h.z - pz);
+      if (d < bd) { bd = d; best = { node: h }; }
+    }
+    return best;
+  }
+
+  function updateVillagers(delta, t) {
+    const now = performance.now();
+    for (const v of villagers) {
+      const g = v.group;
+      if (v.state === 'rest') {
+        if (now - v.t0 > 2500) {
+          v.target = villagerFindTarget(v);
+          if (v.target) { v.state = 'gather'; g.visible = true; }
+          else v.t0 = now; // nothing to do — check again in a bit
+        }
+        continue;
+      }
+
+      const dest = v.state === 'return' ? v.home
+        : v.target.item ? v.target.item
+        : v.target.node;
+      const dx = dest.x - g.position.x, dz = dest.z - g.position.z;
+      const dist = Math.hypot(dx, dz);
+      if (dist > 0.35) {
+        const step = Math.min(VILLAGER_SPEED * delta, dist);
+        g.position.x += (dx / dist) * step;
+        g.position.z += (dz / dist) * step;
+        g.rotation.y = Math.atan2(dx, dz);
+        g.position.y = LAND_Y + Math.abs(Math.sin(t * 10)) * 0.05;
+        continue;
+      }
+
+      if (v.state === 'return') { // home — hand everything over
+        const parts = Object.entries(v.carried)
+          .map(([k, n]) => { inv[k] += n; return `${n} ${RESOURCES[k].emoji}`; });
+        if (parts.length) {
+          refreshInventory();
+          toast(`🏠 Your worker brought home ${parts.join(' + ')}`, true);
+        }
+        v.carried = {}; v.stops = 0;
+        v.state = 'rest'; v.t0 = now;
+        g.visible = false;
+        continue;
+      }
+
+      // arrived at the target — grab it if it's still there
+      if (v.target.item) {
+        const idx = groundItems.indexOf(v.target.item);
+        if (idx !== -1) {
+          scene.remove(v.target.item.mesh);
+          groundItems.splice(idx, 1);
+          v.carried[v.target.item.resource] = (v.carried[v.target.item.resource] || 0) + 1;
+          v.stops++;
+        }
+      } else {
+        const h = v.target.node;
+        if (h.ready) {
+          const def = HARVEST_DEFS[h.kind];
+          h.ready = false;
+          h.regrowAt = now + def.regrowMs;
+          if (def.hide) h.group.visible = false;
+          if (h.coconutMeshes) h.coconutMeshes.forEach(m => (m.visible = false));
+          v.carried[def.resource] = (v.carried[def.resource] || 0) + def.yield;
+          v.stops++;
+        }
+      }
+      if (v.stops >= 3) { v.state = 'return'; continue; }
+      v.target = villagerFindTarget(v);
+      if (!v.target) v.state = 'return'; // nothing left — bring back what they have
     }
   }
 
@@ -947,11 +1356,13 @@
   // The first patches follow a set progression — sequenced so that whatever a
   // later land cost asks for, an earlier patch already produces — and after
   // that, themes repeat at random.
-  const PATCH_THEMES = ['chicken', 'bamboo', 'rock', 'corn', 'ice', 'hive', 'iron', 'tree'];
+  const PATCH_THEMES = ['chicken', 'bamboo', 'rock', 'corn', 'flower', 'ice', 'hive', 'iron', 'berry', 'pumpkin', 'cow', 'sheep', 'tree'];
   const THEME_NAMES = {
     chicken: '🐔 A chicken farm', bamboo: '🎍 A bamboo grove', rock: '🪨 A rocky field',
-    corn: '🌽 A corn field', ice: '🧊 An ice field', hive: '🍯 An apiary',
-    iron: '⛏️ An iron deposit', tree: '🥥 A coconut grove',
+    corn: '🌽 A corn field', flower: '🌸 A flower meadow', ice: '🧊 An ice field',
+    hive: '🍯 An apiary', iron: '⛏️ An iron deposit', berry: '🫐 Berry bushes',
+    pumpkin: '🎃 A pumpkin patch', cow: '🐄 A cow pasture', sheep: '🐑 A sheep pasture',
+    tree: '🥥 A coconut grove',
   };
   let patchCounter = 0;
   function spawnPatchProps(newCells) {
@@ -981,14 +1392,15 @@
       return { x: x + (Math.random() - 0.5) * 0.5, z: z + (Math.random() - 0.5) * 0.5 };
     };
 
-    const count = theme === 'hive' ? 2 : theme === 'tree' ? 3 : 4;
+    const counts = { hive: 2, tree: 3, chicken: 3, cow: 2, sheep: 2 };
+    const count = counts[theme] ?? 4;
     for (let n = 0; n < count; n++) {
       const spot = takeSpot();
       if (!spot) break;
-      if (theme === 'chicken') addChicken(spot.x, spot.z);
+      if (ANIMAL_DEFS[theme]) addAnimal(theme, spot.x, spot.z);
       else addHarvestable(theme, spot.x, spot.z);
     }
-    if (theme === 'chicken') { // the chickens get their barn
+    if (ANIMAL_DEFS[theme]) { // every animal patch gets its barn
       const spot = takeSpot();
       if (spot) {
         const barn = makeBarn();
@@ -1227,6 +1639,7 @@
       }
     }
     extents[dir] += PATCH_DEPTH;
+    fitSunToIsland(Math.max(extents.px, extents.nx, extents.pz, extents.nz) + PATCH_DEPTH);
 
     rebuildIslandMeshes();
     spawnPatchProps(newCells);
@@ -1351,8 +1764,14 @@
   const DROP_MATS = {
     coconut: new THREE.MeshStandardMaterial({ color: 0x6D4C41, flatShading: true, roughness: 0.85 }),
     bamboo:  new THREE.MeshStandardMaterial({ color: 0x8BC34A, flatShading: true, roughness: 0.8 }),
+    egg:     new THREE.MeshStandardMaterial({ color: 0xFFF8E1, flatShading: true, roughness: 0.6 }),
     wood:    new THREE.MeshStandardMaterial({ color: 0x8D6E63, flatShading: true, roughness: 0.9 }),
     corn:    new THREE.MeshStandardMaterial({ color: 0xFDD835, flatShading: true, roughness: 0.7 }),
+    flower:  new THREE.MeshStandardMaterial({ color: 0xF48FB1, flatShading: true, roughness: 0.7 }),
+    berry:   new THREE.MeshStandardMaterial({ color: 0x5C6BC0, flatShading: true, roughness: 0.5 }),
+    pumpkin: new THREE.MeshStandardMaterial({ color: 0xEF6C00, flatShading: true, roughness: 0.75 }),
+    milk:    new THREE.MeshStandardMaterial({ color: 0xFAFAFA, flatShading: true, roughness: 0.4 }),
+    wool:    new THREE.MeshStandardMaterial({ color: 0xF5F5F5, flatShading: true, roughness: 1 }),
     honey:   new THREE.MeshStandardMaterial({ color: 0xFFA000, flatShading: true, roughness: 0.4 }),
     rock:    new THREE.MeshStandardMaterial({ color: 0x9E9E9E, flatShading: true, roughness: 0.95 }),
     ice:     new THREE.MeshStandardMaterial({ color: 0xB3E5FC, flatShading: true, roughness: 0.25, transparent: true, opacity: 0.85 }),
@@ -1365,11 +1784,31 @@
         stick.rotation.z = Math.random() * Math.PI;
         return stick;
       }
+      case 'egg': {
+        const egg = new THREE.Mesh(new THREE.SphereGeometry(0.11, 8, 8), DROP_MATS.egg);
+        egg.scale.y = 1.25;
+        return egg;
+      }
       case 'wood': {
         const log = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.5, 6), DROP_MATS.wood);
         log.rotation.z = Math.PI / 2;
         log.rotation.y = Math.random() * Math.PI;
         return log;
+      }
+      case 'milk': {
+        const bottle = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.09, 0.26, 7), DROP_MATS.milk);
+        return bottle;
+      }
+      case 'wool': {
+        const tuft = new THREE.Mesh(new THREE.DodecahedronGeometry(0.14, 0), DROP_MATS.wool);
+        return tuft;
+      }
+      case 'flower':  return new THREE.Mesh(new THREE.DodecahedronGeometry(0.1, 0), DROP_MATS.flower);
+      case 'berry':   return new THREE.Mesh(new THREE.SphereGeometry(0.09, 6, 6), DROP_MATS.berry);
+      case 'pumpkin': {
+        const p = new THREE.Mesh(new THREE.SphereGeometry(0.16, 7, 6), DROP_MATS.pumpkin);
+        p.scale.y = 0.75;
+        return p;
       }
       case 'corn':  return new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.32, 0.14), DROP_MATS.corn);
       case 'honey': return new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.24, 0.22), DROP_MATS.honey);
@@ -1387,6 +1826,30 @@
 
     if (def.tool === 'hammer' && !hammerHeld) {
       toast('Too hard to break by hand — take out your hammer 🔨', false);
+      return;
+    }
+
+    // Hives don't regrow on a timer — the bees fill them from flowers, and
+    // they only give honey once full enough.
+    if (h.kind === 'hive') {
+      const hv = beeHives.find(v => v.group === h.group);
+      if (hv.honeyPct < HIVE_COLLECT_PCT) {
+        toast(`🍯 The hive is only ${hv.honeyPct}% full — bees fill it from flowers (ready at ${HIVE_COLLECT_PCT}%)`, false);
+        return;
+      }
+      const gained = hv.honeyPct >= 100 ? 2 : 1; // a completely full hive gives extra
+      hv.honeyPct = 0;
+      updateHiveSprite(hv);
+      for (let i = 0; i < gained; i++) {
+        const drop = makeDropMesh('honey');
+        drop.position.set(h.x + (Math.random() - 0.5) * 0.4, LAND_Y + def.dropHeight, h.z + (Math.random() - 0.5) * 0.4);
+        drop.castShadow = true;
+        scene.add(drop);
+        fallingDrops.push({ mesh: drop, vel: new THREE.Vector3((Math.random() - 0.5) * 1.5, 0.5, (Math.random() - 0.5) * 1.5), bounces: 0, settleAt: 0 });
+      }
+      inv.honey += gained;
+      refreshInventory();
+      if (hammerHeld) hammerSwingT0 = performance.now();
       return;
     }
 
@@ -1536,10 +1999,22 @@
     showMessage('Sorry, you have nothing in your hand.');
   }
 
+  function buyHouse() {
+    if (!canAfford(HOUSE_COST)) {
+      showMessage(`Sorry, a worker house costs ${costText(HOUSE_COST)}.`);
+      return;
+    }
+    if (!buildHouse()) { showMessage('No room for a house — buy more land first!'); return; }
+    payCost(HOUSE_COST);
+    refreshInventory();
+    showMessage('A worker house was built! Your worker will gather things and bring them home to you.');
+  }
+
   speechButtonsEl.addEventListener('click', e => {
     const action = e.target.dataset.action;
     if (action === 'all') sellAll();
     else if (action === 'hand') sellHand();
+    else if (action === 'house') buyHouse();
     else if (action === 'cancel') shopExit();
   });
 
@@ -1841,9 +2316,10 @@
         hammer.position.y = -0.24 + Math.sin(t * 1.7) * 0.008;
       }
 
-      updateChickens(delta, t);
+      updateAnimals(delta, t);
       updateBees(delta, t);
-      updateEggs();
+      updateGroundItems();
+      updateVillagers(delta, t);
 
       if (shopMarkerGroup.visible) {
         shopGlowPad.material.opacity = 0.4 + Math.sin(t * 3) * 0.15;
@@ -1851,6 +2327,9 @@
       }
     }
 
+    // Keep the sky dome centered on the viewer — the island can outgrow it otherwise.
+    sky.position.x = activeCamera.position.x;
+    sky.position.z = activeCamera.position.z;
     renderer.render(scene, activeCamera);
   }
   loop();
