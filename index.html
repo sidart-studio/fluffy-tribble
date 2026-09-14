@@ -96,6 +96,63 @@
     #home-btn.show { display: flex; }
     #home-btn:active { transform: translateY(56px) scale(.9); }
 
+    #store-btn {
+      position: fixed; right: 18px; top: 50%; transform: translateY(150px); z-index: 120;
+      width: 76px; height: 76px; border-radius: 50%;
+      background: rgba(0,0,0,.5); border: 3px solid #8BE28B;
+      font-size: 32px; display: none; flex-direction: column;
+      align-items: center; justify-content: center;
+      box-shadow: 0 6px 14px rgba(0,0,0,.35); cursor: pointer;
+    }
+    #store-btn .lbl {
+      font-size: 9px; font-weight: 800; color: #fff; letter-spacing: .5px; margin-top: -2px;
+    }
+    #store-btn.show { display: flex; }
+    #store-btn:active { transform: translateY(150px) scale(.9); }
+
+    #fast-badge {
+      position: fixed; top: 16px; right: 16px; z-index: 120;
+      background: linear-gradient(180deg,#FFCA28,#FF9800); color: #3e2200;
+      border: 2px solid #fff; border-radius: 12px; padding: 6px 12px;
+      font-size: 12px; font-weight: 900; letter-spacing: .5px;
+      display: none; box-shadow: 0 4px 10px rgba(0,0,0,.3);
+    }
+    #fast-badge.show { display: block; }
+
+    #store-panel {
+      position: fixed; inset: 0; z-index: 260; display: none;
+      align-items: center; justify-content: center; background: rgba(0,0,0,.45);
+    }
+    #store-panel.show { display: flex; }
+    #store-card {
+      background: #fff; color: #2d2d2d; border-radius: 18px; padding: 18px;
+      width: min(340px, 88vw); box-shadow: 0 12px 34px rgba(0,0,0,.4);
+      text-align: center;
+    }
+    #store-title { font-size: 18px; font-weight: 900; margin-bottom: 12px; }
+    .store-item {
+      border: 2px solid #eee; border-radius: 14px; padding: 12px; text-align: left;
+      background: #fafafa;
+    }
+    .store-item-top { display: flex; justify-content: space-between; align-items: center; }
+    .store-item-name { font-weight: 900; font-size: 15px; }
+    .store-price { font-weight: 900; color: #2e7d32; font-size: 13px; }
+    .store-price s { color: #999; margin-right: 4px; }
+    .store-item-desc { font-size: 12px; color: #555; margin: 8px 0 10px; line-height: 1.45; }
+    .store-buy {
+      border-radius: 10px; padding: 9px 12px; font-size: 13px; font-weight: 800;
+      text-align: center; cursor: pointer; background: #eee; color: #555;
+      border: 2px solid #ddd; transition: background .12s;
+    }
+    .store-buy.on { background: linear-gradient(180deg,#FFCA28,#FF9800); color: #3e2200; border-color: #FF9800; }
+    .store-buy:active { transform: scale(.97); }
+    #store-note { font-size: 10px; color: #999; margin: 12px 2px 10px; line-height: 1.5; }
+    #store-close {
+      display: inline-block; border-radius: 10px; padding: 8px 22px; font-size: 13px;
+      font-weight: 800; background: #f0f0f0; border: 2px solid #ddd; cursor: pointer;
+    }
+    #store-close:active { transform: scale(.97); }
+
     #inventory .n2 { color: #8BE28B; }
 
     #speech-bubble {
@@ -139,6 +196,24 @@
   <div id="hit-btn">🥊</div>
   <div id="hammer-btn" title="Hold / put away your hammer (Q)">🔨<span class="lbl">HAMMER</span></div>
   <div id="home-btn" title="Go back to the shop (H)">🏠<span class="lbl">HOME</span></div>
+  <div id="store-btn" title="Open the store">💰<span class="lbl">STORE</span></div>
+  <div id="fast-badge">⚡ FAST MODE</div>
+
+  <div id="store-panel">
+    <div id="store-card">
+      <div id="store-title">💰 CubeWorld Store</div>
+      <div class="store-item">
+        <div class="store-item-top">
+          <span class="store-item-name">⚡ Fast Mode</span>
+          <span class="store-price"><s>$2.99</s> FREE 👑</span>
+        </div>
+        <div class="store-item-desc">Everything grows twice as fast — trees, crops, honey, eggs, and animals. Other players pay $2.99; you made this game, so it's yours for free.</div>
+        <div id="fast-buy" class="store-buy on">⚡ ON — tap to turn off</div>
+      </div>
+      <div id="store-note">Demo store — no real money changes hands in this preview. Selling Fast Mode for real needs a payment provider (like Stripe) hooked up to a published game.</div>
+      <div id="store-close">Close</div>
+    </div>
+  </div>
 
   <div id="speech-bubble">
     <div id="speech-text">What do you want to sell?</div>
@@ -1076,7 +1151,7 @@
     scene.add(group);
     animals.push({
       type, group, tx: x, tz: z, pauseUntil: 0, phase: Math.random() * 10,
-      nextProductAt: performance.now() + def.minMs + Math.random() * (def.maxMs - def.minMs),
+      nextProductAt: performance.now() + growMs(def.minMs + Math.random() * (def.maxMs - def.minMs)),
     });
   }
 
@@ -1089,7 +1164,7 @@
     mesh.castShadow = true;
     scene.add(mesh);
     const item = { mesh, x, z, resource };
-    if (resource === 'egg') item.hatchAt = performance.now() + EGG_HATCH_MS;
+    if (resource === 'egg') item.hatchAt = performance.now() + growMs(EGG_HATCH_MS);
     groundItems.push(item);
   }
 
@@ -1141,7 +1216,7 @@
       }
 
       if (now > c.nextProductAt) {
-        c.nextProductAt = now + def.minMs + Math.random() * (def.maxMs - def.minMs);
+        c.nextProductAt = now + growMs(def.minMs + Math.random() * (def.maxMs - def.minMs));
         if (groundItems.length < MAX_GROUND_ITEMS) dropGroundItem(def.product, g.position.x, g.position.z);
       }
     }
@@ -1168,7 +1243,7 @@
       // The scout: hive -> flower -> hive; each completed trip fills the hive.
       const hx = hv.group.position.x, hz = hv.group.position.z;
       if (hv.state === 'wait') {
-        if (now - hv.t0 > 1500 && hv.honeyPct < 100) {
+        if (now - hv.t0 > growMs(1500) && hv.honeyPct < 100) {
           const flower = nearestFlower(hx, hz);
           if (flower) {
             hv.target = flower;
@@ -1178,7 +1253,7 @@
           }
         }
       } else {
-        const k = Math.min((now - hv.t0) / BEE_TRIP_MS, 1);
+        const k = Math.min((now - hv.t0) / growMs(BEE_TRIP_MS), 1);
         const kk = hv.state === 'to' ? k : 1 - k; // 0 = at hive, 1 = at flower
         hv.bee.position.set(
           hx + (hv.target.x - hx) * kk,
@@ -1354,7 +1429,7 @@
         if (h.ready) {
           const def = HARVEST_DEFS[h.kind];
           h.ready = false;
-          h.regrowAt = now + def.regrowMs;
+          h.regrowAt = now + growMs(def.regrowMs);
           if (def.hide) h.group.visible = false;
           if (h.coconutMeshes) h.coconutMeshes.forEach(m => (m.visible = false));
           v.carried[def.resource] = (v.carried[def.resource] || 0) + def.yield;
@@ -1779,6 +1854,31 @@
   }
   homeBtnEl.addEventListener('click', goHome);
 
+  // ── The store & Fast Mode. Fast Mode makes everything grow twice as fast.
+  // For other players it would be a real purchase; this copy belongs to the
+  // game's creator, so it comes free and starts ON.
+  let fastMode = true;
+  function growMs(ms) { return fastMode ? ms * 0.5 : ms; }
+
+  const storeBtnEl = document.getElementById('store-btn');
+  const storePanelEl = document.getElementById('store-panel');
+  const fastBuyEl = document.getElementById('fast-buy');
+  const fastBadgeEl = document.getElementById('fast-badge');
+
+  function refreshFastUI() {
+    fastBuyEl.classList.toggle('on', fastMode);
+    fastBuyEl.textContent = fastMode ? '⚡ ON — tap to turn off' : 'Turn Fast Mode on (FREE 👑)';
+    fastBadgeEl.classList.toggle('show', fastMode && phase === 'fps');
+  }
+  storeBtnEl.addEventListener('click', () => storePanelEl.classList.add('show'));
+  document.getElementById('store-close').addEventListener('click', () => storePanelEl.classList.remove('show'));
+  fastBuyEl.addEventListener('click', () => {
+    fastMode = !fastMode;
+    refreshFastUI();
+    toast(fastMode ? '👑 Creator perk — Fast Mode is ON, everything grows 2× faster!'
+                   : 'Fast Mode is off — normal growing speed', true);
+  });
+
   let targetHarvest = null; // the nearest ready resource node within reach
 
   function findHarvestTarget() {
@@ -1893,7 +1993,7 @@
     if (hammerHeld) hammerSwingT0 = performance.now();
 
     h.ready = false;
-    h.regrowAt = performance.now() + def.regrowMs;
+    h.regrowAt = performance.now() + growMs(def.regrowMs);
     if (def.hide || chopWood) h.group.visible = false; // chopped/mined away; grows back later
     if (h.coconutMeshes) h.coconutMeshes.forEach(m => (m.visible = false));
     if (h === introTree) { glowPad.visible = false; markerGroup.visible = false; }
@@ -2121,6 +2221,8 @@
       inventoryEl.classList.add('show');
       hammerBtnEl.classList.add('show');
       homeBtnEl.classList.add('show');
+      storeBtnEl.classList.add('show');
+      refreshFastUI();
       setTimeout(() => toast('🔨 You have a hammer! Press the HAMMER button on the right to hold it', true), 900);
 
       fadeEl.classList.remove('show');
