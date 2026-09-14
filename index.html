@@ -65,6 +65,18 @@
     body.touch #hit-btn.ready { display: flex; }
     #hit-btn:active { transform: scale(.9); }
 
+    #hammer-btn {
+      position: fixed; right: 20px; bottom: 104px; z-index: 120;
+      width: 64px; height: 64px; border-radius: 50%;
+      background: rgba(0,0,0,.45); border: 3px solid rgba(255,255,255,.5);
+      font-size: 26px; display: none; align-items: center; justify-content: center;
+      box-shadow: 0 6px 14px rgba(0,0,0,.35); cursor: pointer;
+      transition: background .15s, border-color .15s;
+    }
+    #hammer-btn.show { display: flex; }
+    #hammer-btn.held { background: linear-gradient(180deg,#FFCA28,#FF9800); border-color: #fff; }
+    #hammer-btn:active { transform: scale(.9); }
+
     #inventory .n2 { color: #8BE28B; }
 
     #speech-bubble {
@@ -106,6 +118,7 @@
   <div id="hit-prompt"><span class="k">E</span> Hit</div>
   <div id="joy-zone"><div id="joy-knob"></div></div>
   <div id="hit-btn">🥊</div>
+  <div id="hammer-btn" title="Hold / put away your hammer (Q)">🔨</div>
 
   <div id="speech-bubble">
     <div id="speech-text">What do you want to sell?</div>
@@ -137,6 +150,7 @@
     coconut: { emoji: '🥥', price: 10, plural: 'coconuts' },
     bamboo:  { emoji: '🎍', price: 5,  plural: 'bamboo' },
     egg:     { emoji: '🥚', price: 15, plural: 'eggs' },
+    wood:    { emoji: '🪵', price: 7,  plural: 'wood' },
     corn:    { emoji: '🌽', price: 8,  plural: 'corn' },
     honey:   { emoji: '🍯', price: 20, plural: 'honey' },
     rock:    { emoji: '🪨', price: 6,  plural: 'rocks' },
@@ -146,21 +160,33 @@
   const inv = Object.fromEntries(Object.keys(RESOURCES).map(k => [k, 0]));
 
   // Every hittable thing in the world: what it drops, how much, regrow time,
-  // whether the whole model hides while regrowing, and how high drops spawn.
+  // whether the whole model hides while regrowing, how high drops spawn, and
+  // whether it's hard enough to need the hammer.
   const HARVEST_DEFS = {
     tree:   { resource: 'coconut', yield: 3, regrowMs: 8000,  hide: false, dropHeight: 2.85 },
     bamboo: { resource: 'bamboo',  yield: 2, regrowMs: 12000, hide: true,  dropHeight: 1.6 },
     corn:   { resource: 'corn',    yield: 2, regrowMs: 15000, hide: true,  dropHeight: 0.9 },
     hive:   { resource: 'honey',   yield: 1, regrowMs: 20000, hide: false, dropHeight: 1.2 },
-    rock:   { resource: 'rock',    yield: 2, regrowMs: 18000, hide: true,  dropHeight: 0.7 },
-    ice:    { resource: 'ice',     yield: 2, regrowMs: 18000, hide: true,  dropHeight: 0.7 },
-    iron:   { resource: 'iron',    yield: 1, regrowMs: 25000, hide: true,  dropHeight: 0.7 },
+    rock:   { resource: 'rock',    yield: 2, regrowMs: 18000, hide: true,  dropHeight: 0.7, tool: 'hammer' },
+    ice:    { resource: 'ice',     yield: 2, regrowMs: 18000, hide: true,  dropHeight: 0.7, tool: 'hammer' },
+    iron:   { resource: 'iron',    yield: 1, regrowMs: 25000, hide: true,  dropHeight: 0.7, tool: 'hammer' },
   };
+  // Chopping a tree with the hammer out fells the whole tree for wood instead
+  // of shaking coconuts loose.
+  const WOOD_PER_TREE = 2;
   const EGG_MIN_MS = 15000, EGG_MAX_MS = 30000; // how often each chicken lays an egg
   const MAX_GROUND_EGGS = 8;  // eggs lying around at once, island-wide
   const SHOP_WALK_MS = 1100;  // how long the shopkeeper takes to walk in/out
-  const LAND_PRICE_BASE = 100; // first patch of land costs this
-  const LAND_PRICE_STEP = 50;  // each later patch costs this much more
+  // What each land purchase costs, in purchase order — coins at first, then
+  // mixes of coins and resources. Past the list, costs keep climbing.
+  const LAND_COSTS = [
+    { coins: 100 },
+    { coins: 150, egg: 2 },
+    { coins: 150, rock: 3, bamboo: 4 },
+    { coins: 200, iron: 1, egg: 3 },
+    { coins: 250, ice: 2, wood: 5 },
+    { coins: 250, iron: 2, honey: 2 },
+  ];
   const PATCH_DEPTH = 3;       // how many cells deep each purchased patch extends outward
   const PATCH_HALFW = 2;       // patches are (2*PATCH_HALFW + 1) cells wide
   const MAX_EXPANSIONS_PER_DIR = 3; // each side of the island can grow this many times
@@ -1075,7 +1101,25 @@
   const extents = { px: ISLAND_R, nx: ISLAND_R, pz: ISLAND_R, nz: ISLAND_R };
   const expansions = { px: 0, nx: 0, pz: 0, nz: 0 };
   let totalLandPurchases = 0;
-  function landPrice() { return LAND_PRICE_BASE + LAND_PRICE_STEP * totalLandPurchases; }
+  function landCost() {
+    if (totalLandPurchases < LAND_COSTS.length) return LAND_COSTS[totalLandPurchases];
+    const extra = totalLandPurchases - LAND_COSTS.length;
+    return { coins: 300 + 50 * extra, iron: 2, wood: 6 };
+  }
+  function costText(cost) {
+    return Object.entries(cost)
+      .map(([k, n]) => `${n} ${k === 'coins' ? '🪙' : RESOURCES[k].emoji}`)
+      .join(' + ');
+  }
+  function canAfford(cost) {
+    return Object.entries(cost).every(([k, n]) => (k === 'coins' ? cubeCoins : inv[k]) >= n);
+  }
+  function payCost(cost) {
+    for (const [k, n] of Object.entries(cost)) {
+      if (k === 'coins') cubeCoins -= n;
+      else inv[k] -= n;
+    }
+  }
 
   const buyButtons = {}; // dir -> { group, sprite, x, z, wasNear }
 
@@ -1129,7 +1173,7 @@
         btn.sprite.material.map.dispose();
         btn.sprite.material.dispose();
       }
-      btn.sprite = makeTextSprite(`Buy land · ${landPrice()} 🪙`, { color: '#FF8A80' });
+      btn.sprite = makeTextSprite(`Buy land · ${costText(landCost())}`, { color: '#FF8A80' });
       btn.sprite.position.y = 1.5;
       btn.group.add(btn.sprite);
     }
@@ -1140,9 +1184,9 @@
   Object.values(buyButtons).forEach(b => (b.group.visible = false)); // shown after the first coconut harvest
 
   function buyLandAt(dir) {
-    const price = landPrice();
-    if (cubeCoins < price) { toast(`You need ${price} cubecoins to buy this land`, false); return; }
-    cubeCoins -= price;
+    const cost = landCost();
+    if (!canAfford(cost)) { toast(`You need ${costText(cost)} to buy this land`, false); return; }
+    payCost(cost);
     totalLandPurchases++;
     expansions[dir]++;
 
@@ -1168,7 +1212,7 @@
     else placeBuyButton(dir);
     refreshButtonSprites();
     refreshInventory();
-    toast(`Land purchased for ${price} 🪙!`, true);
+    toast(`Land purchased for ${costText(cost)}!`, true);
   }
 
   function updateBuyButtons() {
@@ -1234,6 +1278,39 @@
     toastTimer = setTimeout(() => (toastEl.style.opacity = '0'), 2200);
   }
 
+  // ── The hammer — CUBEY starts with it; the 🔨 button (or Q) takes it out
+  // and puts it away. Hard nodes (rocks, ice, iron) only break with it, and
+  // hitting a tree while holding it fells the tree for wood.
+  let hammerHeld = false;
+  let hammerSwingT0 = 0;
+  const hammerBtnEl = document.getElementById('hammer-btn');
+
+  const hammer = new THREE.Group();
+  {
+    const handleMat = new THREE.MeshStandardMaterial({ color: 0x8D6E63, flatShading: true, roughness: 0.85 });
+    const headMat   = new THREE.MeshStandardMaterial({ color: 0x90A4AE, flatShading: true, roughness: 0.4, metalness: 0.3 });
+    const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.032, 0.42, 6), handleMat);
+    handle.position.y = 0.05;
+    const head = new THREE.Mesh(new THREE.BoxGeometry(0.17, 0.09, 0.09), headMat);
+    head.position.y = 0.26;
+    hammer.add(handle, head);
+  }
+  hammer.position.set(0.28, -0.24, -0.55); // lower-right corner of the view
+  hammer.rotation.set(-0.4, 0.15, -0.25);
+  hammer.visible = false;
+  fpsCamera.add(hammer);
+  scene.add(fpsCamera); // so the camera's held-item children render
+
+  function toggleHammer() {
+    if (phase !== 'fps') return;
+    hammerHeld = !hammerHeld;
+    hammer.visible = hammerHeld;
+    hammerBtnEl.classList.toggle('held', hammerHeld);
+    toast(hammerHeld ? '🔨 Hammer out — you can break rocks, ice, and iron, or chop trees for wood'
+                     : 'Hammer put away', true);
+  }
+  hammerBtnEl.addEventListener('click', toggleHammer);
+
   let targetHarvest = null; // the nearest ready resource node within reach
 
   function findHarvestTarget() {
@@ -1251,6 +1328,7 @@
   const DROP_MATS = {
     coconut: new THREE.MeshStandardMaterial({ color: 0x6D4C41, flatShading: true, roughness: 0.85 }),
     bamboo:  new THREE.MeshStandardMaterial({ color: 0x8BC34A, flatShading: true, roughness: 0.8 }),
+    wood:    new THREE.MeshStandardMaterial({ color: 0x8D6E63, flatShading: true, roughness: 0.9 }),
     corn:    new THREE.MeshStandardMaterial({ color: 0xFDD835, flatShading: true, roughness: 0.7 }),
     honey:   new THREE.MeshStandardMaterial({ color: 0xFFA000, flatShading: true, roughness: 0.4 }),
     rock:    new THREE.MeshStandardMaterial({ color: 0x9E9E9E, flatShading: true, roughness: 0.95 }),
@@ -1263,6 +1341,12 @@
         const stick = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 1.1, 5), DROP_MATS.bamboo);
         stick.rotation.z = Math.random() * Math.PI;
         return stick;
+      }
+      case 'wood': {
+        const log = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.5, 6), DROP_MATS.wood);
+        log.rotation.z = Math.PI / 2;
+        log.rotation.y = Math.random() * Math.PI;
+        return log;
       }
       case 'corn':  return new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.32, 0.14), DROP_MATS.corn);
       case 'honey': return new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.24, 0.22), DROP_MATS.honey);
@@ -1278,15 +1362,29 @@
     if (!h) return;
     const def = HARVEST_DEFS[h.kind];
 
+    if (def.tool === 'hammer' && !hammerHeld) {
+      toast('Too hard to break by hand — take out your hammer 🔨', false);
+      return;
+    }
+
+    // Holding the hammer at a tree fells the whole tree for wood instead.
+    const chopWood = h.kind === 'tree' && hammerHeld;
+    const resource = chopWood ? 'wood' : def.resource;
+    const yieldN   = chopWood ? WOOD_PER_TREE : def.yield;
+
+    if (hammerHeld) hammerSwingT0 = performance.now();
+
     h.ready = false;
     h.regrowAt = performance.now() + def.regrowMs;
-    if (def.hide) h.group.visible = false;             // chopped/mined away; grows back later
+    if (def.hide || chopWood) h.group.visible = false; // chopped/mined away; grows back later
     if (h.coconutMeshes) h.coconutMeshes.forEach(m => (m.visible = false));
     if (h === introTree) { glowPad.visible = false; markerGroup.visible = false; }
 
-    const dropY = h.kind === 'tree' ? LAND_Y + CROWN_HEIGHT - 0.2 : LAND_Y + def.dropHeight;
-    for (let i = 0; i < def.yield; i++) {
-      const drop = makeDropMesh(def.resource);
+    const dropY = chopWood ? LAND_Y + 1.2
+      : h.kind === 'tree' ? LAND_Y + CROWN_HEIGHT - 0.2
+      : LAND_Y + def.dropHeight;
+    for (let i = 0; i < yieldN; i++) {
+      const drop = makeDropMesh(resource);
       drop.position.set(
         h.x + (Math.random() - 0.5) * 0.4,
         dropY,
@@ -1302,7 +1400,7 @@
       });
     }
 
-    inv[def.resource] += def.yield;
+    inv[resource] += yieldN;
     refreshInventory();
 
     // The intro tree's "Hit!" marker has done its job — retire it for good, and
@@ -1491,6 +1589,7 @@
 
       phase = 'fps';
       inventoryEl.classList.add('show');
+      hammerBtnEl.classList.add('show');
 
       fadeEl.classList.remove('show');
     }, 380);
@@ -1527,6 +1626,7 @@
   window.addEventListener('keydown', e => {
     keys.add(e.key.toLowerCase());
     if (e.key.toLowerCase() === 'e') hitTree();
+    if (e.key.toLowerCase() === 'q') toggleHammer();
   });
   window.addEventListener('keyup', e => keys.delete(e.key.toLowerCase()));
 
@@ -1710,6 +1810,12 @@
       glowPad.material.opacity = 0.4 + Math.sin(t * 3) * 0.15;
       arrowGroup.position.y = 1.0 + Math.sin(t * 2.2) * 0.25;
       markerGroup.rotation.y += delta * 0.6;
+
+      if (hammer.visible) { // gentle idle bob, plus a quick swing right after a hit
+        const swing = Math.max(0, 1 - (performance.now() - hammerSwingT0) / 260);
+        hammer.rotation.x = -0.4 - Math.sin(swing * Math.PI) * 0.9 + Math.sin(t * 2) * 0.03;
+        hammer.position.y = -0.24 + Math.sin(t * 1.7) * 0.008;
+      }
 
       updateChickens(delta, t);
       updateBees(delta, t);
