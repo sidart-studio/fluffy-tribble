@@ -102,7 +102,7 @@
 
   <div id="fade"></div>
   <div id="start-prompt">Click to begin — drag or arrow keys to turn</div>
-  <div id="inventory">🥥 <span class="n" id="coconut-count">0</span> &nbsp; 🎍 <span class="n" id="bamboo-count">0</span> &nbsp; 🥚 <span class="n" id="egg-count">0</span> &nbsp; 🪙 <span class="n2" id="coin-count">0</span></div>
+  <div id="inventory"><span id="inv-items"></span>🪙 <span class="n2" id="coin-count">0</span></div>
   <div id="hit-prompt"><span class="k">E</span> Hit</div>
   <div id="joy-zone"><div id="joy-knob"></div></div>
   <div id="hit-btn">🥊</div>
@@ -130,13 +130,32 @@
   const PLAYER_SPEED = 5.6;
   const EYE_HEIGHT   = 0.66;
   const HIT_RANGE    = 2.8;   // how close CUBEY needs to be to the tree to hit it
-  const REGROW_MS    = 8000;  // how long until the tree grows new coconuts
   const SHOP_RANGE   = 2.6;   // how close, and in front of, the shop CUBEY needs to be
-  const COCONUT_PRICE = 10;   // cubecoins per coconut
-  const BAMBOO_PRICE  = 5;    // cubecoins per bamboo stick
-  const EGG_PRICE     = 15;   // cubecoins per egg
-  const BAMBOO_YIELD  = 2;    // sticks per bamboo harvest
-  const BAMBOO_REGROW_MS = 12000; // how long a harvested bamboo cluster takes to grow back
+
+  // Every collectable resource in the game: its emoji, sell price, and plural name.
+  const RESOURCES = {
+    coconut: { emoji: '🥥', price: 10, plural: 'coconuts' },
+    bamboo:  { emoji: '🎍', price: 5,  plural: 'bamboo' },
+    egg:     { emoji: '🥚', price: 15, plural: 'eggs' },
+    corn:    { emoji: '🌽', price: 8,  plural: 'corn' },
+    honey:   { emoji: '🍯', price: 20, plural: 'honey' },
+    rock:    { emoji: '🪨', price: 6,  plural: 'rocks' },
+    ice:     { emoji: '🧊', price: 12, plural: 'ice' },
+    iron:    { emoji: '⛏️', price: 25, plural: 'iron' },
+  };
+  const inv = Object.fromEntries(Object.keys(RESOURCES).map(k => [k, 0]));
+
+  // Every hittable thing in the world: what it drops, how much, regrow time,
+  // whether the whole model hides while regrowing, and how high drops spawn.
+  const HARVEST_DEFS = {
+    tree:   { resource: 'coconut', yield: 3, regrowMs: 8000,  hide: false, dropHeight: 2.85 },
+    bamboo: { resource: 'bamboo',  yield: 2, regrowMs: 12000, hide: true,  dropHeight: 1.6 },
+    corn:   { resource: 'corn',    yield: 2, regrowMs: 15000, hide: true,  dropHeight: 0.9 },
+    hive:   { resource: 'honey',   yield: 1, regrowMs: 20000, hide: false, dropHeight: 1.2 },
+    rock:   { resource: 'rock',    yield: 2, regrowMs: 18000, hide: true,  dropHeight: 0.7 },
+    ice:    { resource: 'ice',     yield: 2, regrowMs: 18000, hide: true,  dropHeight: 0.7 },
+    iron:   { resource: 'iron',    yield: 1, regrowMs: 25000, hide: true,  dropHeight: 0.7 },
+  };
   const EGG_MIN_MS = 15000, EGG_MAX_MS = 30000; // how often each chicken lays an egg
   const MAX_GROUND_EGGS = 8;  // eggs lying around at once, island-wide
   const SHOP_WALK_MS = 1100;  // how long the shopkeeper takes to walk in/out
@@ -551,20 +570,31 @@
   // ═══════════════════════════════════════════════
   //  PLACE THE SCENE
   // ═══════════════════════════════════════════════
-  // Every coconut tree on the island is harvestable; new land grows more of them.
-  const trees = []; // { group, x, z, ready, regrowAt, coconutMeshes }
-  function addTree(x, z, randomYaw = false) {
-    const group = makeCoconutTree();
+  // Everything hittable on the island lives here; new land grows more of it.
+  // Builders are function declarations further down, so they're hoisted and usable here.
+  const harvestables = []; // { kind, group, x, z, ready, regrowAt, coconutMeshes? }
+  const HARVEST_MAKERS = {
+    tree:   () => makeCoconutTree(),
+    bamboo: () => makeBamboo(),
+    corn:   () => makeCornPatch(),
+    hive:   () => makeBeehive(),
+    rock:   () => makeRockPile(),
+    ice:    () => makeIceBlock(),
+    iron:   () => makeIronOre(),
+  };
+  function addHarvestable(kind, x, z, randomYaw = true) {
+    const group = HARVEST_MAKERS[kind]();
     group.position.set(x, LAND_Y, z);
     if (randomYaw) group.rotation.y = Math.random() * Math.PI * 2;
     scene.add(group);
-    const t = { group, x, z, ready: true, regrowAt: 0, coconutMeshes: group.userData.coconutMeshes };
-    trees.push(t);
-    return t;
+    const h = { kind, group, x, z, ready: true, regrowAt: 0 };
+    if (kind === 'tree') h.coconutMeshes = group.userData.coconutMeshes;
+    harvestables.push(h);
+    return h;
   }
 
   const treePos = cellWorld(1, -2);
-  addTree(treePos.x, treePos.z); // trees[0] — the intro tree with the "Hit!" marker
+  const introTree = addHarvestable('tree', treePos.x, treePos.z, false); // the tree with the "Hit!" marker
 
   const shop = makeWoodenShop();
   const shopPos = cellWorld(-1, -1);
@@ -627,15 +657,83 @@
     return g;
   }
 
-  // Bamboo clusters are harvestable, like the coconut trees: hit one to chop
-  // sticks, and the cluster grows back after a while.
-  const bamboos = []; // { group, x, z, ready, regrowAt }
-  function addBamboo(x, z) {
-    const group = makeBamboo();
-    group.position.set(x, LAND_Y, z);
-    group.rotation.y = Math.random() * Math.PI * 2;
-    scene.add(group);
-    bamboos.push({ group, x, z, ready: true, regrowAt: 0 });
+  function makeCornPatch() {
+    const g = new THREE.Group();
+    const stalkMat = new THREE.MeshStandardMaterial({ color: 0x558B2F, flatShading: true, roughness: 0.85 });
+    const leafMat  = new THREE.MeshStandardMaterial({ color: 0x7CB342, flatShading: true, roughness: 0.85 });
+    const cobMat   = new THREE.MeshStandardMaterial({ color: 0xFDD835, flatShading: true, roughness: 0.7 });
+    const count = 3 + Math.floor(Math.random() * 2);
+    for (let i = 0; i < count; i++) {
+      const h = 0.9 + Math.random() * 0.5;
+      const px = (Math.random() - 0.5) * 0.9, pz = (Math.random() - 0.5) * 0.9;
+      const stalk = new THREE.Mesh(new THREE.BoxGeometry(0.08, h, 0.08), stalkMat);
+      stalk.position.set(px, h / 2, pz);
+      stalk.castShadow = true;
+      g.add(stalk);
+      const leaf = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.05, 0.12), leafMat);
+      leaf.position.set(px, h * 0.45, pz);
+      leaf.rotation.y = Math.random() * Math.PI;
+      leaf.rotation.z = 0.4;
+      g.add(leaf);
+      const cob = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.26, 0.12), cobMat);
+      cob.position.set(px + 0.09, h * 0.65, pz);
+      cob.rotation.z = 0.25;
+      cob.castShadow = true;
+      g.add(cob);
+    }
+    return g;
+  }
+
+  function makeRockPile() {
+    const g = new THREE.Group();
+    const rockMat = new THREE.MeshStandardMaterial({ color: 0x9E9E9E, flatShading: true, roughness: 0.95 });
+    const count = 2 + Math.floor(Math.random() * 2);
+    for (let i = 0; i < count; i++) {
+      const s = 0.25 + Math.random() * 0.25;
+      const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(s, 0), rockMat);
+      rock.position.set((Math.random() - 0.5) * 0.7, s * 0.7, (Math.random() - 0.5) * 0.7);
+      rock.rotation.set(Math.random() * 3, Math.random() * 3, Math.random() * 3);
+      rock.castShadow = true;
+      g.add(rock);
+    }
+    return g;
+  }
+
+  function makeIceBlock() {
+    const g = new THREE.Group();
+    const iceMat = new THREE.MeshStandardMaterial({
+      color: 0xB3E5FC, flatShading: true, roughness: 0.25,
+      transparent: true, opacity: 0.85,
+    });
+    const count = 2 + Math.floor(Math.random() * 2);
+    for (let i = 0; i < count; i++) {
+      const s = 0.3 + Math.random() * 0.3;
+      const cube = new THREE.Mesh(new THREE.BoxGeometry(s, s, s), iceMat);
+      cube.position.set((Math.random() - 0.5) * 0.7, s / 2, (Math.random() - 0.5) * 0.7);
+      cube.rotation.y = Math.random() * Math.PI;
+      cube.castShadow = true;
+      g.add(cube);
+    }
+    return g;
+  }
+
+  function makeIronOre() {
+    const g = new THREE.Group();
+    const oreMat   = new THREE.MeshStandardMaterial({ color: 0x616161, flatShading: true, roughness: 0.9 });
+    const fleckMat = new THREE.MeshStandardMaterial({ color: 0xBF6B30, flatShading: true, roughness: 0.6 });
+    const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(0.45, 0), oreMat);
+    rock.position.y = 0.32;
+    rock.rotation.set(Math.random() * 3, Math.random() * 3, 0);
+    rock.castShadow = true;
+    g.add(rock);
+    for (let i = 0; i < 4; i++) { // rusty flecks so it reads as ore, not plain stone
+      const fleck = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.1), fleckMat);
+      const a = Math.random() * Math.PI * 2;
+      fleck.position.set(Math.cos(a) * 0.4, 0.25 + Math.random() * 0.3, Math.sin(a) * 0.4);
+      fleck.rotation.set(Math.random() * 3, Math.random() * 3, 0);
+      g.add(fleck);
+    }
+    return g;
   }
 
   function makeBarn() {
@@ -761,7 +859,7 @@
       if (Math.hypot(player.position.x - e.x, player.position.z - e.z) < 0.9) {
         scene.remove(e.mesh);
         eggs.splice(i, 1);
-        eggCount += 1;
+        inv.egg += 1;
         refreshInventory();
         toast('🥚 Picked up an egg!', true);
       }
@@ -814,12 +912,19 @@
   // What each new patch of land gets, in order of purchase.
   let patchCounter = 0;
   function spawnPatchProps(newCells) {
-    // Prefer interior cells (not on the new coastline) so props stay off the beach.
-    const candidates = newCells.filter(c => !isCoast(c.gx, c.gz));
-    for (let i = candidates.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [candidates[i], candidates[j]] = [candidates[j], candidates[i]];
-    }
+    // Prefer interior cells (not on the new coastline) so props stay off the
+    // beach — but fall back to beach cells rather than skip part of the plan.
+    const shuffle = arr => {
+      for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+      }
+      return arr;
+    };
+    const candidates = [
+      ...shuffle(newCells.filter(c => !isCoast(c.gx, c.gz))),
+      ...shuffle(newCells.filter(c => isCoast(c.gx, c.gz))),
+    ];
     let idx = 0;
     const takeSpot = () => {
       if (idx >= candidates.length) return null;
@@ -831,17 +936,19 @@
     const plan = ['tree', 'bamboo', 'chicken'];
     if (Math.random() < 0.5) plan.push('tree');
     if (Math.random() < 0.5) plan.push('chicken');
+    // Two resource nodes per patch, so every land purchase brings something new to collect.
+    const nodes = ['corn', 'rock', 'ice', 'iron'];
+    for (let n = 0; n < 2; n++) plan.push(nodes.splice(Math.floor(Math.random() * nodes.length), 1)[0]);
     plan.push(['barn', 'hive', 'shop'][patchCounter % 3]); // one landmark per patch, cycling
     patchCounter++;
 
     for (const what of plan) {
       const spot = takeSpot();
       if (!spot) break;
-      if (what === 'tree') addTree(spot.x, spot.z, true);
-      else if (what === 'chicken') addChicken(spot.x, spot.z);
-      else if (what === 'bamboo') addBamboo(spot.x, spot.z);
+      if (what === 'chicken') addChicken(spot.x, spot.z);
+      else if (what in HARVEST_MAKERS) addHarvestable(what, spot.x, spot.z);
       else {
-        const prop = what === 'barn' ? makeBarn() : what === 'hive' ? makeBeehive() : makeWoodenShop();
+        const prop = what === 'barn' ? makeBarn() : makeWoodenShop();
         prop.position.set(spot.x, LAND_Y, spot.z);
         prop.rotation.y = Math.random() * Math.PI * 2;
         scene.add(prop);
@@ -1081,32 +1188,42 @@
   }
 
   // ═══════════════════════════════════════════════
-  //  COCONUT HARVEST — hit the tree, coconuts fall, inventory grows
+  //  HARVEST — hit a resource node, its drops fall, inventory grows
   // ═══════════════════════════════════════════════
-  let coconutCount = 0;
-  let bambooCount = 0;
-  let eggCount = 0;
   let cubeCoins = 0;
   let harvestEnabled = false; // becomes true once the intro→fps transition completes
   let treeIntroduced = false; // once true, the intro tree's arrow retires for good
-  const fallingCoconuts = []; // { mesh, vel, bounces } — also carries falling bamboo sticks
-  const nutMat2 = new THREE.MeshStandardMaterial({ color: 0x6D4C41, flatShading: true, roughness: 0.85 });
+  const fallingDrops = []; // { mesh, vel, bounces } — every harvested item that's mid-air
 
   const inventoryEl = document.getElementById('inventory');
-  const coconutCountEl = document.getElementById('coconut-count');
-  const bambooCountEl = document.getElementById('bamboo-count');
-  const eggCountEl = document.getElementById('egg-count');
+  const invItemsEl = document.getElementById('inv-items');
   const coinCountEl = document.getElementById('coin-count');
   const hitPromptEl = document.getElementById('hit-prompt');
   const hitBtnEl = document.getElementById('hit-btn');
   const toastEl = document.getElementById('toast');
 
+  // One HUD entry per resource; entries stay hidden until you've collected some
+  // (the coconut slot is always shown, so the HUD never looks empty).
+  const invCountEls = {};
+  for (const [key, r] of Object.entries(RESOURCES)) {
+    const wrap = document.createElement('span');
+    wrap.style.marginRight = '10px';
+    const num = document.createElement('span');
+    num.className = 'n';
+    num.textContent = '0';
+    wrap.append(`${r.emoji} `, num);
+    invItemsEl.appendChild(wrap);
+    invCountEls[key] = { wrap, num };
+  }
+
   function refreshInventory() {
-    coconutCountEl.textContent = coconutCount;
-    bambooCountEl.textContent = bambooCount;
-    eggCountEl.textContent = eggCount;
+    for (const key of Object.keys(RESOURCES)) {
+      invCountEls[key].num.textContent = inv[key];
+      invCountEls[key].wrap.style.display = (key === 'coconut' || inv[key] > 0) ? '' : 'none';
+    }
     coinCountEl.textContent = cubeCoins;
   }
+  refreshInventory();
 
   let toastTimer;
   function toast(msg, ok) {
@@ -1117,77 +1234,75 @@
     toastTimer = setTimeout(() => (toastEl.style.opacity = '0'), 2200);
   }
 
-  let targetHarvest = null; // the nearest ready tree or bamboo cluster within reach
+  let targetHarvest = null; // the nearest ready resource node within reach
 
   function findHarvestTarget() {
     if (!harvestEnabled) return null;
     let best = null, bestDist = HIT_RANGE;
-    for (const t of trees) {
-      if (!t.ready) continue;
-      const d = Math.hypot(player.position.x - t.x, player.position.z - t.z);
-      if (d <= bestDist) { best = { kind: 'tree', obj: t }; bestDist = d; }
-    }
-    for (const b of bamboos) {
-      if (!b.ready) continue;
-      const d = Math.hypot(player.position.x - b.x, player.position.z - b.z);
-      if (d <= bestDist) { best = { kind: 'bamboo', obj: b }; bestDist = d; }
+    for (const h of harvestables) {
+      if (!h.ready) continue;
+      const d = Math.hypot(player.position.x - h.x, player.position.z - h.z);
+      if (d <= bestDist) { best = h; bestDist = d; }
     }
     return best;
   }
 
-  const stickMat = new THREE.MeshStandardMaterial({ color: 0x8BC34A, flatShading: true, roughness: 0.8 });
-
-  function hitTree() { // harvests whatever is targeted: a coconut tree or a bamboo cluster
-    const target = targetHarvest;
-    if (!target) return;
-
-    if (target.kind === 'bamboo') {
-      const b = target.obj;
-      b.ready = false;
-      b.regrowAt = performance.now() + BAMBOO_REGROW_MS;
-      b.group.visible = false; // chopped down; grows back later
-      for (let i = 0; i < BAMBOO_YIELD; i++) {
-        const stick = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 1.1, 5), stickMat);
-        stick.position.set(b.x + (Math.random() - 0.5) * 0.4, LAND_Y + 1.6, b.z + (Math.random() - 0.5) * 0.4);
+  // What each resource looks like while it tumbles to the ground.
+  const DROP_MATS = {
+    coconut: new THREE.MeshStandardMaterial({ color: 0x6D4C41, flatShading: true, roughness: 0.85 }),
+    bamboo:  new THREE.MeshStandardMaterial({ color: 0x8BC34A, flatShading: true, roughness: 0.8 }),
+    corn:    new THREE.MeshStandardMaterial({ color: 0xFDD835, flatShading: true, roughness: 0.7 }),
+    honey:   new THREE.MeshStandardMaterial({ color: 0xFFA000, flatShading: true, roughness: 0.4 }),
+    rock:    new THREE.MeshStandardMaterial({ color: 0x9E9E9E, flatShading: true, roughness: 0.95 }),
+    ice:     new THREE.MeshStandardMaterial({ color: 0xB3E5FC, flatShading: true, roughness: 0.25, transparent: true, opacity: 0.85 }),
+    iron:    new THREE.MeshStandardMaterial({ color: 0x757575, flatShading: true, roughness: 0.5, metalness: 0.4 }),
+  };
+  function makeDropMesh(resource) {
+    switch (resource) {
+      case 'bamboo': {
+        const stick = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 1.1, 5), DROP_MATS.bamboo);
         stick.rotation.z = Math.random() * Math.PI;
-        stick.castShadow = true;
-        scene.add(stick);
-        fallingCoconuts.push({
-          mesh: stick,
-          vel: new THREE.Vector3((Math.random() - 0.5) * 1.4, 0.4, (Math.random() - 0.5) * 1.4),
-          bounces: 0,
-          settleAt: 0,
-        });
+        return stick;
       }
-      bambooCount += BAMBOO_YIELD;
-      refreshInventory();
-      return;
+      case 'corn':  return new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.32, 0.14), DROP_MATS.corn);
+      case 'honey': return new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.24, 0.22), DROP_MATS.honey);
+      case 'rock':  return new THREE.Mesh(new THREE.DodecahedronGeometry(0.15, 0), DROP_MATS.rock);
+      case 'ice':   return new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.22, 0.22), DROP_MATS.ice);
+      case 'iron':  return new THREE.Mesh(new THREE.DodecahedronGeometry(0.16, 0), DROP_MATS.iron);
+      default:      return new THREE.Mesh(new THREE.SphereGeometry(0.13, 8, 8), DROP_MATS.coconut);
     }
+  }
 
-    const t = target.obj;
-    t.ready = false;
-    t.regrowAt = performance.now() + REGROW_MS;
-    t.coconutMeshes.forEach(m => (m.visible = false));
-    if (t === trees[0]) { glowPad.visible = false; markerGroup.visible = false; }
+  function hitTree() { // harvests whatever resource node is targeted
+    const h = targetHarvest;
+    if (!h) return;
+    const def = HARVEST_DEFS[h.kind];
 
-    for (let i = 0; i < 3; i++) {
-      const nut = new THREE.Mesh(new THREE.SphereGeometry(0.13, 8, 8), nutMat2);
-      nut.position.set(
-        t.x + (Math.random() - 0.5) * 0.3,
-        LAND_Y + CROWN_HEIGHT - 0.2,
-        t.z + (Math.random() - 0.5) * 0.3
+    h.ready = false;
+    h.regrowAt = performance.now() + def.regrowMs;
+    if (def.hide) h.group.visible = false;             // chopped/mined away; grows back later
+    if (h.coconutMeshes) h.coconutMeshes.forEach(m => (m.visible = false));
+    if (h === introTree) { glowPad.visible = false; markerGroup.visible = false; }
+
+    const dropY = h.kind === 'tree' ? LAND_Y + CROWN_HEIGHT - 0.2 : LAND_Y + def.dropHeight;
+    for (let i = 0; i < def.yield; i++) {
+      const drop = makeDropMesh(def.resource);
+      drop.position.set(
+        h.x + (Math.random() - 0.5) * 0.4,
+        dropY,
+        h.z + (Math.random() - 0.5) * 0.4
       );
-      nut.castShadow = true;
-      scene.add(nut);
-      fallingCoconuts.push({
-        mesh: nut,
-        vel: new THREE.Vector3((Math.random() - 0.5) * 1.6, 0.5, (Math.random() - 0.5) * 1.6),
+      drop.castShadow = true;
+      scene.add(drop);
+      fallingDrops.push({
+        mesh: drop,
+        vel: new THREE.Vector3((Math.random() - 0.5) * 1.5, 0.5, (Math.random() - 0.5) * 1.5),
         bounces: 0,
         settleAt: 0,
       });
     }
 
-    coconutCount += 3;
+    inv[def.resource] += def.yield;
     refreshInventory();
 
     // The intro tree's "Hit!" marker has done its job — retire it for good, and
@@ -1200,15 +1315,15 @@
     }
   }
 
-  function updateFallingCoconuts(delta) {
+  function updateFallingDrops(delta) {
     const now = performance.now();
-    for (let i = fallingCoconuts.length - 1; i >= 0; i--) {
-      const fc = fallingCoconuts[i];
+    for (let i = fallingDrops.length - 1; i >= 0; i--) {
+      const fc = fallingDrops[i];
       const m = fc.mesh;
       if (fc.settleAt) {
         if (now > fc.settleAt) {
           scene.remove(m);
-          fallingCoconuts.splice(i, 1);
+          fallingDrops.splice(i, 1);
         }
         continue;
       }
@@ -1272,13 +1387,16 @@
   }
 
   function sellAll() {
-    const earned = coconutCount * COCONUT_PRICE + bambooCount * BAMBOO_PRICE + eggCount * EGG_PRICE;
-    if (earned <= 0) { showMessage('Sorry, you have nothing to sell.'); return; }
+    let earned = 0;
     const parts = [];
-    if (coconutCount > 0) parts.push(`${coconutCount} coconut${coconutCount > 1 ? 's' : ''}`);
-    if (bambooCount > 0) parts.push(`${bambooCount} bamboo`);
-    if (eggCount > 0) parts.push(`${eggCount} egg${eggCount > 1 ? 's' : ''}`);
-    coconutCount = 0; bambooCount = 0; eggCount = 0;
+    for (const [key, r] of Object.entries(RESOURCES)) {
+      const n = inv[key];
+      if (n <= 0) continue;
+      earned += n * r.price;
+      parts.push(`${n} ${n > 1 ? r.plural : key}`);
+      inv[key] = 0;
+    }
+    if (earned <= 0) { showMessage('Sorry, you have nothing to sell.'); return; }
     cubeCoins += earned;
     refreshInventory();
     showMessage(`Sold ${parts.join(', ')} for ${earned} cubecoins!`);
@@ -1286,14 +1404,15 @@
 
   function sellHand() {
     // "The thing in your hand" is one unit of whatever you're carrying, coconuts first.
-    let name = null, price = 0;
-    if (coconutCount > 0)      { coconutCount -= 1; name = 'coconut';      price = COCONUT_PRICE; }
-    else if (bambooCount > 0)  { bambooCount -= 1;  name = 'bamboo stick'; price = BAMBOO_PRICE; }
-    else if (eggCount > 0)     { eggCount -= 1;     name = 'egg';          price = EGG_PRICE; }
-    if (!name) { showMessage('Sorry, you have nothing in your hand.'); return; }
-    cubeCoins += price;
-    refreshInventory();
-    showMessage(`Sold 1 ${name} for ${price} cubecoins!`);
+    for (const [key, r] of Object.entries(RESOURCES)) {
+      if (inv[key] <= 0) continue;
+      inv[key] -= 1;
+      cubeCoins += r.price;
+      refreshInventory();
+      showMessage(`Sold 1 ${key} for ${r.price} cubecoins!`);
+      return;
+    }
+    showMessage('Sorry, you have nothing in your hand.');
   }
 
   speechButtonsEl.addEventListener('click', e => {
@@ -1574,22 +1693,19 @@
       updatePlayer(delta);
       updateFpsCamera();
       fpsCamera.updateMatrixWorld(); // so worldToScreen below reflects this frame's look direction
-      updateFallingCoconuts(delta);
+      updateFallingDrops(delta);
       updateShopkeeper(delta);
 
       const now = performance.now();
-      for (const tr of trees) {
-        if (!tr.ready && now > tr.regrowAt) {
-          tr.ready = true;
-          tr.coconutMeshes.forEach(m => (m.visible = true));
-          if (tr === trees[0]) {
-            glowPad.visible = true;
-            if (!treeIntroduced) markerGroup.visible = true;
-          }
+      for (const h of harvestables) {
+        if (h.ready || now < h.regrowAt) continue;
+        h.ready = true;
+        h.group.visible = true;
+        if (h.coconutMeshes) h.coconutMeshes.forEach(m => (m.visible = true));
+        if (h === introTree) {
+          glowPad.visible = true;
+          if (!treeIntroduced) markerGroup.visible = true;
         }
-      }
-      for (const b of bamboos) {
-        if (!b.ready && now > b.regrowAt) { b.ready = true; b.group.visible = true; }
       }
       glowPad.material.opacity = 0.4 + Math.sin(t * 3) * 0.15;
       arrowGroup.position.y = 1.0 + Math.sin(t * 2.2) * 0.25;
