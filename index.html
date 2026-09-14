@@ -102,7 +102,7 @@
 
   <div id="fade"></div>
   <div id="start-prompt">Click to begin — drag or arrow keys to turn</div>
-  <div id="inventory">🥥 <span class="n" id="coconut-count">0</span> &nbsp; 🪙 <span class="n2" id="coin-count">0</span></div>
+  <div id="inventory">🥥 <span class="n" id="coconut-count">0</span> &nbsp; 🎍 <span class="n" id="bamboo-count">0</span> &nbsp; 🥚 <span class="n" id="egg-count">0</span> &nbsp; 🪙 <span class="n2" id="coin-count">0</span></div>
   <div id="hit-prompt"><span class="k">E</span> Hit</div>
   <div id="joy-zone"><div id="joy-knob"></div></div>
   <div id="hit-btn">🥊</div>
@@ -133,6 +133,12 @@
   const REGROW_MS    = 8000;  // how long until the tree grows new coconuts
   const SHOP_RANGE   = 2.6;   // how close, and in front of, the shop CUBEY needs to be
   const COCONUT_PRICE = 10;   // cubecoins per coconut
+  const BAMBOO_PRICE  = 5;    // cubecoins per bamboo stick
+  const EGG_PRICE     = 15;   // cubecoins per egg
+  const BAMBOO_YIELD  = 2;    // sticks per bamboo harvest
+  const BAMBOO_REGROW_MS = 12000; // how long a harvested bamboo cluster takes to grow back
+  const EGG_MIN_MS = 15000, EGG_MAX_MS = 30000; // how often each chicken lays an egg
+  const MAX_GROUND_EGGS = 8;  // eggs lying around at once, island-wide
   const SHOP_WALK_MS = 1100;  // how long the shopkeeper takes to walk in/out
   const LAND_PRICE_BASE = 100; // first patch of land costs this
   const LAND_PRICE_STEP = 50;  // each later patch costs this much more
@@ -621,6 +627,17 @@
     return g;
   }
 
+  // Bamboo clusters are harvestable, like the coconut trees: hit one to chop
+  // sticks, and the cluster grows back after a while.
+  const bamboos = []; // { group, x, z, ready, regrowAt }
+  function addBamboo(x, z) {
+    const group = makeBamboo();
+    group.position.set(x, LAND_Y, z);
+    group.rotation.y = Math.random() * Math.PI * 2;
+    scene.add(group);
+    bamboos.push({ group, x, z, ready: true, regrowAt: 0 });
+  }
+
   function makeBarn() {
     const g = new THREE.Group();
     const wallMat = new THREE.MeshStandardMaterial({ color: 0xC62828, flatShading: true, roughness: 0.85 });
@@ -720,7 +737,35 @@
     group.position.set(x, LAND_Y, z);
     group.rotation.y = Math.random() * Math.PI * 2;
     scene.add(group);
-    chickens.push({ group, tx: x, tz: z, pauseUntil: 0, phase: Math.random() * 10 });
+    chickens.push({
+      group, tx: x, tz: z, pauseUntil: 0, phase: Math.random() * 10,
+      nextEggAt: performance.now() + EGG_MIN_MS + Math.random() * (EGG_MAX_MS - EGG_MIN_MS),
+    });
+  }
+
+  // Eggs the chickens leave behind — walk over one to pick it up.
+  const eggs = []; // { mesh, x, z }
+  const eggMat = new THREE.MeshStandardMaterial({ color: 0xFFF8E1, flatShading: true, roughness: 0.6 });
+  function layEgg(x, z) {
+    const mesh = new THREE.Mesh(new THREE.SphereGeometry(0.11, 8, 8), eggMat);
+    mesh.scale.y = 1.25;
+    mesh.position.set(x, LAND_Y + 0.12, z);
+    mesh.castShadow = true;
+    scene.add(mesh);
+    eggs.push({ mesh, x, z });
+  }
+
+  function updateEggs() {
+    for (let i = eggs.length - 1; i >= 0; i--) {
+      const e = eggs[i];
+      if (Math.hypot(player.position.x - e.x, player.position.z - e.z) < 0.9) {
+        scene.remove(e.mesh);
+        eggs.splice(i, 1);
+        eggCount += 1;
+        refreshInventory();
+        toast('🥚 Picked up an egg!', true);
+      }
+    }
   }
 
   const CHICKEN_SPEED = 0.9;
@@ -748,6 +793,11 @@
         g.position.z += (dz / dist) * step;
         g.rotation.y = Math.atan2(dx, dz);
         g.position.y = LAND_Y + Math.abs(Math.sin(t * 9 + c.phase)) * 0.05;
+      }
+
+      if (now > c.nextEggAt) {
+        c.nextEggAt = now + EGG_MIN_MS + Math.random() * (EGG_MAX_MS - EGG_MIN_MS);
+        if (eggs.length < MAX_GROUND_EGGS) layEgg(g.position.x, g.position.z);
       }
     }
   }
@@ -789,8 +839,9 @@
       if (!spot) break;
       if (what === 'tree') addTree(spot.x, spot.z, true);
       else if (what === 'chicken') addChicken(spot.x, spot.z);
+      else if (what === 'bamboo') addBamboo(spot.x, spot.z);
       else {
-        const prop = what === 'bamboo' ? makeBamboo() : what === 'barn' ? makeBarn() : what === 'hive' ? makeBeehive() : makeWoodenShop();
+        const prop = what === 'barn' ? makeBarn() : what === 'hive' ? makeBeehive() : makeWoodenShop();
         prop.position.set(spot.x, LAND_Y, spot.z);
         prop.rotation.y = Math.random() * Math.PI * 2;
         scene.add(prop);
@@ -1033,14 +1084,18 @@
   //  COCONUT HARVEST — hit the tree, coconuts fall, inventory grows
   // ═══════════════════════════════════════════════
   let coconutCount = 0;
+  let bambooCount = 0;
+  let eggCount = 0;
   let cubeCoins = 0;
   let harvestEnabled = false; // becomes true once the intro→fps transition completes
   let treeIntroduced = false; // once true, the intro tree's arrow retires for good
-  const fallingCoconuts = []; // { mesh, vel, bounces }
+  const fallingCoconuts = []; // { mesh, vel, bounces } — also carries falling bamboo sticks
   const nutMat2 = new THREE.MeshStandardMaterial({ color: 0x6D4C41, flatShading: true, roughness: 0.85 });
 
   const inventoryEl = document.getElementById('inventory');
   const coconutCountEl = document.getElementById('coconut-count');
+  const bambooCountEl = document.getElementById('bamboo-count');
+  const eggCountEl = document.getElementById('egg-count');
   const coinCountEl = document.getElementById('coin-count');
   const hitPromptEl = document.getElementById('hit-prompt');
   const hitBtnEl = document.getElementById('hit-btn');
@@ -1048,6 +1103,8 @@
 
   function refreshInventory() {
     coconutCountEl.textContent = coconutCount;
+    bambooCountEl.textContent = bambooCount;
+    eggCountEl.textContent = eggCount;
     coinCountEl.textContent = cubeCoins;
   }
 
@@ -1060,22 +1117,54 @@
     toastTimer = setTimeout(() => (toastEl.style.opacity = '0'), 2200);
   }
 
-  let targetTree = null; // the nearest ready tree within reach, if any
+  let targetHarvest = null; // the nearest ready tree or bamboo cluster within reach
 
-  function findTargetTree() {
+  function findHarvestTarget() {
     if (!harvestEnabled) return null;
     let best = null, bestDist = HIT_RANGE;
     for (const t of trees) {
       if (!t.ready) continue;
       const d = Math.hypot(player.position.x - t.x, player.position.z - t.z);
-      if (d <= bestDist) { best = t; bestDist = d; }
+      if (d <= bestDist) { best = { kind: 'tree', obj: t }; bestDist = d; }
+    }
+    for (const b of bamboos) {
+      if (!b.ready) continue;
+      const d = Math.hypot(player.position.x - b.x, player.position.z - b.z);
+      if (d <= bestDist) { best = { kind: 'bamboo', obj: b }; bestDist = d; }
     }
     return best;
   }
 
-  function hitTree() {
-    const t = targetTree;
-    if (!t) return;
+  const stickMat = new THREE.MeshStandardMaterial({ color: 0x8BC34A, flatShading: true, roughness: 0.8 });
+
+  function hitTree() { // harvests whatever is targeted: a coconut tree or a bamboo cluster
+    const target = targetHarvest;
+    if (!target) return;
+
+    if (target.kind === 'bamboo') {
+      const b = target.obj;
+      b.ready = false;
+      b.regrowAt = performance.now() + BAMBOO_REGROW_MS;
+      b.group.visible = false; // chopped down; grows back later
+      for (let i = 0; i < BAMBOO_YIELD; i++) {
+        const stick = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 1.1, 5), stickMat);
+        stick.position.set(b.x + (Math.random() - 0.5) * 0.4, LAND_Y + 1.6, b.z + (Math.random() - 0.5) * 0.4);
+        stick.rotation.z = Math.random() * Math.PI;
+        stick.castShadow = true;
+        scene.add(stick);
+        fallingCoconuts.push({
+          mesh: stick,
+          vel: new THREE.Vector3((Math.random() - 0.5) * 1.4, 0.4, (Math.random() - 0.5) * 1.4),
+          bounces: 0,
+          settleAt: 0,
+        });
+      }
+      bambooCount += BAMBOO_YIELD;
+      refreshInventory();
+      return;
+    }
+
+    const t = target.obj;
     t.ready = false;
     t.regrowAt = performance.now() + REGROW_MS;
     t.coconutMeshes.forEach(m => (m.visible = false));
@@ -1183,20 +1272,28 @@
   }
 
   function sellAll() {
-    if (coconutCount <= 0) { showMessage('Sorry, you have nothing to sell.'); return; }
-    const sold = coconutCount, earned = sold * COCONUT_PRICE;
-    coconutCount = 0;
+    const earned = coconutCount * COCONUT_PRICE + bambooCount * BAMBOO_PRICE + eggCount * EGG_PRICE;
+    if (earned <= 0) { showMessage('Sorry, you have nothing to sell.'); return; }
+    const parts = [];
+    if (coconutCount > 0) parts.push(`${coconutCount} coconut${coconutCount > 1 ? 's' : ''}`);
+    if (bambooCount > 0) parts.push(`${bambooCount} bamboo`);
+    if (eggCount > 0) parts.push(`${eggCount} egg${eggCount > 1 ? 's' : ''}`);
+    coconutCount = 0; bambooCount = 0; eggCount = 0;
     cubeCoins += earned;
     refreshInventory();
-    showMessage(`Sold ${sold} coconuts for ${earned} cubecoins!`);
+    showMessage(`Sold ${parts.join(', ')} for ${earned} cubecoins!`);
   }
 
   function sellHand() {
-    if (coconutCount <= 0) { showMessage('Sorry, you have nothing in your hand.'); return; }
-    coconutCount -= 1;
-    cubeCoins += COCONUT_PRICE;
+    // "The thing in your hand" is one unit of whatever you're carrying, coconuts first.
+    let name = null, price = 0;
+    if (coconutCount > 0)      { coconutCount -= 1; name = 'coconut';      price = COCONUT_PRICE; }
+    else if (bambooCount > 0)  { bambooCount -= 1;  name = 'bamboo stick'; price = BAMBOO_PRICE; }
+    else if (eggCount > 0)     { eggCount -= 1;     name = 'egg';          price = EGG_PRICE; }
+    if (!name) { showMessage('Sorry, you have nothing in your hand.'); return; }
+    cubeCoins += price;
     refreshInventory();
-    showMessage(`Sold 1 coconut for ${COCONUT_PRICE} cubecoins!`);
+    showMessage(`Sold 1 ${name} for ${price} cubecoins!`);
   }
 
   speechButtonsEl.addEventListener('click', e => {
@@ -1444,9 +1541,9 @@
     feet[1].position.y = 0.11 + Math.max(0, -Math.sin(walkCycle)) * 0.08;
     shadowBlob.position.set(player.position.x, LAND_Y + 0.02, player.position.z);
 
-    targetTree = findTargetTree();
-    hitPromptEl.classList.toggle('show', !!targetTree && !isTouch);
-    hitBtnEl.classList.toggle('ready', !!targetTree && isTouch);
+    targetHarvest = findHarvestTarget();
+    hitPromptEl.classList.toggle('show', !!targetHarvest && !isTouch);
+    hitBtnEl.classList.toggle('ready', !!targetHarvest && isTouch);
     updateBuyButtons();
 
     if (treeIntroduced) {
@@ -1491,12 +1588,16 @@
           }
         }
       }
+      for (const b of bamboos) {
+        if (!b.ready && now > b.regrowAt) { b.ready = true; b.group.visible = true; }
+      }
       glowPad.material.opacity = 0.4 + Math.sin(t * 3) * 0.15;
       arrowGroup.position.y = 1.0 + Math.sin(t * 2.2) * 0.25;
       markerGroup.rotation.y += delta * 0.6;
 
       updateChickens(delta, t);
       updateBees(delta, t);
+      updateEggs();
 
       if (shopMarkerGroup.visible) {
         shopGlowPad.material.opacity = 0.4 + Math.sin(t * 3) * 0.15;
