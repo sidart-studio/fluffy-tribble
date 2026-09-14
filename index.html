@@ -82,6 +82,20 @@
     #hammer-btn.held .lbl { color: #3e2200; }
     #hammer-btn:active { transform: translateY(-50%) scale(.9); }
 
+    #home-btn {
+      position: fixed; right: 18px; top: 50%; transform: translateY(56px); z-index: 120;
+      width: 76px; height: 76px; border-radius: 50%;
+      background: rgba(0,0,0,.5); border: 3px solid #90CAF9;
+      font-size: 32px; display: none; flex-direction: column;
+      align-items: center; justify-content: center;
+      box-shadow: 0 6px 14px rgba(0,0,0,.35); cursor: pointer;
+    }
+    #home-btn .lbl {
+      font-size: 9px; font-weight: 800; color: #fff; letter-spacing: .5px; margin-top: -2px;
+    }
+    #home-btn.show { display: flex; }
+    #home-btn:active { transform: translateY(56px) scale(.9); }
+
     #inventory .n2 { color: #8BE28B; }
 
     #speech-bubble {
@@ -124,6 +138,7 @@
   <div id="joy-zone"><div id="joy-knob"></div></div>
   <div id="hit-btn">🥊</div>
   <div id="hammer-btn" title="Hold / put away your hammer (Q)">🔨<span class="lbl">HAMMER</span></div>
+  <div id="home-btn" title="Go back to the shop (H)">🏠<span class="lbl">HOME</span></div>
 
   <div id="speech-bubble">
     <div id="speech-text">What do you want to sell?</div>
@@ -1747,6 +1762,23 @@
   }
   hammerBtnEl.addEventListener('click', toggleHammer);
 
+  // ── The HOME button — one press brings CUBEY back to the shop, however far
+  // the island has grown.
+  const homeBtnEl = document.getElementById('home-btn');
+  function goHome() {
+    if (phase !== 'fps') return;
+    fadeEl.classList.add('show');
+    setTimeout(() => {
+      const spot = new THREE.Vector3(shopPos.x, LAND_Y, shopPos.z).addScaledVector(shopDoorDir, 3.2);
+      player.position.set(spot.x, LAND_Y, spot.z);
+      yaw = Math.atan2(-(shopPos.x - spot.x), -(shopPos.z - spot.z)); // face the shop
+      pitch = -0.15;
+      fadeEl.classList.remove('show');
+      toast('🏠 Back at the shop!', true);
+    }, 380);
+  }
+  homeBtnEl.addEventListener('click', goHome);
+
   let targetHarvest = null; // the nearest ready resource node within reach
 
   function findHarvestTarget() {
@@ -2088,6 +2120,7 @@
       phase = 'fps';
       inventoryEl.classList.add('show');
       hammerBtnEl.classList.add('show');
+      homeBtnEl.classList.add('show');
       setTimeout(() => toast('🔨 You have a hammer! Press the HAMMER button on the right to hold it', true), 900);
 
       fadeEl.classList.remove('show');
@@ -2126,6 +2159,7 @@
     keys.add(e.key.toLowerCase());
     if (e.key.toLowerCase() === 'e') hitTree();
     if (e.key.toLowerCase() === 'q') toggleHammer();
+    if (e.key.toLowerCase() === 'h') goHome();
   });
   window.addEventListener('keyup', e => keys.delete(e.key.toLowerCase()));
 
