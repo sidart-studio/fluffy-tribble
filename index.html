@@ -66,16 +66,21 @@
     #hit-btn:active { transform: scale(.9); }
 
     #hammer-btn {
-      position: fixed; right: 20px; bottom: 104px; z-index: 120;
-      width: 64px; height: 64px; border-radius: 50%;
-      background: rgba(0,0,0,.45); border: 3px solid rgba(255,255,255,.5);
-      font-size: 26px; display: none; align-items: center; justify-content: center;
+      position: fixed; right: 18px; top: 50%; transform: translateY(-50%); z-index: 120;
+      width: 76px; height: 76px; border-radius: 50%;
+      background: rgba(0,0,0,.5); border: 3px solid #FFD54F;
+      font-size: 32px; display: none; flex-direction: column;
+      align-items: center; justify-content: center;
       box-shadow: 0 6px 14px rgba(0,0,0,.35); cursor: pointer;
       transition: background .15s, border-color .15s;
     }
+    #hammer-btn .lbl {
+      font-size: 9px; font-weight: 800; color: #fff; letter-spacing: .5px; margin-top: -2px;
+    }
     #hammer-btn.show { display: flex; }
     #hammer-btn.held { background: linear-gradient(180deg,#FFCA28,#FF9800); border-color: #fff; }
-    #hammer-btn:active { transform: scale(.9); }
+    #hammer-btn.held .lbl { color: #3e2200; }
+    #hammer-btn:active { transform: translateY(-50%) scale(.9); }
 
     #inventory .n2 { color: #8BE28B; }
 
@@ -118,7 +123,7 @@
   <div id="hit-prompt"><span class="k">E</span> Hit</div>
   <div id="joy-zone"><div id="joy-knob"></div></div>
   <div id="hit-btn">🥊</div>
-  <div id="hammer-btn" title="Hold / put away your hammer (Q)">🔨</div>
+  <div id="hammer-btn" title="Hold / put away your hammer (Q)">🔨<span class="lbl">HAMMER</span></div>
 
   <div id="speech-bubble">
     <div id="speech-text">What do you want to sell?</div>
@@ -177,15 +182,18 @@
   const EGG_MIN_MS = 15000, EGG_MAX_MS = 30000; // how often each chicken lays an egg
   const MAX_GROUND_EGGS = 8;  // eggs lying around at once, island-wide
   const SHOP_WALK_MS = 1100;  // how long the shopkeeper takes to walk in/out
-  // What each land purchase costs, in purchase order — coins at first, then
-  // mixes of coins and resources. Past the list, costs keep climbing.
+  // What each land purchase costs, in purchase order — always 2 or 3 things
+  // after the first, and often no coins at all, just resources. Each cost only
+  // asks for things earlier patches (or the hammer) can already produce.
   const LAND_COSTS = [
     { coins: 100 },
-    { coins: 150, egg: 2 },
-    { coins: 150, rock: 3, bamboo: 4 },
-    { coins: 200, iron: 1, egg: 3 },
-    { coins: 250, ice: 2, wood: 5 },
-    { coins: 250, iron: 2, honey: 2 },
+    { coins: 100, egg: 2 },
+    { egg: 3, bamboo: 4 },
+    { coins: 150, rock: 3, bamboo: 2 },
+    { corn: 4, rock: 2 },
+    { coins: 200, ice: 2, corn: 3 },
+    { honey: 2, ice: 3, wood: 4 },
+    { coins: 250, iron: 1, honey: 1 },
   ];
   const PATCH_DEPTH = 3;       // how many cells deep each purchased patch extends outward
   const PATCH_HALFW = 2;       // patches are (2*PATCH_HALFW + 1) cells wide
@@ -935,11 +943,25 @@
     }
   }
 
-  // What each new patch of land gets, in order of purchase.
+  // Each purchased patch is themed: it grows several of ONE kind of thing.
+  // The first patches follow a set progression — sequenced so that whatever a
+  // later land cost asks for, an earlier patch already produces — and after
+  // that, themes repeat at random.
+  const PATCH_THEMES = ['chicken', 'bamboo', 'rock', 'corn', 'ice', 'hive', 'iron', 'tree'];
+  const THEME_NAMES = {
+    chicken: '🐔 A chicken farm', bamboo: '🎍 A bamboo grove', rock: '🪨 A rocky field',
+    corn: '🌽 A corn field', ice: '🧊 An ice field', hive: '🍯 An apiary',
+    iron: '⛏️ An iron deposit', tree: '🥥 A coconut grove',
+  };
   let patchCounter = 0;
   function spawnPatchProps(newCells) {
-    // Prefer interior cells (not on the new coastline) so props stay off the
-    // beach — but fall back to beach cells rather than skip part of the plan.
+    const theme = patchCounter < PATCH_THEMES.length
+      ? PATCH_THEMES[patchCounter]
+      : PATCH_THEMES[Math.floor(Math.random() * PATCH_THEMES.length)];
+    patchCounter++;
+
+    // Prefer interior cells (not on the new coastline) so things stay off the
+    // beach — but fall back to beach cells rather than spawn less.
     const shuffle = arr => {
       for (let i = arr.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
@@ -959,27 +981,23 @@
       return { x: x + (Math.random() - 0.5) * 0.5, z: z + (Math.random() - 0.5) * 0.5 };
     };
 
-    const plan = ['tree', 'bamboo', 'chicken'];
-    if (Math.random() < 0.5) plan.push('tree');
-    if (Math.random() < 0.5) plan.push('chicken');
-    // Two resource nodes per patch, so every land purchase brings something new to collect.
-    const nodes = ['corn', 'rock', 'ice', 'iron'];
-    for (let n = 0; n < 2; n++) plan.push(nodes.splice(Math.floor(Math.random() * nodes.length), 1)[0]);
-    plan.push(['barn', 'hive', 'shop'][patchCounter % 3]); // one landmark per patch, cycling
-    patchCounter++;
-
-    for (const what of plan) {
+    const count = theme === 'hive' ? 2 : theme === 'tree' ? 3 : 4;
+    for (let n = 0; n < count; n++) {
       const spot = takeSpot();
       if (!spot) break;
-      if (what === 'chicken') addChicken(spot.x, spot.z);
-      else if (what in HARVEST_MAKERS) addHarvestable(what, spot.x, spot.z);
-      else {
-        const prop = what === 'barn' ? makeBarn() : makeWoodenShop();
-        prop.position.set(spot.x, LAND_Y, spot.z);
-        prop.rotation.y = Math.random() * Math.PI * 2;
-        scene.add(prop);
+      if (theme === 'chicken') addChicken(spot.x, spot.z);
+      else addHarvestable(theme, spot.x, spot.z);
+    }
+    if (theme === 'chicken') { // the chickens get their barn
+      const spot = takeSpot();
+      if (spot) {
+        const barn = makeBarn();
+        barn.position.set(spot.x, LAND_Y, spot.z);
+        barn.rotation.y = Math.random() * Math.PI * 2;
+        scene.add(barn);
       }
     }
+    setTimeout(() => toast(`${THEME_NAMES[theme]} grew on your new land!`, true), 2400);
   }
 
   // ═══════════════════════════════════════════════
@@ -1104,7 +1122,12 @@
   function landCost() {
     if (totalLandPurchases < LAND_COSTS.length) return LAND_COSTS[totalLandPurchases];
     const extra = totalLandPurchases - LAND_COSTS.length;
-    return { coins: 300 + 50 * extra, iron: 2, wood: 6 };
+    const late = [ // past the set list, rotate pricier 2-3 part bundles
+      { coins: 300 + 50 * extra, iron: 2, wood: 5 },
+      { iron: 2, rock: 4, egg: 4 },
+      { coins: 350 + 50 * extra, honey: 3 },
+    ];
+    return late[extra % late.length];
   }
   function costText(cost) {
     return Object.entries(cost)
@@ -1590,6 +1613,7 @@
       phase = 'fps';
       inventoryEl.classList.add('show');
       hammerBtnEl.classList.add('show');
+      setTimeout(() => toast('🔨 You have a hammer! Press the HAMMER button on the right to hold it', true), 900);
 
       fadeEl.classList.remove('show');
     }, 380);
