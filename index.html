@@ -674,84 +674,114 @@
   // ═══════════════════════════════════════════════
   //  CUBEY — the friendly cube waving hello. This is you.
   // ═══════════════════════════════════════════════
-  function makeCubey() {
+  // ═══════════════════════════════════════════════
+  //  PEOPLE — one builder makes every character in the game: a proper little
+  //  person with hair, a face, a shirt, arms with hands, pants, and shoes.
+  // ═══════════════════════════════════════════════
+  function makePerson({ shirt = 0xFF7043, pants = 0x455A64, skin = 0xF4C08A, hair = 0x4E342E, apron = false } = {}) {
     const group = new THREE.Group();
-    const cubeyMat = new THREE.MeshStandardMaterial({ color: 0xFFB74D, flatShading: true, roughness: 0.7 });
-
-    const body = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), cubeyMat);
-    body.position.y = 0.5;
-    body.castShadow = true;
+    const body = new THREE.Group(); // everything visual lives here, so it can hide as one
     group.add(body);
+
+    const shirtMat = new THREE.MeshStandardMaterial({ color: shirt, roughness: 0.75 });
+    const pantsMat = new THREE.MeshStandardMaterial({ color: pants, roughness: 0.85 });
+    const skinMat  = new THREE.MeshStandardMaterial({ color: skin, roughness: 0.6 });
+    const hairMat  = new THREE.MeshStandardMaterial({ color: hair, roughness: 0.9 });
+    const shoeMat  = new THREE.MeshStandardMaterial({ color: 0x3E2723, roughness: 0.5 });
+
+    [-0.1, 0.1].forEach(lx => { // shoes + legs
+      const shoe = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.1, 0.3), shoeMat);
+      shoe.position.set(lx, 0.05, 0.03);
+      shoe.castShadow = true;
+      const leg = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.56, 0.17), pantsMat);
+      leg.position.set(lx, 0.38, 0);
+      leg.castShadow = true;
+      body.add(shoe, leg);
+    });
+    const hips = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.16, 0.21), pantsMat);
+    hips.position.y = 0.72;
+    body.add(hips);
+
+    const torso = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.52, 0.25), shirtMat);
+    torso.position.y = 1.05;
+    torso.castShadow = true;
+    body.add(torso);
+    if (apron) { // the shopkeeper's work apron
+      const ap = new THREE.Mesh(
+        new THREE.BoxGeometry(0.34, 0.62, 0.04),
+        new THREE.MeshStandardMaterial({ color: 0xF5F0E8, roughness: 0.85 })
+      );
+      ap.position.set(0, 0.92, 0.14);
+      body.add(ap);
+    }
+
+    // arms hang from shoulder pivots, so they can swing or wave
+    const armPivots = [];
+    [-0.28, 0.28].forEach(ax => {
+      const pivot = new THREE.Group();
+      pivot.position.set(ax, 1.26, 0);
+      const sleeve = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.24, 0.13), shirtMat);
+      sleeve.position.y = -0.12;
+      sleeve.castShadow = true;
+      const forearm = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.26, 0.11), skinMat);
+      forearm.position.y = -0.36;
+      const hand = new THREE.Mesh(new THREE.SphereGeometry(0.07, 8, 8), skinMat);
+      hand.position.y = -0.52;
+      pivot.add(sleeve, forearm, hand);
+      body.add(pivot);
+      armPivots.push(pivot);
+    });
+
+    const neck = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.1, 0.12), skinMat);
+    neck.position.y = 1.36;
+    const head = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.34, 0.3), skinMat);
+    head.position.y = 1.56;
+    head.castShadow = true;
+    body.add(neck, head);
+
+    const hairTop = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.12, 0.33), hairMat);
+    hairTop.position.y = 1.74;
+    const hairBack = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.24, 0.08), hairMat);
+    hairBack.position.set(0, 1.6, -0.14);
+    body.add(hairTop, hairBack);
 
     const eyeMat = new THREE.MeshStandardMaterial({ color: 0xFFFFFF });
     const pupilMat = new THREE.MeshStandardMaterial({ color: 0x2d2d2d });
     const faceBits = [];
-    [-0.22, 0.22].forEach(ex => {
-      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.13, 10, 10), eyeMat);
-      eye.position.set(ex, 0.62, 0.49);
-      const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.06, 8, 8), pupilMat);
-      pupil.position.set(ex, 0.62, 0.58);
-      group.add(eye, pupil);
+    [-0.075, 0.075].forEach(ex => {
+      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.045, 8, 8), eyeMat);
+      eye.position.set(ex, 1.58, 0.14);
+      const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.022, 6, 6), pupilMat);
+      pupil.position.set(ex, 1.58, 0.175);
+      body.add(eye, pupil);
       faceBits.push(eye, pupil);
     });
+    const mouth = new THREE.Mesh(
+      new THREE.BoxGeometry(0.1, 0.025, 0.02),
+      new THREE.MeshStandardMaterial({ color: 0x8D5524 })
+    );
+    mouth.position.set(0, 1.47, 0.152);
+    body.add(mouth);
+    faceBits.push(mouth);
 
-    const footMat = new THREE.MeshStandardMaterial({ color: 0x6D4C41, flatShading: true });
-    const footL = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.22, 0.36), footMat);
-    const footR = footL.clone();
-    footL.position.set(-0.25, 0.11, 0);
-    footR.position.set(0.25, 0.11, 0);
-    footL.castShadow = true; footR.castShadow = true;
-    group.add(footL, footR);
-
-    // Waving arm, pivoted at the shoulder so it can swing.
-    const armPivot = new THREE.Group();
-    armPivot.position.set(0.53, 0.78, 0.1);
-    const arm = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.5, 0.16), cubeyMat);
-    arm.position.set(0, -0.25, 0);
-    arm.castShadow = true;
-    const hand = new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 8), cubeyMat);
-    hand.position.set(0, -0.5, 0);
-    armPivot.add(arm, hand);
-    group.add(armPivot);
-
-    group.userData.armPivot = armPivot;
+    group.userData.armPivot = armPivots[1]; // the right arm — CUBEY waves with it
+    group.userData.armPivots = armPivots;
     group.userData.body = body;
     group.userData.faceBits = faceBits;
-    group.userData.feet = [footL, footR];
+    return group;
+  }
+
+  function makeCubey() { // CUBEY — that's you
+    const group = makePerson({ shirt: 0xFF7043, pants: 0x455A64, hair: 0x5D4037 });
+    group.scale.setScalar(0.85);
     return group;
   }
 
   // ═══════════════════════════════════════════════
-  //  SHOPKEEPER — a blue cube who runs the shop
+  //  SHOPKEEPER — the person who runs the shop
   // ═══════════════════════════════════════════════
   function makeShopkeeper() {
-    const group = new THREE.Group();
-    const mat = new THREE.MeshStandardMaterial({ color: 0x42A5F5, flatShading: true, roughness: 0.7 });
-
-    const body = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), mat);
-    body.position.y = 0.5;
-    body.castShadow = true;
-    group.add(body);
-
-    const eyeMat = new THREE.MeshStandardMaterial({ color: 0xFFFFFF });
-    const pupilMat = new THREE.MeshStandardMaterial({ color: 0x2d2d2d });
-    [-0.22, 0.22].forEach(ex => {
-      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.13, 10, 10), eyeMat);
-      eye.position.set(ex, 0.62, 0.49);
-      const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.06, 8, 8), pupilMat);
-      pupil.position.set(ex, 0.62, 0.58);
-      group.add(eye, pupil);
-    });
-
-    const footMat = new THREE.MeshStandardMaterial({ color: 0x1E4E7A, flatShading: true });
-    const footL = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.22, 0.36), footMat);
-    const footR = footL.clone();
-    footL.position.set(-0.25, 0.11, 0);
-    footR.position.set(0.25, 0.11, 0);
-    footL.castShadow = true; footR.castShadow = true;
-    group.add(footL, footR);
-
-    return group;
+    return makePerson({ shirt: 0x42A5F5, pants: 0x1E4E7A, hair: 0x3E2723, apron: true });
   }
 
   // ═══════════════════════════════════════════════
@@ -797,7 +827,7 @@
   const shopInsidePos = new THREE.Vector3(shopPos.x, LAND_Y, shopPos.z).addScaledVector(shopDoorDir, 0.3);
   const shopStandPos  = new THREE.Vector3(shopPos.x, LAND_Y, shopPos.z).addScaledVector(shopDoorDir, 1.2);
 
-  const SHOPKEEPER_SCALE = 0.65; // smaller than CUBEY, so he fits his little shop
+  const SHOPKEEPER_SCALE = 0.5; // person-sized for his little shop
   const shopkeeper = makeShopkeeper();
   shopkeeper.scale.setScalar(SHOPKEEPER_SCALE);
   shopkeeper.position.copy(shopInsidePos);
@@ -1328,29 +1358,14 @@
     return g;
   }
 
-  function makeVillager() {
-    const g = new THREE.Group();
-    const cols = [0xEF9A9A, 0x80CBC4, 0xFFE082, 0x9FA8DA];
-    const bodyMat = new THREE.MeshStandardMaterial({
-      color: cols[Math.floor(Math.random() * cols.length)], flatShading: true, roughness: 0.7,
-    });
-    const skinMat = new THREE.MeshStandardMaterial({ color: 0xFFCC99, flatShading: true, roughness: 0.8 });
-    const body = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.4, 0.24), bodyMat);
-    body.position.y = 0.42; body.castShadow = true;
-    const head = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.28, 0.28), skinMat);
-    head.position.y = 0.78; head.castShadow = true;
-    const eyeMatV = new THREE.MeshStandardMaterial({ color: 0x2d2d2d });
-    [-0.07, 0.07].forEach(ex => {
-      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.025, 6, 6), eyeMatV);
-      eye.position.set(ex, 0.8, 0.15);
-      g.add(eye);
-    });
-    [-0.09, 0.09].forEach(lx => {
-      const leg = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.22, 0.13), bodyMat);
-      leg.position.set(lx, 0.11, 0);
-      g.add(leg);
-    });
-    g.add(body, head);
+  function makeVillager() { // each worker is their own little person
+    const shirts = [0xEF9A9A, 0x80CBC4, 0xFFE082, 0x9FA8DA, 0xA5D6A7];
+    const pantsCols = [0x455A64, 0x5D4037, 0x37474F];
+    const hairs = [0x3E2723, 0x212121, 0x8D6E63, 0xF9A825, 0x6D4C41];
+    const skins = [0xF4C08A, 0xD9A066, 0x8D5524, 0xFFDBAC];
+    const pick = a => a[Math.floor(Math.random() * a.length)];
+    const g = makePerson({ shirt: pick(shirts), pants: pick(pantsCols), hair: pick(hairs), skin: pick(skins) });
+    g.scale.setScalar(0.5);
     return g;
   }
 
@@ -2306,7 +2321,7 @@
     return { x: (v.x * 0.5 + 0.5) * innerWidth, y: (-v.y * 0.5 + 0.5) * innerHeight, behind: v.z > 1 };
   }
 
-  const shopHeadOffset = new THREE.Vector3(0, 1.15 * SHOPKEEPER_SCALE, 0);
+  const shopHeadOffset = new THREE.Vector3(0, 1.95 * SHOPKEEPER_SCALE, 0); // just above the person's head
   function updateShopkeeper(delta) {
     if (shopState === 'walking_out' || shopState === 'walking_in') {
       const tt = Math.min((performance.now() - shopAnimT0) / SHOP_WALK_MS, 1);
@@ -2331,7 +2346,9 @@
       const s = worldToScreen(head);
       if (!s.behind) {
         speechBubbleEl.style.left = `${s.x}px`;
-        speechBubbleEl.style.top = `${s.y - 14}px`;
+        // keep the whole bubble on screen even when standing right at the counter
+        const minY = speechBubbleEl.offsetHeight + 26;
+        speechBubbleEl.style.top = `${Math.max(minY, s.y - 14)}px`;
       }
     }
 
@@ -2542,9 +2559,6 @@
     }
 
     player.rotation.y = yaw;
-    const feet = player.userData.feet;
-    feet[0].position.y = 0.11 + Math.max(0, Math.sin(walkCycle)) * 0.08;
-    feet[1].position.y = 0.11 + Math.max(0, -Math.sin(walkCycle)) * 0.08;
     shadowBlob.position.set(player.position.x, LAND_Y + 0.02, player.position.z);
 
     targetHarvest = findHarvestTarget();
