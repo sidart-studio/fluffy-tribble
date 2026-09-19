@@ -256,7 +256,6 @@ const ENEMY_MOBS = [
   { color:0x8e6bb0, eyeColor:'#ffffff', accessory:'none' },
   { color:0x3e5c3e, eyeColor:'#ffeb3b', accessory:'horns' },
 ];
-const MAX_ROSTER = 8;
 
 // dirt patch: tiles x9-13, y5-9 (5x5 = 25 plots)
 const DIRT_X0 = 9, DIRT_Z0 = 5, DIRT_W = 5, DIRT_D = 5;
@@ -754,7 +753,7 @@ function renderRoster(){
       <div class="roster-icon">${m.icon}</div>
       <div class="roster-bar-wrap"><div class="roster-bar" style="width:${pct}%"></div></div>
     </div>`;
-  }).join('') + `<div class="roster-empty">${state.roster.length}/${MAX_ROSTER}</div>`;
+  }).join('') + `<div class="roster-empty">${state.roster.length} monster${state.roster.length===1?'':'s'}</div>`;
 }
 
 function renderHotbar(){
@@ -878,10 +877,6 @@ function plantSeed(plot){
 }
 
 function collectMonster(plot){
-  if (state.roster.length >= MAX_ROSTER){
-    spawnParticle(plot.tx+0.5, 0.6, plot.tz+0.5, "Roster full!", '#FF8080');
-    return;
-  }
   const s = seedById(plot.seedId);
   const m = s.monster;
   const char = makeVoxelMob({ bodyColor: m.color, accessory: m.accessory, size: m.size });
