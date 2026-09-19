@@ -210,6 +210,14 @@
         <div class="store-item-desc">Everything grows twice as fast — trees, crops, honey, eggs, and animals. Other players pay $2.99; you made this game, so it's yours for free.</div>
         <div id="fast-buy" class="store-buy on">⚡ ON — tap to turn off</div>
       </div>
+      <div class="store-item" style="margin-top: 10px;">
+        <div class="store-item-top">
+          <span class="store-item-name">🏪 Shop Upgrade</span>
+          <span class="store-price" id="shop-upg-price"><s>$1.99</s> FREE 👑</span>
+        </div>
+        <div class="store-item-desc" id="shop-upg-desc"></div>
+        <div id="shop-buy" class="store-buy">⬆ Upgrade to Level 2</div>
+      </div>
       <div id="store-note">Demo store — no real money changes hands in this preview. Selling Fast Mode for real needs a payment provider (like Stripe) hooked up to a published game.</div>
       <div id="store-close">Close</div>
     </div>
@@ -1880,6 +1888,62 @@
                    : 'Fast Mode is off — normal growing speed', true);
   });
 
+  // ── Shop upgrades: a better shop pays more coins for everything you sell.
+  // Priced in real money for other players; free for the creator.
+  const SHOP_LEVELS = [
+    { mult: 1 },
+    { mult: 1.25, price: '$1.99' },
+    { mult: 1.5,  price: '$3.99' },
+    { mult: 2,    price: '$6.99' },
+  ];
+  let shopLevel = 1;
+  const shopMult = () => SHOP_LEVELS[shopLevel - 1].mult;
+
+  const shopBuyEl = document.getElementById('shop-buy');
+  const shopUpgPriceEl = document.getElementById('shop-upg-price');
+  const shopUpgDescEl = document.getElementById('shop-upg-desc');
+
+  let shopStarSprite = null;
+  function updateShopStars() { // gold stars over the shop show its level
+    if (shopStarSprite) {
+      shop.remove(shopStarSprite);
+      shopStarSprite.material.map.dispose();
+      shopStarSprite.material.dispose();
+      shopStarSprite = null;
+    }
+    if (shopLevel > 1) {
+      shopStarSprite = makeTextSprite('★'.repeat(shopLevel - 1), { color: '#FFD54F' });
+      shopStarSprite.scale.multiplyScalar(0.7);
+      shopStarSprite.position.y = 3.1;
+      shop.add(shopStarSprite);
+    }
+  }
+
+  function refreshShopUpgradeUI() {
+    if (shopLevel >= SHOP_LEVELS.length) {
+      shopUpgPriceEl.textContent = 'MAX 👑';
+      shopUpgDescEl.textContent = `Your shop is Level ${shopLevel} — it pays 2× coins for everything you sell. Fully upgraded!`;
+      shopBuyEl.textContent = `🏪 Level ${shopLevel} — 2× coins (max)`;
+      shopBuyEl.classList.add('on');
+    } else {
+      const next = SHOP_LEVELS[shopLevel];
+      shopUpgPriceEl.innerHTML = `<s>${next.price}</s> FREE 👑`;
+      shopUpgDescEl.textContent =
+        `Your shop is Level ${shopLevel} (${shopMult()}× coins). Upgrade it to earn ${next.mult}× coins on every sale. Other players pay ${next.price}.`;
+      shopBuyEl.textContent = `⬆ Upgrade to Level ${shopLevel + 1}`;
+    }
+  }
+  refreshShopUpgradeUI();
+
+  shopBuyEl.addEventListener('pointerdown', e => {
+    e.preventDefault();
+    if (shopLevel >= SHOP_LEVELS.length) { toast('🏪 Your shop is already at the top level!', true); return; }
+    shopLevel++;
+    updateShopStars();
+    refreshShopUpgradeUI();
+    toast(`👑 Creator perk — shop upgraded to Level ${shopLevel}! You now earn ${shopMult()}× coins`, true);
+  });
+
   let targetHarvest = null; // the nearest ready resource node within reach
 
   function findHarvestTarget() {
@@ -2109,14 +2173,15 @@
     for (const [key, r] of Object.entries(RESOURCES)) {
       const n = inv[key];
       if (n <= 0) continue;
-      earned += n * r.price;
+      earned += Math.round(n * r.price * shopMult());
       parts.push(`${n} ${n > 1 ? r.plural : key}`);
       inv[key] = 0;
     }
     if (earned <= 0) { showMessage('Sorry, you have nothing to sell.'); return; }
     cubeCoins += earned;
     refreshInventory();
-    showMessage(`Sold ${parts.join(', ')} for ${earned} cubecoins!`);
+    const bonus = shopMult() > 1 ? ` (Level ${shopLevel} shop bonus!)` : '';
+    showMessage(`Sold ${parts.join(', ')} for ${earned} cubecoins!${bonus}`);
   }
 
   function sellHand() {
@@ -2124,9 +2189,10 @@
     for (const [key, r] of Object.entries(RESOURCES)) {
       if (inv[key] <= 0) continue;
       inv[key] -= 1;
-      cubeCoins += r.price;
+      const paid = Math.round(r.price * shopMult());
+      cubeCoins += paid;
       refreshInventory();
-      showMessage(`Sold 1 ${key} for ${r.price} cubecoins!`);
+      showMessage(`Sold 1 ${key} for ${paid} cubecoins!`);
       return;
     }
     showMessage('Sorry, you have nothing in your hand.');
