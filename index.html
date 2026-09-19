@@ -124,15 +124,6 @@
     #back-btn.show { display: flex; }
     #back-btn:active { transform: translateY(150px) scale(.9); }
 
-    #fast-badge {
-      position: fixed; top: 16px; right: 16px; z-index: 120;
-      background: linear-gradient(180deg,#FFCA28,#FF9800); color: #3e2200;
-      border: 2px solid #fff; border-radius: 12px; padding: 6px 12px;
-      font-size: 12px; font-weight: 900; letter-spacing: .5px;
-      display: none; box-shadow: 0 4px 10px rgba(0,0,0,.3);
-    }
-    #fast-badge.show { display: block; }
-
     #store-panel {
       position: fixed; inset: 0; z-index: 260; display: none;
       align-items: center; justify-content: center; background: rgba(0,0,0,.45);
@@ -212,7 +203,6 @@
   <div id="home-btn" title="Go back to the shop (H)">🏠<span class="lbl">HOME</span></div>
   <div id="store-btn" title="Open the store">💰<span class="lbl">STORE</span></div>
   <div id="back-btn" title="Go back to where you were (B)">↩️<span class="lbl">BACK</span></div>
-  <div id="fast-badge">⚡ FAST MODE</div>
 
   <div id="store-panel">
     <div id="store-card">
@@ -223,7 +213,7 @@
           <span class="store-price"><s>$2.99</s> FREE 👑</span>
         </div>
         <div class="store-item-desc">Everything grows twice as fast — trees, crops, honey, eggs, and animals. Other players pay $2.99; you made this game, so it's yours for free.</div>
-        <div id="fast-buy" class="store-buy on">⚡ ON — tap to turn off</div>
+        <div id="fast-buy" class="store-buy">Turn Fast Mode on (FREE 👑)</div>
       </div>
       <div class="store-item" style="margin-top: 10px;">
         <div class="store-item-top">
@@ -1899,20 +1889,18 @@
   backBtnEl.addEventListener('pointerdown', e => { e.preventDefault(); goBack(); });
 
   // ── The store & Fast Mode. Fast Mode makes everything grow twice as fast.
-  // For other players it would be a real purchase; this copy belongs to the
-  // game's creator, so it comes free and starts ON.
-  let fastMode = true;
+  // For other players it would be a real purchase; the game's creator gets it
+  // free in the store, but everyone starts without it.
+  let fastMode = false;
   function growMs(ms) { return fastMode ? ms * 0.5 : ms; }
 
   const storeBtnEl = document.getElementById('store-btn');
   const storePanelEl = document.getElementById('store-panel');
   const fastBuyEl = document.getElementById('fast-buy');
-  const fastBadgeEl = document.getElementById('fast-badge');
 
   function refreshFastUI() {
     fastBuyEl.classList.toggle('on', fastMode);
     fastBuyEl.textContent = fastMode ? '⚡ ON — tap to turn off' : 'Turn Fast Mode on (FREE 👑)';
-    fastBadgeEl.classList.toggle('show', fastMode && phase === 'fps');
   }
   storeBtnEl.addEventListener('pointerdown', e => { e.preventDefault(); storePanelEl.classList.add('show'); });
   document.getElementById('store-close').addEventListener('pointerdown', e => { e.preventDefault(); storePanelEl.classList.remove('show'); });
