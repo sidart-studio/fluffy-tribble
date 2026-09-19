@@ -66,7 +66,7 @@
     #hit-btn:active { transform: scale(.9); }
 
     #hammer-btn {
-      position: fixed; right: 18px; top: 50%; transform: translateY(-50%); z-index: 120;
+      position: fixed; right: 18px; top: 50%; transform: translateY(-132px); z-index: 120;
       width: 76px; height: 76px; border-radius: 50%;
       background: rgba(0,0,0,.5); border: 3px solid #FFD54F;
       font-size: 32px; display: none; flex-direction: column;
@@ -80,10 +80,10 @@
     #hammer-btn.show { display: flex; }
     #hammer-btn.held { background: linear-gradient(180deg,#FFCA28,#FF9800); border-color: #fff; }
     #hammer-btn.held .lbl { color: #3e2200; }
-    #hammer-btn:active { transform: translateY(-50%) scale(.9); }
+    #hammer-btn:active { transform: translateY(-132px) scale(.9); }
 
     #home-btn {
-      position: fixed; right: 18px; top: 50%; transform: translateY(56px); z-index: 120;
+      position: fixed; right: 18px; top: 50%; transform: translateY(-38px); z-index: 120;
       width: 76px; height: 76px; border-radius: 50%;
       background: rgba(0,0,0,.5); border: 3px solid #90CAF9;
       font-size: 32px; display: none; flex-direction: column;
@@ -94,10 +94,10 @@
       font-size: 9px; font-weight: 800; color: #fff; letter-spacing: .5px; margin-top: -2px;
     }
     #home-btn.show { display: flex; }
-    #home-btn:active { transform: translateY(56px) scale(.9); }
+    #home-btn:active { transform: translateY(-38px) scale(.9); }
 
     #store-btn {
-      position: fixed; right: 18px; top: 50%; transform: translateY(150px); z-index: 120;
+      position: fixed; right: 18px; top: 50%; transform: translateY(56px); z-index: 120;
       width: 76px; height: 76px; border-radius: 50%;
       background: rgba(0,0,0,.5); border: 3px solid #8BE28B;
       font-size: 32px; display: none; flex-direction: column;
@@ -108,7 +108,7 @@
       font-size: 9px; font-weight: 800; color: #fff; letter-spacing: .5px; margin-top: -2px;
     }
     #store-btn.show { display: flex; }
-    #store-btn:active { transform: translateY(150px) scale(.9); }
+    #store-btn:active { transform: translateY(56px) scale(.9); }
 
     #fast-badge {
       position: fixed; top: 16px; right: 16px; z-index: 120;
@@ -1835,7 +1835,7 @@
     toast(hammerHeld ? '🔨 Hammer out — you can break rocks, ice, and iron, or chop trees for wood'
                      : 'Hammer put away', true);
   }
-  hammerBtnEl.addEventListener('click', toggleHammer);
+  hammerBtnEl.addEventListener('pointerdown', e => { e.preventDefault(); toggleHammer(); });
 
   // ── The HOME button — one press brings CUBEY back to the shop, however far
   // the island has grown.
@@ -1852,7 +1852,7 @@
       toast('🏠 Back at the shop!', true);
     }, 380);
   }
-  homeBtnEl.addEventListener('click', goHome);
+  homeBtnEl.addEventListener('pointerdown', e => { e.preventDefault(); goHome(); });
 
   // ── The store & Fast Mode. Fast Mode makes everything grow twice as fast.
   // For other players it would be a real purchase; this copy belongs to the
@@ -1870,9 +1870,10 @@
     fastBuyEl.textContent = fastMode ? '⚡ ON — tap to turn off' : 'Turn Fast Mode on (FREE 👑)';
     fastBadgeEl.classList.toggle('show', fastMode && phase === 'fps');
   }
-  storeBtnEl.addEventListener('click', () => storePanelEl.classList.add('show'));
-  document.getElementById('store-close').addEventListener('click', () => storePanelEl.classList.remove('show'));
-  fastBuyEl.addEventListener('click', () => {
+  storeBtnEl.addEventListener('pointerdown', e => { e.preventDefault(); storePanelEl.classList.add('show'); });
+  document.getElementById('store-close').addEventListener('pointerdown', e => { e.preventDefault(); storePanelEl.classList.remove('show'); });
+  fastBuyEl.addEventListener('pointerdown', e => {
+    e.preventDefault();
     fastMode = !fastMode;
     refreshFastUI();
     toast(fastMode ? '👑 Creator perk — Fast Mode is ON, everything grows 2× faster!'
@@ -2142,7 +2143,7 @@
     showMessage('A worker house was built! Your worker will gather things and bring them home to you.');
   }
 
-  speechButtonsEl.addEventListener('click', e => {
+  speechButtonsEl.addEventListener('pointerdown', e => {
     const action = e.target.dataset.action;
     if (action === 'all') sellAll();
     else if (action === 'hand') sellHand();
@@ -2348,7 +2349,7 @@
   canvas.addEventListener('touchend', lookTouchEnd);
   canvas.addEventListener('touchcancel', lookTouchEnd);
 
-  hitBtnEl.addEventListener('click', hitTree);
+  hitBtnEl.addEventListener('pointerdown', e => { e.preventDefault(); hitTree(); });
 
   // ═══════════════════════════════════════════════
   //  RESIZE
