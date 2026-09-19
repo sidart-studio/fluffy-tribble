@@ -288,7 +288,8 @@
   const WOOD_PER_TREE = 2;
 
   // Animals wander the island and leave their product on the ground.
-  // Uncollected eggs hatch into a random new animal after a while.
+  // Uncollected eggs hatch into an extra chicken after a while; cows and
+  // sheep come from their own pasture lands.
   const ANIMAL_DEFS = {
     chicken: { product: 'egg',  minMs: 15000, maxMs: 30000, speed: 0.9 },
     cow:     { product: 'milk', minMs: 25000, maxMs: 45000, speed: 0.65 },
@@ -1189,9 +1190,8 @@
       } else if (it.hatchAt && now > it.hatchAt) {
         scene.remove(it.mesh);
         groundItems.splice(i, 1);
-        const type = ['chicken', 'cow', 'sheep'][Math.floor(Math.random() * 3)];
-        addAnimal(type, it.x, it.z);
-        toast(`🐣 An egg hatched — a ${type} joined your island!`, true);
+        addAnimal('chicken', it.x, it.z); // eggs are chicken eggs — they hatch into chicks
+        toast('🐣 An egg hatched — an extra chicken joined your island!', true);
       }
     }
   }
