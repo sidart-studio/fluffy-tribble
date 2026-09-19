@@ -110,6 +110,20 @@
     #store-btn.show { display: flex; }
     #store-btn:active { transform: translateY(56px) scale(.9); }
 
+    #back-btn {
+      position: fixed; right: 18px; top: 50%; transform: translateY(150px); z-index: 120;
+      width: 76px; height: 76px; border-radius: 50%;
+      background: rgba(0,0,0,.5); border: 3px solid #FF8A80;
+      font-size: 32px; display: none; flex-direction: column;
+      align-items: center; justify-content: center;
+      box-shadow: 0 6px 14px rgba(0,0,0,.35); cursor: pointer;
+    }
+    #back-btn .lbl {
+      font-size: 9px; font-weight: 800; color: #fff; letter-spacing: .5px; margin-top: -2px;
+    }
+    #back-btn.show { display: flex; }
+    #back-btn:active { transform: translateY(150px) scale(.9); }
+
     #fast-badge {
       position: fixed; top: 16px; right: 16px; z-index: 120;
       background: linear-gradient(180deg,#FFCA28,#FF9800); color: #3e2200;
@@ -197,6 +211,7 @@
   <div id="hammer-btn" title="Hold / put away your hammer (Q)">🔨<span class="lbl">HAMMER</span></div>
   <div id="home-btn" title="Go back to the shop (H)">🏠<span class="lbl">HOME</span></div>
   <div id="store-btn" title="Open the store">💰<span class="lbl">STORE</span></div>
+  <div id="back-btn" title="Go back to where you were (B)">↩️<span class="lbl">BACK</span></div>
   <div id="fast-badge">⚡ FAST MODE</div>
 
   <div id="store-panel">
@@ -1846,21 +1861,42 @@
   hammerBtnEl.addEventListener('pointerdown', e => { e.preventDefault(); toggleHammer(); });
 
   // ── The HOME button — one press brings CUBEY back to the shop, however far
-  // the island has grown.
+  // the island has grown. BACK undoes it: it returns you to where you stood
+  // before the last HOME press, in case it was an accident.
   const homeBtnEl = document.getElementById('home-btn');
+  const backBtnEl = document.getElementById('back-btn');
+  let backSpot = null; // where CUBEY stood before the last HOME teleport
+
   function goHome() {
     if (phase !== 'fps') return;
     fadeEl.classList.add('show');
     setTimeout(() => {
+      backSpot = { x: player.position.x, z: player.position.z, yaw, pitch };
+      backBtnEl.classList.add('show');
       const spot = new THREE.Vector3(shopPos.x, LAND_Y, shopPos.z).addScaledVector(shopDoorDir, 3.2);
       player.position.set(spot.x, LAND_Y, spot.z);
       yaw = Math.atan2(-(shopPos.x - spot.x), -(shopPos.z - spot.z)); // face the shop
       pitch = -0.15;
       fadeEl.classList.remove('show');
-      toast('🏠 Back at the shop!', true);
+      toast('🏠 Back at the shop! (BACK returns you to where you were)', true);
     }, 380);
   }
   homeBtnEl.addEventListener('pointerdown', e => { e.preventDefault(); goHome(); });
+
+  function goBack() {
+    if (phase !== 'fps' || !backSpot) return;
+    fadeEl.classList.add('show');
+    setTimeout(() => {
+      player.position.set(backSpot.x, LAND_Y, backSpot.z);
+      yaw = backSpot.yaw;
+      pitch = backSpot.pitch;
+      backSpot = null;
+      backBtnEl.classList.remove('show');
+      fadeEl.classList.remove('show');
+      toast('↩️ Back to where you were!', true);
+    }, 380);
+  }
+  backBtnEl.addEventListener('pointerdown', e => { e.preventDefault(); goBack(); });
 
   // ── The store & Fast Mode. Fast Mode makes everything grow twice as fast.
   // For other players it would be a real purchase; this copy belongs to the
@@ -2329,6 +2365,7 @@
     if (e.key.toLowerCase() === 'e') hitTree();
     if (e.key.toLowerCase() === 'q') toggleHammer();
     if (e.key.toLowerCase() === 'h') goHome();
+    if (e.key.toLowerCase() === 'b') goBack();
   });
   window.addEventListener('keyup', e => keys.delete(e.key.toLowerCase()));
 
