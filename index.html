@@ -260,7 +260,7 @@
   const PLAYER_SPEED = 5.6;
   const EYE_HEIGHT   = 0.66;
   const HIT_RANGE    = 2.8;   // how close CUBEY needs to be to the tree to hit it
-  const SHOP_RANGE   = 2.6;   // how close, and in front of, the shop CUBEY needs to be
+  const SHOP_RANGE   = 3.2;   // how close, and in front of, the shop CUBEY needs to be
 
   // Every collectable resource in the game: its emoji, sell price, and plural name.
   const RESOURCES = {
@@ -825,9 +825,14 @@
   // The direction the shop's door faces — "in front of the shop" is out along this vector.
   const shopDoorDir = new THREE.Vector3(Math.sin(shop.rotation.y), 0, Math.cos(shop.rotation.y));
   const shopInsidePos = new THREE.Vector3(shopPos.x, LAND_Y, shopPos.z).addScaledVector(shopDoorDir, 0.3);
-  const shopStandPos  = new THREE.Vector3(shopPos.x, LAND_Y, shopPos.z).addScaledVector(shopDoorDir, 1.2);
+  // He walks well clear of the doorway, and a step to the side so he never
+  // ends up inside the player standing in front of the door.
+  const shopDoorPerp = new THREE.Vector3(shopDoorDir.z, 0, -shopDoorDir.x);
+  const shopStandPos = new THREE.Vector3(shopPos.x, LAND_Y, shopPos.z)
+    .addScaledVector(shopDoorDir, 1.9)
+    .addScaledVector(shopDoorPerp, 0.6);
 
-  const SHOPKEEPER_SCALE = 0.5; // person-sized for his little shop
+  const SHOPKEEPER_SCALE = 0.6; // person-sized for his little shop
   const shopkeeper = makeShopkeeper();
   shopkeeper.scale.setScalar(SHOPKEEPER_SCALE);
   shopkeeper.position.copy(shopInsidePos);
@@ -2334,6 +2339,12 @@
       }
     }
 
+    if (shopkeeper.visible) { // always turn to face the player while outside
+      const fdx = player.position.x - shopkeeper.position.x;
+      const fdz = player.position.z - shopkeeper.position.z;
+      if (Math.hypot(fdx, fdz) > 0.2) shopkeeper.rotation.y = Math.atan2(fdx, fdz);
+    }
+
     if (dialogMode === 'message' && performance.now() > dialogRevertAt) {
       if (shopState === 'out') showPrompt();
       else dialogMode = null;
@@ -2570,7 +2581,7 @@
       const sdx = player.position.x - shopPos.x, sdz = player.position.z - shopPos.z;
       const sdist = Math.hypot(sdx, sdz);
       const facing = (sdx * shopDoorDir.x + sdz * shopDoorDir.z) / (sdist || 1);
-      nearShop = sdist <= SHOP_RANGE && facing > 0.3; // roughly in front of the door, not behind it
+      nearShop = sdist <= SHOP_RANGE && facing > 0.15; // roughly in front of the door, not behind it
       if (nearShop) shopEnter();
     }
   }
