@@ -90,7 +90,7 @@ canvas{display:block;position:fixed;inset:0;cursor:crosshair}
   <ul>
     <li><b>Paths</b> connect everything. Guests only walk on paths, and a ride or shop must touch a path to be used.</li>
     <li><b>Rides &amp; shops</b> are placed from the toolbar. Click a ride later to set its ticket price and view its stats.</li>
-    <li><b>Coasters</b>: choose <i>Custom Coaster</i>, then click (or drag) across neighbouring tiles to lay track. Use <kbd>Q</kbd>/<kbd>E</kbd> to change the height of the next piece (max one level per tile). Click the first piece again to close the circuit, then press <b>Finish</b>. Bigger drops and more turns mean more excitement.</li>
+    <li><b>Coasters</b>: choose <i>Custom Coaster</i>, then click (or drag) across neighbouring tiles to lay track. Use <kbd>Q</kbd>/<kbd>E</kbd> to change the height of the next piece (max one level per tile). Lay the track in a loop that comes back next to the station (the first piece), then press <b>Finish</b>. Bigger drops and more turns mean more excitement.</li>
     <li><b>Scenery</b> raises the mood of guests walking nearby.</li>
   </ul>
   <h4>Controls</h4>
@@ -636,15 +636,25 @@ function buildCheck(x,y){ // returns 'add' | 'close' | null
   if(t.t!=='grass'||t.o)return null;if(b.tiles.some(p=>p.x===x&&p.y===y))return null;
   return 'add';
 }
+function buildStatus(){ // {ok:boolean, msg:string}
+  const b=G.build;if(b.closed)return {ok:true,msg:'Circuit closed. Press Finish to build.'};
+  const n=b.tiles.length;if(!n)return {ok:false,msg:'Click a grass tile to place the station.'};
+  if(n<4)return {ok:false,msg:`Lay at least 4 pieces (${n} so far). Click a tile next to the last piece.`};
+  const f=b.tiles[0],l=b.tiles[n-1],d=Math.abs(f.x-l.x)+Math.abs(f.y-l.y);
+  if(d!==1)return {ok:false,msg:`Bring the track back to the station: the last piece is ${d} tiles away from it.`};
+  if(Math.abs(l.h-f.h)>1)return {ok:false,msg:`The track is at height ${l.h} but must be within 1 level of the station (height ${f.h}) to join it. Undo and lower the last pieces.`};
+  return {ok:true,msg:'The track is back at the station. Press Finish to build!'};
+}
 function buildAdd(x,y){
   const b=G.build,st=buildCheck(x,y);if(!st)return;
   if(st==='close'){b.closed=true;toast('Circuit closed – press Finish to build');renderPanel();return;}
+  if(b.tiles.length>=4&&b.tiles[0].x===x&&b.tiles[0].y===y){toast(buildStatus().msg);return;}
   const last=b.tiles[b.tiles.length-1];let h=b.tiles.length?clamp(b.h,last.h-1,last.h+1):0;b.h=h;
   b.tiles.push({x,y,h});renderPanel();
 }
 function buildUndo(){const b=G.build;if(!b)return;if(b.closed)b.closed=false;else if(b.tiles.length){b.tiles.pop();if(b.tiles.length)b.h=b.tiles[b.tiles.length-1].h;else b.h=0;}renderPanel();}
 function buildHeight(d){const b=G.build;if(!b)return;const last=b.tiles[b.tiles.length-1];const lo=last?Math.max(0,last.h-1):0,hi=last?Math.min(MAX_H,last.h+1):0;b.h=clamp(b.h+d,lo,hi);renderPanel();}
-function buildFinish(){const b=G.build;if(!b||!b.closed)return;const cost=coasterCost(b.tiles);
+function buildFinish(){const b=G.build;if(!b)return;if(!b.closed){if(!buildStatus().ok){toast(buildStatus().msg);return;}b.closed=true;}const cost=coasterCost(b.tiles);
   if(G.cash<cost){toast('Not enough cash ('+money(cost)+' needed)');return;}
   const o=addObj(makeCoaster(b.tiles));addCash(-cost);G.build=null;setTool(null);G.sel={o};toast('🎢 '+o.name+' built! Excitement '+o.exc.toFixed(1));renderPanel();}
 function buildCancel(){G.build=null;setTool(null);renderPanel();}
@@ -665,7 +675,7 @@ function renderTabs(){
   $('items').innerHTML=tab.items.map((it,i)=>{const on=G.tool&&G.tool.kind===it.kind&&G.tool.type===it.type;return `<div class="item ${on?'on':''} ${it.c&&G.cash<it.c?'poor':''}" data-i="${i}"><div class="ic">${it.icon}</div><div class="nm">${it.name}</div><div class="ct">${it.cost}</div>${it.ex?`<div class="ex">${it.ex}</div>`:''}</div>`;}).join('');
   $('items').querySelectorAll('.item').forEach(el=>el.onclick=()=>{const it=tab.items[+el.dataset.i];if(G.tool&&G.tool.kind===it.kind&&G.tool.type===it.type&&it.kind!=='coaster')setTool(null);else setTool({kind:it.kind,type:it.type});});
 }
-const HINTS={inspect:'Click a ride, shop or guest to inspect it. Drag to pan, wheel to zoom.',path:'Click or drag on grass to lay paths ($20 each). Rides need a path next to them.',demolish:'Click a path or building to remove it. Rides and shops refund 40%.',coaster:'Click or drag across neighbouring tiles to lay track. Q/E change height. Click the first piece to close the loop.',template:'Click to place a ready-made 7×4 coaster with a lift hill (needs free grass).',ride:'Click on free grass to place. Must touch a path to receive guests.',shop:'Click on free grass next to a path.',scenery:'Click on free grass. Guests walking nearby get happier.'};
+const HINTS={inspect:'Click a ride, shop or guest to inspect it. Drag to pan, wheel to zoom.',path:'Click or drag on grass to lay paths ($20 each). Rides need a path next to them.',demolish:'Click a path or building to remove it. Rides and shops refund 40%.',coaster:'Click or drag across neighbouring tiles to lay track. Q/E change height. Loop back to the station tile, then press Finish.',template:'Click to place a ready-made 7×4 coaster with a lift hill (needs free grass).',ride:'Click on free grass to place. Must touch a path to receive guests.',shop:'Click on free grass next to a path.',scenery:'Click on free grass. Guests walking nearby get happier.'};
 function setTool(t){
   if(G.build&&(!t||t.kind!=='coaster')){G.build=null;}
   G.tool=t;if(t&&t.kind==='coaster'&&!G.build)G.build={tiles:[],h:0,closed:false};
@@ -678,11 +688,12 @@ function bar(v,inv){const c=inv?(v>70?'bad':v>45?'warn':''):(v<30?'bad':v<55?'wa
 function renderPanel(){
   const p=$('panel');let h='';
   if(G.build){const b=G.build,cost=coasterCost(b.tiles);
-    h=`<h3>🎢 Coaster builder</h3><p>${b.closed?'Circuit closed. Press Finish to build.':b.tiles.length?'Click a tile next to the last piece. Click the first piece to close the loop.':'Click a grass tile to place the station.'}</p>
+    const bs=buildStatus();
+    h=`<h3>🎢 Coaster builder</h3><p style="color:${bs.ok?'var(--green)':'#fff'}">${bs.msg}</p>${b.tiles.length&&!bs.ok?'<p>The circuit must loop back to the first piece (the station).</p>':''}
     <div class="row"><span>Pieces</span><b>${b.tiles.length}</b></div><div class="row"><span>Cost so far</span><b>${money(cost)}</b></div>
     <div class="stepper"><span>Next height</span><button id="b-hdn">−</button><b>${b.h}</b><button id="b-hup">+</button></div>
     <p>Track can rise or fall one level per tile. Higher lift hills give bigger drops and more excitement.</p>
-    <div class="actions"><button class="btn" id="b-undo" ${b.tiles.length?'':'disabled'}>↶ Undo</button><button class="btn primary" id="b-finish" ${b.closed?'':'disabled'}>✔ Finish</button><button class="btn danger" id="b-cancel">✖ Cancel</button></div>`;
+    <div class="actions"><button class="btn" id="b-undo" ${b.tiles.length?'':'disabled'}>↶ Undo</button><button class="btn primary" id="b-finish" ${bs.ok?'':'disabled'}>✔ Finish</button><button class="btn danger" id="b-cancel">✖ Cancel</button></div>`;
     p.innerHTML=h;$('b-hdn').onclick=()=>buildHeight(-1);$('b-hup').onclick=()=>buildHeight(1);$('b-undo').onclick=buildUndo;$('b-finish').onclick=buildFinish;$('b-cancel').onclick=buildCancel;return;
   }
   if(G.sel&&G.sel.o&&G.objs.has(G.sel.o.id)){const o=G.sel.o;
