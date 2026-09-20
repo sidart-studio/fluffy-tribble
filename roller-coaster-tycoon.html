@@ -1,0 +1,841 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Coaster Park Tycoon</title>
+<style>
+:root{--bg:#0f1720;--panel:rgba(14,20,28,.84);--line:rgba(255,255,255,.12);--gold:#ffd54f;--green:#69f0ae;--red:#ff5252;--text:#eef2f5;--muted:rgba(238,242,245,.62)}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%;overflow:hidden;background:var(--bg);font-family:'Segoe UI',system-ui,-apple-system,sans-serif;color:var(--text);user-select:none;-webkit-user-select:none}
+canvas{display:block;position:fixed;inset:0;cursor:crosshair}
+#hud{position:fixed;top:0;left:0;right:0;height:56px;display:flex;align-items:center;justify-content:space-between;padding:0 16px;background:var(--panel);backdrop-filter:blur(10px);border-bottom:1px solid var(--line);z-index:20}
+.stats{display:flex;gap:22px}
+.stat{display:flex;flex-direction:column;line-height:1.1}
+.stat b{font-size:18px;color:var(--gold)}
+.stat span{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+.stat.g b{color:var(--green)} .stat.w b{color:#fff}
+#title{text-align:center}
+#title h1{font-size:17px;letter-spacing:1px}
+#title p{font-size:10px;color:var(--muted)}
+.goal b{color:#fff}
+.speed{display:flex;gap:4px}
+.speed button,.btn{background:rgba(255,255,255,.08);border:1px solid var(--line);color:#fff;padding:6px 10px;border-radius:7px;cursor:pointer;font-size:12px;font-family:inherit}
+.speed button.on,.btn.on{background:rgba(255,213,79,.25);border-color:var(--gold);color:var(--gold)}
+.btn:hover,.speed button:hover{background:rgba(255,255,255,.16)}
+.btn.danger{border-color:var(--red);color:var(--red)}
+.btn.primary{border-color:var(--green);color:var(--green)}
+.btn:disabled{opacity:.35;cursor:default}
+#toolbar{position:fixed;left:0;right:0;bottom:0;background:var(--panel);backdrop-filter:blur(10px);border-top:1px solid var(--line);z-index:20}
+#tabs{display:flex;gap:2px;padding:6px 10px 0}
+.tab{padding:6px 14px;border-radius:8px 8px 0 0;font-size:12px;cursor:pointer;color:var(--muted);border:1px solid transparent;border-bottom:none}
+.tab.on{background:rgba(255,255,255,.08);color:#fff;border-color:var(--line)}
+#items{display:flex;gap:8px;padding:8px 10px 10px;overflow-x:auto;min-height:92px;align-items:stretch}
+.item{display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:88px;padding:6px 8px;border-radius:10px;border:2px solid var(--line);background:rgba(255,255,255,.05);cursor:pointer;transition:.15s}
+.item:hover{background:rgba(255,255,255,.14);transform:translateY(-2px)}
+.item.on{border-color:var(--gold);background:rgba(255,213,79,.18)}
+.item.poor{opacity:.4}
+.item .ic{font-size:24px;line-height:1.1} .item .nm{font-size:10px;font-weight:700;margin-top:3px;text-align:center;white-space:nowrap} .item .ct{font-size:10px;color:var(--gold)} .item .ex{font-size:9px;color:var(--muted)}
+#panel{position:fixed;top:66px;right:12px;width:256px;max-height:calc(100% - 210px);overflow-y:auto;background:var(--panel);backdrop-filter:blur(10px);border:1px solid var(--line);border-radius:12px;padding:12px;z-index:20;font-size:12px}
+#panel h3{font-size:14px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center;gap:6px}
+#panel h3 small{font-size:10px;color:var(--muted);font-weight:400}
+#panel p{color:var(--muted);margin:3px 0;line-height:1.35}
+#panel .row{display:flex;justify-content:space-between;margin:3px 0;gap:8px}
+#panel .row b{color:#fff;text-align:right}
+.bar{height:6px;border-radius:3px;background:rgba(255,255,255,.1);overflow:hidden;margin:2px 0 6px}
+.bar i{display:block;height:100%;background:var(--green)}
+.bar i.warn{background:#ffb300} .bar i.bad{background:var(--red)}
+.actions{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.stepper{display:flex;align-items:center;gap:6px;margin:4px 0}
+.stepper button{width:26px;height:26px;border-radius:6px;border:1px solid var(--line);background:rgba(255,255,255,.08);color:#fff;cursor:pointer;font-size:14px}
+.stepper b{min-width:64px;text-align:center;color:var(--gold)}
+.stepper span{color:var(--muted);font-size:11px}
+.thought{font-style:italic;color:#fff;background:rgba(255,255,255,.08);padding:6px 8px;border-radius:8px;margin:6px 0}
+#toast{position:fixed;top:64px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.78);border:1px solid var(--line);padding:8px 16px;border-radius:20px;font-size:13px;opacity:0;transition:.25s;z-index:30;pointer-events:none;white-space:nowrap;max-width:90vw;overflow:hidden;text-overflow:ellipsis}
+#toast.show{opacity:1}
+#hint{position:fixed;left:12px;bottom:158px;font-size:11px;color:var(--muted);background:rgba(0,0,0,.45);padding:6px 10px;border-radius:8px;z-index:20;max-width:340px;line-height:1.4;pointer-events:none}
+#help{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:50;display:none;align-items:center;justify-content:center}
+#help.show{display:flex}
+#help .box{background:#141c26;border:1px solid var(--line);border-radius:14px;padding:22px 26px;max-width:560px;max-height:90vh;overflow-y:auto;font-size:13px;line-height:1.55}
+#help h2{margin-bottom:8px} #help h4{margin:10px 0 4px} #help li{margin:3px 0 3px 16px} #help kbd{background:rgba(255,255,255,.12);padding:1px 6px;border-radius:4px;font-family:monospace}
+@media (max-width:760px){#panel{width:210px;max-height:calc(100% - 230px)} .stats{gap:12px} .stat b{font-size:15px} #title p{display:none} #title h1{font-size:14px} #hint{display:none}}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="hud">
+  <div class="stats">
+    <div class="stat"><b id="s-cash">$0</b><span>Cash</span></div>
+    <div class="stat g"><b id="s-guests">0</b><span>Guests</span></div>
+    <div class="stat w"><b id="s-rating">0</b><span>Park rating</span></div>
+    <div class="stat w"><b id="s-day">Day 1</b><span id="s-time">09:00</span></div>
+  </div>
+  <div id="title"><h1>🎢 Coaster Park Tycoon</h1><p id="goal" class="goal"></p></div>
+  <div class="speed">
+    <button id="sp0" title="Pause (Space)">⏸</button>
+    <button id="sp1" class="on" title="Normal speed (1)">1×</button>
+    <button id="sp2" title="Fast (2)">2×</button>
+    <button id="sp3" title="Fastest (3)">3×</button>
+    <button id="b-help" class="btn" title="Help (H)">?</button>
+  </div>
+</div>
+<div id="panel"></div>
+<div id="hint"></div>
+<div id="toolbar"><div id="tabs"></div><div id="items"></div></div>
+<div id="toast"></div>
+<div id="help"><div class="box">
+  <h2>🎢 Coaster Park Tycoon</h2>
+  <p>Build the most thrilling amusement park around. Lay paths from the entrance, place rides and shops next to them, and design your own roller coasters. Guests pay to enter and to ride; keep them fed, happy and thrilled to raise your park rating.</p>
+  <h4>Building</h4>
+  <ul>
+    <li><b>Paths</b> connect everything. Guests only walk on paths, and a ride or shop must touch a path to be used.</li>
+    <li><b>Rides &amp; shops</b> are placed from the toolbar. Click a ride later to set its ticket price and view its stats.</li>
+    <li><b>Coasters</b>: choose <i>Custom Coaster</i>, then click (or drag) across neighbouring tiles to lay track. Use <kbd>Q</kbd>/<kbd>E</kbd> to change the height of the next piece (max one level per tile). Click the first piece again to close the circuit, then press <b>Finish</b>. Bigger drops and more turns mean more excitement.</li>
+    <li><b>Scenery</b> raises the mood of guests walking nearby.</li>
+  </ul>
+  <h4>Controls</h4>
+  <ul>
+    <li>Pan: drag with the mouse (right/middle button, or left button with no build tool), or <kbd>WASD</kbd> / arrow keys. Zoom: mouse wheel.</li>
+    <li><kbd>Esc</kbd> cancel tool · <kbd>Space</kbd> pause · <kbd>1</kbd>–<kbd>3</kbd> speed · <kbd>Backspace</kbd> undo track piece · <kbd>Enter</kbd> finish coaster · <kbd>Del</kbd> demolish tool</li>
+  </ul>
+  <h4>Goal</h4>
+  <p>Reach a park rating of 750 with at least 150 guests in the park. Rides break down over time and are fixed automatically for a fee. Upkeep is charged at the end of every day. Your park autosaves in this browser.</p>
+  <div class="actions"><button class="btn primary" id="b-help-close">Let's build!</button></div>
+</div></div>
+<script>
+'use strict';
+/* ═══════════════════════════ CONFIG ═══════════════════════════ */
+const W=30,H=30;                 // park grid
+const TW=64,TH=32,HZ=18;         // isometric tile size / px per track level
+const LEVEL=0.5;                 // world height per track level (tile units)
+const DAY_LEN=120;               // real seconds per park day at 1x
+const START_CASH=12000, MAX_GUESTS=220, MAX_H=8;
+const GOAL_RATING=750, GOAL_GUESTS=150;
+const DIRS=[[1,0],[-1,0],[0,1],[0,-1]];
+const GRAV=7, FRICT=0.012, LIFT=1.6, VMAX=13, CAR_GAP=0.62, CARS=4;
+const PATH_COST=20, COASTER_BASE=600, PIECE_COST=110, PIECE_H_COST=45;
+
+const RIDES={
+  carousel:{name:'Carousel',size:2,cost:1400,cap:16,dur:18,exc:2.6,inten:1.2,naus:1.0,price:2,upkeep:40,icon:'🎠',color:'#f4b400'},
+  teacups:{name:'Spinning Teacups',size:2,cost:1800,cap:12,dur:20,exc:3.2,inten:3.5,naus:4.5,price:2.5,upkeep:50,icon:'☕',color:'#ec407a'},
+  bumper:{name:'Bumper Cars',size:2,cost:2200,cap:14,dur:22,exc:3.4,inten:2.4,naus:1.5,price:2.5,upkeep:60,icon:'🚗',color:'#42a5f5'},
+  haunted:{name:'Haunted House',size:2,cost:2800,cap:20,dur:30,exc:4.3,inten:3.0,naus:1.2,price:3.5,upkeep:70,icon:'👻',color:'#5e35b1'},
+  swing:{name:'Pirate Ship',size:2,cost:3200,cap:24,dur:24,exc:5.0,inten:5.5,naus:4.0,price:4,upkeep:85,icon:'🚢',color:'#8d6e63'},
+  ferris:{name:'Ferris Wheel',size:3,cost:4200,cap:32,dur:40,exc:4.0,inten:1.5,naus:0.8,price:3.5,upkeep:90,icon:'🎡',color:'#ef5350'},
+  drop:{name:'Drop Tower',size:1,cost:4800,cap:8,dur:16,exc:6.2,inten:7.5,naus:4.5,price:5,upkeep:110,icon:'🗼',color:'#26a69a'},
+};
+const SHOPS={
+  burger:{name:'Burger Stall',cost:600,price:4,need:'hunger',icon:'🍔',color:'#ff7043',upkeep:15},
+  icecream:{name:'Ice Cream',cost:500,price:3,need:'hunger',icon:'🍦',color:'#f48fb1',upkeep:12},
+  drink:{name:'Drink Stall',cost:450,price:2,need:'thirst',icon:'🥤',color:'#29b6f6',upkeep:12},
+  souvenir:{name:'Souvenir Shop',cost:800,price:8,need:'souvenir',icon:'🎁',color:'#ab47bc',upkeep:20},
+  toilet:{name:'Restroom',cost:400,price:0.5,need:'bladder',icon:'🚻',color:'#78909c',upkeep:10},
+};
+const SCENERY={
+  tree:{name:'Tree',cost:60,joy:2,icon:'🌳',size:1},
+  flower:{name:'Flower Bed',cost:80,joy:3,icon:'🌷',size:1},
+  bench:{name:'Bench',cost:120,joy:2,icon:'🪑',size:1},
+  lamp:{name:'Lamp Post',cost:90,joy:1,icon:'🏮',size:1},
+  fountain:{name:'Fountain',cost:500,joy:6,icon:'⛲',size:2},
+};
+const COASTER_NAMES=['Thunder Run','Sky Serpent','Iron Falcon','Wild Mouse','The Comet','Cyclone','Viper','Blue Streak','Dragon Fury','Star Chaser','Big Dipper','Nitro'];
+const COASTER_COLORS=['#e53935','#1e88e5','#43a047','#fb8c00','#8e24aa','#00acc1','#fdd835','#d81b60'];
+const FIRST=['Ava','Liam','Noah','Mia','Zoe','Eli','Ivy','Max','Leo','Amy','Sam','Tom','Kai','Nia','Ben','Ella','Jon','Ruby','Finn','Lucy','Omar','Sara','Ivan','Hana'];
+const LAST=['Smith','Chen','Patel','Garcia','Kim','Rossi','Novak','Okafor','Silva','Berg','Dubois','Haas','Ito','Kaur','Lopez','Ng','Oduya','Reyes','Sato','Weber'];
+const SHIRTS=['#e53935','#1e88e5','#43a047','#fdd835','#8e24aa','#fb8c00','#00acc1','#ffffff','#f06292','#26a69a'];
+const PANTS=['#37474f','#3e2723','#1a237e','#455a64','#5d4037'];
+const SKINS=['#f5d0b0','#e0ac82','#c68642','#8d5524','#ffdbac'];
+
+/* ═══════════════════════════ HELPERS ═══════════════════════════ */
+const $=id=>document.getElementById(id);
+const clamp=(v,a,b)=>v<a?a:v>b?b:v;
+const rnd=(a,b)=>a+Math.random()*(b-a);
+const pick=a=>a[Math.floor(Math.random()*a.length)];
+const money=v=>{const neg=v<0;v=Math.abs(v);const s=(Math.round(v*100)/100).toLocaleString(undefined,{minimumFractionDigits:v%1?2:0,maximumFractionDigits:2});return (neg?'-$':'$')+s;};
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function shade(hex,f){const n=parseInt(hex.slice(1),16);const r=clamp(Math.round(((n>>16)&255)*f),0,255),g=clamp(Math.round(((n>>8)&255)*f),0,255),b=clamp(Math.round((n&255)*f),0,255);return `rgb(${r},${g},${b})`;}
+
+/* ═══════════════════════════ STATE ═══════════════════════════ */
+let ENTRY={x:15,y:H-1};
+const G={cash:START_CASH,day:1,time:0,clock:0,speed:1,paused:false,grid:[],objs:new Map(),nextId:1,guests:[],
+  rating:0,entryFee:5,totalGuests:0,earnedToday:0,spentToday:0,earnedTotal:0,dayGuests:0,
+  cam:{x:0,y:0,zoom:1},tool:null,hover:null,sel:null,build:null,goalDone:false,paths:[]};
+
+function tile(x,y){return (x<0||y<0||x>=W||y>=H)?null:G.grid[y][x];}
+const walkable=t=>t&&(t.t==='path'||t.t==='entrance');
+function newGrid(){
+  G.grid=[];
+  for(let y=0;y<H;y++){const row=[];for(let x=0;x<W;x++)row.push({t:'grass',o:0,joy:0,v:Math.random()});G.grid.push(row);}
+  ENTRY={x:Math.floor(W/2),y:H-1};
+  G.grid[ENTRY.y][ENTRY.x].t='entrance';
+  for(let y=H-2;y>=H-7;y--)G.grid[y][ENTRY.x].t='path';
+  refreshPaths();
+}
+function refreshPaths(){G.paths=[];for(let y=0;y<H;y++)for(let x=0;x<W;x++)if(G.grid[y][x].t==='path')G.paths.push({x,y});}
+function recalcJoy(){
+  for(let y=0;y<H;y++)for(let x=0;x<W;x++)G.grid[y][x].joy=0;
+  for(const o of G.objs.values()){if(o.kind!=='scenery')continue;const j=SCENERY[o.type].joy;
+    for(let y=o.y-2;y<o.y+o.n+2;y++)for(let x=o.x-2;x<o.x+o.n+2;x++){const t=tile(x,y);if(t)t.joy+=j;}}
+}
+function addCash(v){G.cash+=v;if(v>0){G.earnedToday+=v;G.earnedTotal+=v;}else G.spentToday-=v;}
+
+/* ═══════════════════════════ OBJECTS ═══════════════════════════ */
+function objTiles(o){
+  if(o.kind==='coaster')return o.tiles;
+  const r=[];for(let j=0;j<o.n;j++)for(let i=0;i<o.n;i++)r.push({x:o.x+i,y:o.y+j});return r;
+}
+function canPlace(x,y,n){for(let j=0;j<n;j++)for(let i=0;i<n;i++){const t=tile(x+i,y+j);if(!t||t.t!=='grass'||t.o)return false;}return true;}
+function addObj(o){o.id=G.nextId++;G.objs.set(o.id,o);for(const t of objTiles(o))G.grid[t.y][t.x].o=o.id;if(o.kind==='scenery')recalcJoy();return o;}
+function removeObj(o){
+  for(const t of objTiles(o))if(G.grid[t.y][t.x].o===o.id)G.grid[t.y][t.x].o=0;
+  if(o.queue)for(const g of o.queue){g.state='walk';g.target=null;g.thought='The ride closed';}
+  if(o.rideList)for(const g of o.rideList){g.state='walk';g.visible=true;g.target=null;if(g.entTile){g.x=g.entTile.x+.5;g.y=g.entTile.y+.5;}}
+  G.objs.delete(o.id);if(o.kind==='scenery')recalcJoy();
+  if(G.sel&&G.sel.o===o)G.sel=null;
+}
+function entranceTiles(o){
+  const set=new Map();
+  for(const t of objTiles(o))for(const [dx,dy] of DIRS){const n=tile(t.x+dx,t.y+dy);if(walkable(n))set.set((t.y+dy)*W+t.x+dx,{x:t.x+dx,y:t.y+dy});}
+  return [...set.values()];
+}
+function makeRide(type,x,y){const d=RIDES[type];return {kind:'ride',type,name:d.name,x,y,n:d.size,price:d.price,exc:d.exc,inten:d.inten,naus:d.naus,cap:d.cap,dur:d.dur,upkeep:d.upkeep,
+  queue:[],rideList:[],state:'idle',wait:0,timer:0,anim:Math.random()*10,cycles:0,riders:0,revenue:0,broken:false,fixT:0,breakdowns:0,built:G.day};}
+function makeShop(type,x,y){const d=SHOPS[type];return {kind:'shop',type,name:d.name,x,y,n:1,price:d.price,upkeep:d.upkeep,sold:0,revenue:0,built:G.day};}
+function makeScenery(type,x,y){const d=SCENERY[type];return {kind:'scenery',type,name:d.name,x,y,n:d.size||1,anim:Math.random()*10,upkeep:0};}
+
+/* ═══════════════════════════ COASTER CURVES ═══════════════════════════ */
+function cr(p0,p1,p2,p3,t){const t2=t*t,t3=t2*t,o=[0,0,0];for(let k=0;k<3;k++)o[k]=0.5*((2*p1[k])+(-p0[k]+p2[k])*t+(2*p0[k]-5*p1[k]+4*p2[k]-p3[k])*t2+(-p0[k]+3*p1[k]-3*p2[k]+p3[k])*t3);return o;}
+function buildCurve(tiles,closed){
+  const n=tiles.length;if(n<2)return null;
+  const P=tiles.map(t=>[t.x+.5,t.y+.5,t.h*LEVEL]);
+  const get=i=>closed?P[((i%n)+n)%n]:P[clamp(i,0,n-1)];
+  const pts=[],own=[],S=8,segs=closed?n:n-1;
+  for(let i=0;i<segs;i++){const p0=get(i-1),p1=get(i),p2=get(i+1),p3=get(i+2);
+    for(let k=0;k<S;k++){const u=k/S;pts.push(cr(p0,p1,p2,p3,u));own.push(u<.5?i:(i+1)%n);}}
+  pts.push(closed?P[0].slice():P[n-1].slice());own.push(closed?0:n-1);
+  const cum=[0];for(let i=1;i<pts.length;i++){const a=pts[i-1],b=pts[i];cum.push(cum[i-1]+Math.hypot(b[0]-a[0],b[1]-a[1],b[2]-a[2]));}
+  const byTile=new Map();for(let i=0;i<pts.length-1;i++){const o=own[i];if(!byTile.has(o))byTile.set(o,[]);byTile.get(o).push(i);}
+  return {pts,own,cum,len:cum[cum.length-1],closed,byTile};
+}
+function curveAt(c,s){
+  const L=c.len;s=((s%L)+L)%L;let lo=0,hi=c.cum.length-1;
+  while(hi-lo>1){const m=(lo+hi)>>1;if(c.cum[m]<=s)lo=m;else hi=m;}
+  const a=c.pts[lo],b=c.pts[hi],f=(s-c.cum[lo])/((c.cum[hi]-c.cum[lo])||1);
+  return [a[0]+(b[0]-a[0])*f,a[1]+(b[1]-a[1])*f,a[2]+(b[2]-a[2])*f];
+}
+function stepTrain(c,t,h){
+  const p1=curveAt(c,t.s-0.1),p2=curveAt(c,t.s+0.1),slope=(p2[2]-p1[2])/0.2;
+  t.v+=(-GRAV*slope-FRICT*t.v*t.v-0.2)*h;
+  if(t.v<LIFT)t.v=LIFT;if(t.v>VMAX)t.v=VMAX;if(t.v>t.maxV)t.maxV=t.v;
+  t.s+=t.v*h;t.lapT+=h;
+  if(t.s>=c.len){t.s=0;t.v=0;t.state='station';return true;}
+  return false;
+}
+function simLap(c){const t={s:0,v:LIFT,maxV:0,lapT:0,state:'run'};let n=0;while(n++<60000&&!stepTrain(c,t,0.02));return {lapTime:t.lapT,maxV:t.maxV};}
+function coasterStats(tiles){
+  const n=tiles.length;let maxH=0,drop=0,turns=0,prev=null;
+  for(let i=0;i<n;i++){const a=tiles[i],b=tiles[(i+1)%n];maxH=Math.max(maxH,a.h);if(b.h<a.h)drop+=a.h-b.h;
+    const d=(b.x-a.x)*10+(b.y-a.y);if(prev!==null&&d!==prev)turns++;prev=d;}
+  const c=buildCurve(tiles,true),sim=simLap(c);
+  const exc=clamp(1.2+drop*0.26+turns*0.09+maxH*0.18+Math.min(n,60)*0.02+sim.maxV*0.12,1,10);
+  const inten=clamp(0.8+drop*0.28+maxH*0.22+sim.maxV*0.28,1,10);
+  const naus=clamp(0.4+turns*0.1+sim.maxV*0.14+drop*0.05,0.5,10);
+  return {maxH,drop,turns,len:n,curve:c,lapTime:sim.lapTime,maxV:sim.maxV,exc:+exc.toFixed(2),inten:+inten.toFixed(2),naus:+naus.toFixed(2)};
+}
+function coasterCost(tiles){return COASTER_BASE+tiles.reduce((s,t)=>s+PIECE_COST+PIECE_H_COST*t.h,0);}
+function makeCoaster(tiles){
+  const st=coasterStats(tiles);const cnt=[...G.objs.values()].filter(o=>o.kind==='coaster').length;
+  const o={kind:'coaster',type:'coaster',name:COASTER_NAMES[cnt%COASTER_NAMES.length]+(cnt>=COASTER_NAMES.length?' '+(Math.floor(cnt/COASTER_NAMES.length)+1):''),
+    tiles:tiles.map(t=>({x:t.x,y:t.y,h:t.h})),x:tiles[0].x,y:tiles[0].y,n:1,color:COASTER_COLORS[cnt%COASTER_COLORS.length],
+    price:1,cap:16,upkeep:Math.round(60+tiles.length*2.5),
+    queue:[],rideList:[],state:'idle',wait:0,timer:0,anim:0,cycles:0,riders:0,revenue:0,broken:false,fixT:0,breakdowns:0,built:G.day,idleT:20,
+    train:{s:0,v:0,state:'station',maxV:0,lapT:0},cost:coasterCost(tiles)};
+  o.price=Math.max(1,Math.round(Math.min(12,1+st.exc*0.75)*2)/2);
+  Object.assign(o,{exc:st.exc,inten:st.inten,naus:st.naus,maxH:st.maxH,drop:st.drop,turns:st.turns,lapTime:st.lapTime,maxV:st.maxV,curve:st.curve});
+  return o;
+}
+function templateTiles(x,y){ // rectangular 7x4 circuit with a lift hill
+  const w=7,d=4,hs=[0,0,1,2,3,4,5,5,3,1,0,1,2,1,0,0,0,0],t=[];
+  for(let i=0;i<w;i++)t.push({x:x+i,y:y});for(let j=1;j<d;j++)t.push({x:x+w-1,y:y+j});
+  for(let i=w-2;i>=0;i--)t.push({x:x+i,y:y+d-1});for(let j=d-2;j>=1;j--)t.push({x:x,y:y+j});
+  t.forEach((p,i)=>p.h=hs[i]);return t;
+}
+
+/* ═══════════════════════════ PATHFINDING ═══════════════════════════ */
+function findPath(sx,sy,isGoal){
+  if(isGoal(sx,sy))return [];
+  const key=(x,y)=>y*W+x,prev=new Int32Array(W*H).fill(-1),seen=new Uint8Array(W*H);
+  const start=key(sx,sy),q=[start];seen[start]=1;let head=0;
+  while(head<q.length){const k=q[head++],x=k%W,y=(k-x)/W;
+    if(k!==start&&isGoal(x,y)){const path=[];let c=k;while(c!==start){path.push({x:c%W,y:Math.floor(c/W)});c=prev[c];}return path.reverse();}
+    for(const [dx,dy] of DIRS){const nx=x+dx,ny=y+dy;if(!walkable(tile(nx,ny)))continue;const nk=key(nx,ny);if(seen[nk])continue;seen[nk]=1;prev[nk]=k;q.push(nk);}}
+  return null;
+}
+function pathTo(g,o){
+  const ents=entranceTiles(o);if(!ents.length)return null;
+  const goal=new Set(ents.map(e=>e.y*W+e.x));
+  return findPath(Math.floor(g.x),Math.floor(g.y),(x,y)=>goal.has(y*W+x));
+}
+
+/* ═══════════════════════════ GUESTS ═══════════════════════════ */
+function spawnGuest(){
+  const cash=rnd(30,130);if(cash<G.entryFee+8)return;
+  const g={id:G.nextId++,name:pick(FIRST)+' '+pick(LAST),x:ENTRY.x+.5,y:ENTRY.y+1.6,path:[{x:ENTRY.x,y:ENTRY.y}],state:'walk',cash:cash-G.entryFee,
+    happy:rnd(55,78),hunger:rnd(0,45),thirst:rnd(0,45),bladder:rnd(0,30),energy:rnd(75,100),nausea:0,pref:pick([1,2,2,3,3,4]),ridden:{},
+    thought:'Entering the park',timer:0,shirt:pick(SHIRTS),pants:pick(PANTS),skin:pick(SKINS),spent:G.entryFee,timeIn:0,target:null,
+    offx:rnd(-.22,.22),offy:rnd(-.22,.22),visible:true,rides:0,stay:rnd(500,1100),lastRide:0,fails:0,queueT:0,entTile:null,done:false};
+  addCash(G.entryFee);G.guests.push(g);G.totalGuests++;G.dayGuests++;
+}
+function tickNeeds(g,dt,k){
+  g.hunger=Math.min(100,g.hunger+0.42*dt*k);g.thirst=Math.min(100,g.thirst+0.55*dt*k);g.bladder=Math.min(100,g.bladder+0.28*dt*k);
+  g.energy=Math.max(0,g.energy-0.22*dt*k);g.nausea=Math.max(0,g.nausea-0.6*dt);
+  let d=0;if(g.hunger>70)d+=0.6;if(g.thirst>70)d+=0.8;if(g.bladder>80)d+=1;if(g.energy<20)d+=0.4;if(g.nausea>60)d+=0.6;
+  if(G.clock-g.lastRide>120&&g.state==='walk')d+=0.35;
+  if(d===0)g.happy=Math.min(100,g.happy+0.12*dt);else g.happy=Math.max(0,g.happy-d*dt);
+}
+function updateGuest(g,dt){
+  if(g.done)return true;
+  g.timeIn+=dt;
+  if(g.state==='ride'){tickNeeds(g,dt,0.4);return false;}
+  if(g.state==='queue'){tickNeeds(g,dt,0.6);g.queueT+=dt;if(g.queueT>100){leaveQueue(g);g.happy-=8;g.thought='I waited far too long';g.timer=1;}return false;}
+  tickNeeds(g,dt,1);
+  if(g.timer>0){g.timer-=dt;return false;}
+  if(g.path.length){
+    const t=g.path[0],tx=t.x+.5+g.offx,ty=t.y+.5+g.offy,dx=tx-g.x,dy=ty-g.y,d=Math.hypot(dx,dy),sp=(g.energy<15?0.6:1.15)*dt;
+    if(d<=sp){g.x=tx;g.y=ty;g.path.shift();if(!g.path.length)arrive(g);}else{g.x+=dx/d*sp;g.y+=dy/d*sp;}
+    const tl=tile(Math.floor(g.x),Math.floor(g.y));if(tl&&tl.joy)g.happy=Math.min(100,g.happy+tl.joy*0.07*dt);
+    return false;
+  }
+  decide(g);return false;
+}
+function leaveQueue(g){for(const o of G.objs.values()){if(o.queue){const i=o.queue.indexOf(g);if(i>=0)o.queue.splice(i,1);}}g.state='walk';g.target=null;}
+function decide(g){
+  if(g.state==='leaving'){
+    const p=findPath(Math.floor(g.x),Math.floor(g.y),(x,y)=>x===ENTRY.x&&y===ENTRY.y);
+    if(p&&p.length)g.path=p;else g.done=true;return;
+  }
+  let why=null;
+  if(g.cash<1.5)why='I have run out of money';else if(g.happy<12)why='This park is terrible!';else if(g.energy<8)why='I am exhausted';else if(g.timeIn>g.stay)why='Time to head home';else if(g.fails>8)why="I can't find anything to do";
+  if(why){g.state='leaving';g.thought=why;decide(g);return;}
+  let need=null;if(g.bladder>65)need='bladder';else if(g.thirst>60)need='thirst';else if(g.hunger>60)need='hunger';
+  else if(g.happy>70&&g.cash>25&&!g.souvenir&&Math.random()<0.08)need='souvenir';
+  if(need&&seekShop(g,need))return;
+  if(seekRide(g))return;
+  wander(g);
+}
+const NEED_WORDS={hunger:'something to eat',thirst:'a drink',bladder:'a restroom',souvenir:'a souvenir'};
+function seekShop(g,need){
+  const shops=[...G.objs.values()].filter(o=>o.kind==='shop'&&SHOPS[o.type].need===need&&g.cash>=o.price);
+  if(!shops.length){if(need!=='souvenir'){g.thought='I need '+NEED_WORDS[need]+'…';g.happy-=0.5;}return false;}
+  shops.sort((a,b)=>(Math.abs(a.x-g.x)+Math.abs(a.y-g.y))-(Math.abs(b.x-g.x)+Math.abs(b.y-g.y)));
+  for(const s of shops.slice(0,3)){const p=pathTo(g,s);if(p){g.target=s.id;g.path=p.length?p:[];g.thought='Heading for '+NEED_WORDS[need];g.state='walk';if(!p.length)arrive(g);return true;}}
+  g.thought="I can't reach "+NEED_WORDS[need];g.fails++;return false;
+}
+function seekRide(g){
+  const ideal=g.pref*2;
+  const cands=[];
+  for(const o of G.objs.values()){if(o.kind!=='ride'&&o.kind!=='coaster')continue;if(o.broken)continue;
+    if(g.ridden[o.id]&&G.clock-g.ridden[o.id]<150)continue;if(o.queue.length>=40)continue;
+    const value=(o.exc*0.9+0.5)*(0.8+g.happy/250);if(o.price>value||o.price>g.cash)continue;
+    if(o.inten>ideal+3.5||o.inten<ideal-4.5)continue;
+    const wgt=(o.exc+1)/(1+o.queue.length/8)/(1+(Math.abs(o.x-g.x)+Math.abs(o.y-g.y))/25);cands.push({o,wgt});}
+  if(!cands.length)return false;
+  let tries=0;
+  while(cands.length&&tries<3){tries++;let tot=cands.reduce((s,c)=>s+c.wgt,0),r=Math.random()*tot,idx=0;
+    for(let i=0;i<cands.length;i++){r-=cands[i].wgt;if(r<=0){idx=i;break;}}
+    const o=cands[idx].o,p=pathTo(g,o);cands.splice(idx,1);
+    if(p){g.target=o.id;g.path=p;g.thought="I want to ride "+o.name;g.state='walk';if(!p.length)arrive(g);return true;}
+    g.fails++;}
+  return false;
+}
+function wander(g){
+  if(!G.paths.length){g.timer=2;return;}
+  const t=pick(G.paths),p=findPath(Math.floor(g.x),Math.floor(g.y),(x,y)=>x===t.x&&y===t.y);
+  if(p&&p.length){g.path=p.slice(0,8);g.state='walk';g.thought=pick(['Just looking around','What a nice day','Where are the rides?','Hmm…']);}else{g.timer=1.5;g.fails++;}
+}
+function arrive(g){
+  if(g.state==='leaving'){g.done=true;return;}
+  const o=g.target?G.objs.get(g.target):null;g.target=null;
+  if(!o){g.timer=rnd(.3,1.5);return;}
+  if(o.kind==='shop'){
+    if(g.cash<o.price){g.thought='Too expensive';g.timer=1;return;}
+    g.cash-=o.price;g.spent+=o.price;addCash(o.price);o.revenue+=o.price;o.sold++;
+    const need=SHOPS[o.type].need;
+    if(need==='hunger'){g.hunger=Math.max(0,g.hunger-70);g.thirst=Math.max(0,g.thirst-15);g.thought='Yum!';}
+    else if(need==='thirst'){g.thirst=0;g.thought='Refreshing!';}
+    else if(need==='bladder'){g.bladder=0;g.thought='Much better';}
+    else{g.souvenir=true;g.thought='I love this souvenir';g.happy=Math.min(100,g.happy+8);}
+    g.happy=Math.min(100,g.happy+4);g.timer=rnd(1,2);return;
+  }
+  if(o.kind==='ride'||o.kind==='coaster'){
+    if(o.broken){g.thought=o.name+' is broken down';g.happy-=3;g.timer=1;return;}
+    if(o.queue.length>=40){g.thought='The queue is far too long';g.timer=1;return;}
+    if(g.cash<o.price){g.thought="I can't afford "+o.name;g.timer=1;return;}
+    o.queue.push(g);g.state='queue';g.queueT=0;g.entTile={x:Math.floor(g.x),y:Math.floor(g.y)};g.thought='Queueing for '+o.name;
+  }
+}
+
+/* ═══════════════════════════ RIDES ═══════════════════════════ */
+function updateRide(o,dt){
+  o.anim+=dt;
+  if(o.broken){o.fixT-=dt;if(o.fixT<=0){o.broken=false;}}
+  if(o.kind==='coaster')updateTrain(o,dt);
+  if(o.state==='idle'){
+    if(o.broken){while(o.queue.length){const g=o.queue.pop();g.state='walk';g.target=null;g.thought=o.name+' has broken down';g.happy-=4;g.timer=rnd(.5,1.5);}return;}
+    if(o.kind==='coaster'&&o.train.state!=='station')return;
+    if(o.queue.length){o.wait+=dt;if(o.queue.length>=o.cap||o.wait>=8)startRide(o);}
+    else if(o.kind==='coaster'){o.idleT+=dt;if(o.idleT>28){o.idleT=0;o.train.state='run';o.train.v=LIFT;o.train.lapT=0;}}
+  }else if(o.state==='running'&&o.kind==='ride'){o.timer-=dt;if(o.timer<=0)endRide(o);}
+  if(!o.broken&&o.state==='idle'&&Math.random()<dt*(0.00035+(G.day-o.built)*0.00002)){
+    o.broken=true;o.fixT=25;o.breakdowns++;addCash(-150);toast('⚠ '+o.name+' has broken down – mechanic called ($150)');
+  }
+}
+function startRide(o){
+  const riders=o.queue.splice(0,o.cap);
+  for(const g of riders){g.cash-=o.price;g.spent+=o.price;addCash(o.price);o.revenue+=o.price;o.riders++;g.state='ride';g.visible=false;}
+  o.rideList=riders;o.state='running';o.timer=o.dur;o.wait=0;
+  if(o.kind==='coaster'){o.train.state='run';o.train.v=LIFT;o.train.lapT=0;o.idleT=0;}
+}
+function endRide(o){
+  for(const g of o.rideList){
+    const ideal=g.pref*2,diff=o.inten-ideal;let gain=o.exc*1.4;
+    if(diff>3){gain-=6;g.thought='That was way too intense!';g.nausea+=o.naus*6;}
+    else if(diff<-3.5){gain*=0.5;g.thought=o.name+' was a bit tame';}
+    else g.thought=o.exc>=5?o.name+' was amazing!':'I enjoyed '+o.name;
+    g.nausea+=o.naus*3;if(g.nausea>70){gain-=5;g.thought='I feel sick…';}
+    g.happy=clamp(g.happy+gain,0,100);g.energy=Math.max(0,g.energy-o.inten*1.5);g.rides++;g.ridden[o.id]=G.clock;g.lastRide=G.clock;
+    const e=g.entTile||{x:o.x,y:o.y};g.x=e.x+.5+g.offx;g.y=e.y+.5+g.offy;g.visible=true;g.state='walk';g.timer=rnd(.5,1.5);g.fails=0;
+  }
+  o.rideList=[];o.cycles++;o.state='idle';o.wait=0;
+}
+function updateTrain(o,dt){
+  const t=o.train,c=o.curve;if(!c||t.state!=='run')return;
+  let rem=dt;while(rem>0){const h=Math.min(rem,0.02);rem-=h;
+    if(stepTrain(c,t,h)){o.lapTime=t.lapT;t.lapT=0;if(o.state==='running')endRide(o);break;}}
+}
+
+/* ═══════════════════════════ ECONOMY / TIME ═══════════════════════════ */
+let spawnAcc=0;
+function spawnRate(){
+  let rides=0;for(const o of G.objs.values())if(o.kind==='ride'||o.kind==='coaster')rides++;
+  const feeF=clamp(1.15-G.entryFee/(6+G.rating/50),0.03,1);
+  return (0.05+G.rating/999*0.6)*feeF*(1+Math.min(rides,10)*0.05);
+}
+function ratingTarget(){
+  let hs=0;for(const g of G.guests)hs+=g.happy;const avg=G.guests.length?hs/G.guests.length:60;
+  let rideScore=0,scen=0,broken=0;
+  for(const o of G.objs.values()){if(o.kind==='ride'||o.kind==='coaster'){if(entranceTiles(o).length)rideScore+=Math.min(o.exc,8)*12;if(o.broken)broken++;}else if(o.kind==='scenery')scen+=SCENERY[o.type].joy*1.5;}
+  const crowd=clamp(0.25+G.guests.length/80,0.25,1);   // a park needs guests to earn its rating
+  return clamp(avg*4.2+(Math.min(rideScore,360)+Math.min(scen,120))*crowd-broken*30,0,999);
+}
+function endDay(){
+  let up=0;for(const o of G.objs.values())up+=o.upkeep||0;
+  addCash(-up);
+  toast(`📋 Day ${G.day} report — income ${money(G.earnedToday)}, expenses ${money(G.spentToday)}, ${G.dayGuests} visitors`);
+  G.day++;G.time=0;G.earnedToday=0;G.spentToday=0;G.dayGuests=0;save(true);
+}
+let ratingT=0;
+function update(dt){
+  G.time+=dt;G.clock+=dt;if(G.time>=DAY_LEN)endDay();
+  if(G.guests.length<MAX_GUESTS&&Math.random()<spawnRate()*dt)spawnGuest();
+  for(const o of G.objs.values()){if(o.kind==='ride'||o.kind==='coaster')updateRide(o,dt);else if(o.kind==='scenery')o.anim+=dt;}
+  for(let i=G.guests.length-1;i>=0;i--){const g=G.guests[i];if(updateGuest(g,dt)){G.guests.splice(i,1);if(G.sel&&G.sel.g===g)G.sel=null;}}
+  ratingT+=dt;if(ratingT>=1){ratingT=0;const tg=ratingTarget();G.rating+=(tg-G.rating)*0.15;}
+  if(!G.goalDone&&G.rating>=GOAL_RATING&&G.guests.length>=GOAL_GUESTS){G.goalDone=true;toast(`🏆 Scenario complete! Park rating ${GOAL_RATING} with ${GOAL_GUESTS} guests. Keep building!`);}
+}
+
+/* ═══════════════════════════ RENDERING ═══════════════════════════ */
+const canvas=$('c'),ctx=canvas.getContext('2d');
+let cw=innerWidth,ch=innerHeight,zoom=1,camx=0,camy=0;
+function resize(){cw=innerWidth;ch=innerHeight;const dpr=Math.min(devicePixelRatio||1,2);canvas.width=cw*dpr;canvas.height=ch*dpr;canvas.style.width=cw+'px';canvas.style.height=ch+'px';ctx.setTransform(dpr,0,0,dpr,0,0);}
+addEventListener('resize',resize);resize();
+const isoX=(x,y)=>(x-y)*(TW/2),isoY=(x,y,h)=>(x+y)*(TH/2)-h*HZ;
+function P(x,y,h=0){return [(isoX(x,y)-camx)*zoom+cw/2,(isoY(x,y,h)-camy)*zoom+ch/2];}
+function screenToWorld(sx,sy){const ix=(sx-cw/2)/zoom+camx,iy=(sy-ch/2)/zoom+camy;return {x:(ix/(TW/2)+iy/(TH/2))/2,y:(iy/(TH/2)-ix/(TW/2))/2};}
+const up=(p,h)=>[p[0],p[1]-h*zoom];
+function poly(pts,fill,stroke,lw){ctx.beginPath();ctx.moveTo(pts[0][0],pts[0][1]);for(let i=1;i<pts.length;i++)ctx.lineTo(pts[i][0],pts[i][1]);ctx.closePath();if(fill){ctx.fillStyle=fill;ctx.fill();}if(stroke){ctx.strokeStyle=stroke;ctx.lineWidth=(lw||1)*zoom;ctx.stroke();}}
+function line(p,q,color,w){ctx.strokeStyle=color;ctx.lineWidth=(w||1)*zoom;ctx.beginPath();ctx.moveTo(p[0],p[1]);ctx.lineTo(q[0],q[1]);ctx.stroke();}
+function circ(p,r,fill,stroke,lw){ctx.beginPath();ctx.arc(p[0],p[1],r*zoom,0,Math.PI*2);if(fill){ctx.fillStyle=fill;ctx.fill();}if(stroke){ctx.strokeStyle=stroke;ctx.lineWidth=(lw||1)*zoom;ctx.stroke();}}
+function box(x,y,w,d,z0,hpx,color){
+  const A=up(P(x,y),z0),B=up(P(x+w,y),z0),C=up(P(x+w,y+d),z0),D=up(P(x,y+d),z0);
+  poly([D,C,up(C,hpx),up(D,hpx)],shade(color,.78));
+  poly([C,B,up(B,hpx),up(C,hpx)],shade(color,.58));
+  poly([up(A,hpx),up(B,hpx),up(C,hpx),up(D,hpx)],color);
+}
+function ellipseW(cx,cy,r,hpx,fill,stroke,lw){ctx.beginPath();for(let k=0;k<=28;k++){const a=k/28*Math.PI*2,p=P(cx+Math.cos(a)*r,cy+Math.sin(a)*r);const y=p[1]-hpx*zoom;if(k)ctx.lineTo(p[0],y);else ctx.moveTo(p[0],y);}ctx.closePath();if(fill){ctx.fillStyle=fill;ctx.fill();}if(stroke){ctx.strokeStyle=stroke;ctx.lineWidth=(lw||1)*zoom;ctx.stroke();}}
+function diamond(x,y,n,fill,stroke,lw){poly([P(x,y),P(x+n,y),P(x+n,y+n),P(x,y+n)],fill,stroke,lw);}
+function label(p,text,bg,fg){ctx.font=`bold ${10*zoom}px sans-serif`;const w=ctx.measureText(text).width+10*zoom,h=14*zoom;ctx.fillStyle=bg;ctx.beginPath();ctx.roundRect(p[0]-w/2,p[1]-h/2,w,h,4*zoom);ctx.fill();ctx.fillStyle=fg;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(text,p[0],p[1]);}
+
+const HORSE=['#fff','#ffcc80','#90caf9','#a5d6a7'];
+const GOND=['#e53935','#1e88e5','#43a047','#fdd835','#8e24aa','#fb8c00','#00acc1','#ec407a'];
+const DRAW={
+  carousel(o){const cx=o.x+1,cy=o.y+1,r=.85,c=P(cx,cy);
+    box(o.x+.15,o.y+.15,1.7,1.7,0,5,'#bcaaa4');ellipseW(cx,cy,r,5,'#efebe9','#a1887f');
+    const spin=o.state==='running'?o.anim*1.6:o.anim*.3;
+    for(let k=0;k<8;k++){const a=spin+k*Math.PI/4,b=P(cx+Math.cos(a)*r*.72,cy+Math.sin(a)*r*.72);line(up(b,5),up(b,36),'#ffe082',1.5);
+      const bob=Math.sin(o.anim*4+k)*(o.state==='running'?3:0.5);circ(up(b,15+bob),3.2,HORSE[k%4],'#5d4037');}
+    line(up(c,5),up(c,54),'#ffe082',3);
+    const rim=[];for(let k=0;k<=12;k++){const a=k/12*Math.PI*2,p=P(cx+Math.cos(a)*r*1.08,cy+Math.sin(a)*r*1.08);rim.push(up(p,36));}
+    const peak=up(c,54);for(let k=0;k<12;k++)poly([rim[k],rim[k+1],peak],k%2?'#fafafa':'#e53935');circ(up(c,56),3,'#fdd835');},
+  teacups(o){const cx=o.x+1,cy=o.y+1;box(o.x+.1,o.y+.1,1.8,1.8,0,4,'#80cbc4');ellipseW(cx,cy,.9,4,'#b2dfdb','#4db6ac');
+    const spin=o.state==='running'?o.anim*1.4:o.anim*.2;
+    for(let k=0;k<4;k++){const a=spin+k*Math.PI/2,px=cx+Math.cos(a)*.5,py=cy+Math.sin(a)*.5,col=GOND[k+2];
+      ellipseW(px,py,.24,4,shade(col,.8));const t=P(px,py);for(let s=0;s<2;s++)line(up(P(px+(s?.24:-.24),py),4),up(P(px+(s?.24:-.24),py),14),shade(col,.7),1);
+      ellipseW(px,py,.26,14,col,'#fff',1);circ(up(t,14),3,'#fff');}},
+  bumper(o){const cx=o.x+1,cy=o.y+1;box(o.x+.05,o.y+.05,1.9,1.9,0,3,'#546e7a');box(o.x,o.y,2,.08,0,8,'#37474f');box(o.x,o.y,.08,2,0,8,'#37474f');
+    const sp=o.state==='running'?1:0.15;
+    for(let k=0;k<5;k++){const a=o.anim*sp*(k%2?1:-1)+k*1.26,rr=.35+k*.09,px=cx+Math.cos(a)*rr,py=cy+Math.sin(a*1.3)*rr;box(px-.14,py-.1,.28,.2,3,5,GOND[k]);}
+    box(o.x,o.y+1.92,2,.08,0,8,'#37474f');box(o.x+1.92,o.y,.08,2,0,8,'#37474f');
+    for(const [px,py] of [[o.x+.08,o.y+.08],[o.x+1.92,o.y+.08],[o.x+1.92,o.y+1.92],[o.x+.08,o.y+1.92]])line(up(P(px,py),8),up(P(px,py),40),'#90a4ae',1.5);
+    ctx.globalAlpha=.85;poly([up(P(o.x,o.y),40),up(P(o.x+2,o.y),40),up(P(o.x+2,o.y+2),40),up(P(o.x,o.y+2),40)],'#42a5f5','#1565c0',1);ctx.globalAlpha=1;
+    label(up(P(cx,cy),46),'BUMPER CARS','#1565c0','#fff');},
+  haunted(o){const cx=o.x+1,cy=o.y+1;box(o.x+.1,o.y+.1,1.8,1.8,0,34,'#4e342e');
+    const A=up(P(o.x+.1,o.y+.1),34),B=up(P(o.x+1.9,o.y+.1),34),C=up(P(o.x+1.9,o.y+1.9),34),D=up(P(o.x+.1,o.y+1.9),34),pk=up(P(cx,cy),62);
+    poly([D,C,pk],'#5e35b1');poly([C,B,pk],'#4527a0');poly([A,B,pk],'#7e57c2');poly([D,A,pk],'#673ab7');
+    for(const [px,py,dx,dy] of [[o.x+.5,o.y+1.9,.2,0],[o.x+1.2,o.y+1.9,.2,0],[o.x+1.9,o.y+.5,0,.2],[o.x+1.9,o.y+1.2,0,.2]]){const a=P(px,py),b=P(px+dx,py+dy);
+      poly([up(a,14),up(b,14),up(b,24),up(a,24)],o.anim%2<1?'#ffee58':'#ffca28');}
+    const gh=up(P(cx,cy),70+Math.sin(o.anim*2)*5);ctx.globalAlpha=.8;circ(gh,5,'#fff');ctx.fillStyle='#fff';ctx.fillRect(gh[0]-5*zoom,gh[1],10*zoom,6*zoom);ctx.globalAlpha=1;circ([gh[0]-2*zoom,gh[1]-1*zoom],1,'#000');circ([gh[0]+2*zoom,gh[1]-1*zoom],1,'#000');},
+  swing(o){const cx=o.x+1,cy=o.y+1;box(o.x+.2,o.y+.2,1.6,1.6,0,4,'#8d6e63');
+    const apex=up(P(cx,cy),60);
+    for(const [px,py] of [[o.x+.3,o.y+.3],[o.x+1.7,o.y+.3]])line(up(P(px,py),4),apex,'#9e9e9e',2.5);
+    const ang=Math.sin(o.anim*1.7)*(o.state==='running'?1.25:0.12),L=42*zoom,sp=[apex[0]+Math.sin(ang)*L,apex[1]+Math.cos(ang)*L];
+    line(apex,sp,'#616161',3);
+    ctx.save();ctx.translate(sp[0],sp[1]);ctx.rotate(-ang);ctx.fillStyle='#6d4c41';ctx.beginPath();ctx.moveTo(-14*zoom,-4*zoom);ctx.lineTo(14*zoom,-4*zoom);ctx.lineTo(9*zoom,6*zoom);ctx.lineTo(-9*zoom,6*zoom);ctx.closePath();ctx.fill();
+    ctx.fillStyle='#ffcc80';ctx.fillRect(-12*zoom,-4*zoom,24*zoom,2*zoom);if(o.rideList.length){ctx.fillStyle='#fff';for(let k=-2;k<=2;k++)ctx.fillRect(k*5*zoom-1*zoom,-8*zoom,2*zoom,3*zoom);}ctx.restore();
+    for(const [px,py] of [[o.x+.3,o.y+1.7],[o.x+1.7,o.y+1.7]])line(up(P(px,py),4),apex,'#bdbdbd',2.5);},
+  ferris(o){const cx=o.x+1.5,cy=o.y+1.5,c=up(P(cx,cy),64),R=54*zoom;
+    box(o.x+.3,o.y+.3,2.4,2.4,0,3,'#9e9e9e');
+    line(up(P(o.x+.5,o.y+.5),3),c,'#757575',3);line(up(P(o.x+2.5,o.y+.5),3),c,'#757575',3);
+    const spin=(o.state==='running'?o.anim*.45:o.anim*.08);
+    ctx.strokeStyle='#eceff1';ctx.lineWidth=3*zoom;ctx.beginPath();ctx.arc(c[0],c[1],R,0,Math.PI*2);ctx.stroke();
+    ctx.lineWidth=1.2*zoom;ctx.beginPath();ctx.arc(c[0],c[1],R*.35,0,Math.PI*2);ctx.stroke();
+    for(let k=0;k<12;k++){const a=spin+k*Math.PI/6;line(c,[c[0]+Math.cos(a)*R,c[1]+Math.sin(a)*R],'#cfd8dc',1.2);}
+    for(let k=0;k<8;k++){const a=spin+k*Math.PI/4,g=[c[0]+Math.cos(a)*R,c[1]+Math.sin(a)*R+6*zoom];ctx.fillStyle=GOND[k];ctx.beginPath();ctx.roundRect(g[0]-5*zoom,g[1]-5*zoom,10*zoom,9*zoom,3*zoom);ctx.fill();ctx.strokeStyle='#37474f';ctx.lineWidth=zoom;ctx.stroke();}
+    circ(c,4,'#ffca28','#f57f17');
+    line(up(P(o.x+.5,o.y+2.5),3),c,'#616161',3);line(up(P(o.x+2.5,o.y+2.5),3),c,'#616161',3);},
+  drop(o){const cx=o.x+.5,cy=o.y+.5;box(o.x+.1,o.y+.1,.8,.8,0,3,'#607d8b');box(o.x+.38,o.y+.38,.24,.24,3,104,'#90a4ae');
+    let hpx=4;if(o.state==='running'){const t=1-o.timer/o.dur;hpx=t<.65?4+(t/.65)*90:t<.75?94:4+90*Math.max(0,1-Math.pow((t-.75)/.12,2));}
+    ellipseW(cx,cy,.45,hpx,'#26a69a','#004d40',1);ellipseW(cx,cy,.45,hpx+7,'#4db6ac','#004d40',1);
+    if(o.rideList.length){for(let k=0;k<6;k++){const a=k/6*Math.PI*2,p=P(cx+Math.cos(a)*.38,cy+Math.sin(a)*.38);circ(up(p,hpx+11),1.6,'#fff');}}
+    ellipseW(cx,cy,.3,107,'#cfd8dc','#78909c',1);line(up(P(cx,cy),107),up(P(cx,cy),118),'#ef5350',2);},
+};
+function drawShop(o){const d=SHOPS[o.type],cx=o.x+.5,cy=o.y+.5,c=P(cx,cy);
+  box(o.x+.12,o.y+.12,.76,.76,0,14,d.color);
+  const A=up(P(o.x,o.y),15),B=up(P(o.x+1,o.y),15),C=up(P(o.x+1,o.y+1),15),D=up(P(o.x,o.y+1),15);poly([A,B,C,D],shade(d.color,1.15),'#fff',1);
+  for(let k=1;k<4;k++){const f=k/4;line([A[0]+(D[0]-A[0])*f,A[1]+(D[1]-A[1])*f],[B[0]+(C[0]-B[0])*f,B[1]+(C[1]-B[1])*f],'rgba(255,255,255,.7)',1);}
+  const s=up(c,24);
+  if(o.type==='burger'){circ(s,4.5,'#d7a86e','#8d6e63');ctx.fillStyle='#43a047';ctx.fillRect(s[0]-4*zoom,s[1]-.5*zoom,8*zoom,1.5*zoom);}
+  else if(o.type==='drink'){ctx.fillStyle='#e3f2fd';ctx.fillRect(s[0]-3*zoom,s[1]-5*zoom,6*zoom,9*zoom);ctx.fillStyle='#ef5350';ctx.fillRect(s[0]-.7*zoom,s[1]-8*zoom,1.4*zoom,5*zoom);}
+  else if(o.type==='icecream'){poly([[s[0]-3*zoom,s[1]],[s[0]+3*zoom,s[1]],[s[0],s[1]+7*zoom]],'#d7a86e');circ([s[0],s[1]-1*zoom],3.5,'#f8bbd0');}
+  else if(o.type==='souvenir'){ctx.fillStyle='#ce93d8';ctx.fillRect(s[0]-4*zoom,s[1]-4*zoom,8*zoom,8*zoom);ctx.fillStyle='#fdd835';ctx.fillRect(s[0]-.8*zoom,s[1]-4*zoom,1.6*zoom,8*zoom);ctx.fillRect(s[0]-4*zoom,s[1]-.8*zoom,8*zoom,1.6*zoom);}
+  else{circ(s,5,'#fff','#37474f');ctx.fillStyle='#37474f';ctx.font=`bold ${6*zoom}px sans-serif`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('WC',s[0],s[1]);}
+}
+function drawScenery(o){const t=G.grid[o.y][o.x],cx=o.x+.5,cy=o.y+.5,c=P(cx,cy);
+  if(o.type==='tree'){const s=.8+t.v*.5,sway=Math.sin(o.anim*1.2)*0.6;line(c,up(c,11*s),'#5d4037',2.5);circ([c[0]+sway*zoom,c[1]-17*s*zoom],8*s,t.v>.5?'#2e7d32':'#388e3c');circ([c[0]-2*zoom+sway*zoom,c[1]-21*s*zoom],5.5*s,'#43a047');}
+  else if(o.type==='flower'){diamond(o.x+.1,o.y+.1,.8,'#7cb342');const cols=['#e53935','#fdd835','#ec407a','#fff','#ab47bc'];for(let k=0;k<7;k++){const a=k*2.4+t.v*6,r=.12+((k*7)%5)*.05,p=P(cx+Math.cos(a)*r*2,cy+Math.sin(a)*r*2);circ(up(p,3),1.8,cols[k%5]);}}
+  else if(o.type==='bench'){box(o.x+.3,o.y+.38,.4,.24,0,3,'#8d6e63');box(o.x+.3,o.y+.38,.4,.05,3,6,'#a1887f');line(up(P(o.x+.33,o.y+.5),0),up(P(o.x+.33,o.y+.5),3),'#5d4037',1.5);line(up(P(o.x+.67,o.y+.5),0),up(P(o.x+.67,o.y+.5),3),'#5d4037',1.5);}
+  else if(o.type==='lamp'){line(c,up(c,26),'#37474f',2);ctx.globalAlpha=.25;circ(up(c,27),9,'#ffeb3b');ctx.globalAlpha=1;circ(up(c,27),3,'#fff59d','#37474f');}
+  else if(o.type==='fountain'){const fx=o.x+1,fy=o.y+1;box(o.x+.1,o.y+.1,1.8,1.8,0,4,'#90a4ae');ellipseW(fx,fy,.8,4,'#4fc3f7','#0288d1',1);
+    const fc=P(fx,fy);line(up(fc,4),up(fc,20),'#b0bec5',3);ctx.strokeStyle='rgba(129,212,250,.9)';ctx.lineWidth=1.5*zoom;
+    for(let k=0;k<6;k++){const a=k/6*Math.PI*2+o.anim,px=fx+Math.cos(a)*.55,py=fy+Math.sin(a)*.55,e=P(px,py);ctx.beginPath();ctx.moveTo(fc[0],fc[1]-20*zoom);ctx.quadraticCurveTo(e[0],e[1]-26*zoom,e[0],e[1]-4*zoom);ctx.stroke();
+      circ(up(e,4+((o.anim*20+k*5)%14)),1.2,'#e1f5fe');}}
+}
+function drawGuest(g,selected){const p=P(g.x,g.y),z=zoom,bob=g.path.length&&g.state==='walk'?Math.abs(Math.sin(G.clock*9+g.id))*1.2:0;
+  ctx.fillStyle='rgba(0,0,0,.25)';ctx.beginPath();ctx.ellipse(p[0],p[1],4*z,2*z,0,0,Math.PI*2);ctx.fill();
+  const y=p[1]-bob*z;
+  ctx.fillStyle=g.pants;ctx.fillRect(p[0]-2*z,y-8*z,4*z,5*z);
+  ctx.fillStyle=g.shirt;ctx.fillRect(p[0]-2.6*z,y-14.5*z,5.2*z,7*z);
+  circ([p[0],y-17*z],2.7,g.skin);
+  if(selected){ctx.strokeStyle='#ffd54f';ctx.lineWidth=1.5*z;ctx.beginPath();ctx.ellipse(p[0],p[1],7*z,3.5*z,0,0,Math.PI*2);ctx.stroke();}
+}
+function drawTrackTile(o,c,ti,alpha){
+  const t=o.tiles[ti],segs=c.byTile.get(ti);if(!segs)return;
+  const cx=t.x+.5,cy=t.y+.5,base=P(cx,cy);
+  ctx.globalAlpha=alpha;
+  if(t.h>0){line(up(base,0),up(base,t.h*HZ-2),'#78909c',2.2);ellipseW(cx,cy,.2,0,'#607d8b');}
+  for(const i of segs){const a=c.pts[i],b=c.pts[i+1],pa=P(a[0],a[1],a[2]/LEVEL),pb=P(b[0],b[1],b[2]/LEVEL);
+    const dx=pb[0]-pa[0],dy=pb[1]-pa[1],L=Math.hypot(dx,dy)||1,nx=-dy/L*3.2*zoom,ny=dx/L*3.2*zoom;
+    if(i%2===0){ctx.strokeStyle='#5d4037';ctx.lineWidth=2*zoom;ctx.beginPath();ctx.moveTo(pa[0]-nx*1.6,pa[1]-ny*1.6);ctx.lineTo(pa[0]+nx*1.6,pa[1]+ny*1.6);ctx.stroke();}
+    ctx.strokeStyle=o.color||'#e53935';ctx.lineWidth=1.7*zoom;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(pa[0]+nx,pa[1]+ny);ctx.lineTo(pb[0]+nx,pb[1]+ny);ctx.moveTo(pa[0]-nx,pa[1]-ny);ctx.lineTo(pb[0]-nx,pb[1]-ny);ctx.stroke();}
+  if(ti===0&&c.closed){box(t.x+.05,t.y+.05,.9,.9,0,2,'#8d6e63');for(const [px,py] of [[t.x+.1,t.y+.1],[t.x+.9,t.y+.1],[t.x+.9,t.y+.9],[t.x+.1,t.y+.9]])line(up(P(px,py),2),up(P(px,py),22),'#a1887f',1.5);
+    ctx.globalAlpha=alpha*.9;poly([up(P(t.x,t.y),22),up(P(t.x+1,t.y),22),up(P(t.x+1,t.y+1),22),up(P(t.x,t.y+1),22)],o.color||'#e53935','#fff',1);}
+  ctx.globalAlpha=1;
+}
+function drawCar(o,c,k){const t=o.train,s=t.s-k*CAR_GAP,a=curveAt(c,s),b=curveAt(c,s+0.12),pa=P(a[0],a[1],a[2]/LEVEL),pb=P(b[0],b[1],b[2]/LEVEL);
+  const ang=Math.atan2(pb[1]-pa[1],pb[0]-pa[0]);ctx.save();ctx.translate(pa[0],pa[1]-4*zoom);ctx.rotate(ang);
+  ctx.fillStyle=k===0?shade(o.color,1.1):o.color;ctx.strokeStyle=shade(o.color,.5);ctx.lineWidth=zoom;ctx.beginPath();ctx.roundRect(-7*zoom,-4*zoom,14*zoom,8*zoom,2.5*zoom);ctx.fill();ctx.stroke();
+  if(o.rideList.length){ctx.fillStyle='#212121';circ([-3*zoom,-1*zoom],1.6,'#ffe0b2');circ([3*zoom,-1*zoom],1.6,'#ffe0b2');}
+  ctx.restore();
+}
+function drawTrain(o){const c=o.curve;if(!c)return;for(let k=CARS-1;k>=0;k--)drawCar(o,c,k);}
+function drawFence(front){ctx.strokeStyle='#8d6e63';
+  const seg=(x0,y0,x1,y1,skip)=>{const n=Math.max(Math.abs(x1-x0),Math.abs(y1-y0));for(let i=0;i<=n;i++){const x=x0+(x1-x0)*i/n,y=y0+(y1-y0)*i/n;if(skip&&skip(x,y))continue;const p=P(x,y);line(p,up(p,9),'#a1887f',1.5);}
+    const a=P(x0,y0),b=P(x1,y1);if(!skip){line(up(a,7),up(b,7),'#8d6e63',1);line(up(a,3),up(b,3),'#8d6e63',1);}};
+  if(!front){seg(0,0,W,0);seg(0,0,0,H);}
+  else{seg(W,0,W,H);seg(0,H,ENTRY.x,H);seg(ENTRY.x+1,H,W,H);}
+}
+function drawGate(){const x=ENTRY.x,y=ENTRY.y;box(x+.02,y+.35,.18,.35,0,26,'#eceff1');box(x+.8,y+.35,.18,.35,0,26,'#eceff1');
+  const a=up(P(x+.1,y+.5),26),b=up(P(x+.9,y+.5),26);poly([a,b,up(b,8),up(a,8)],'#e53935','#b71c1c',1);
+  label(up(P(x+.5,y+.5),30),'WELCOME','rgba(0,0,0,0)','#fff');line(up(P(x+.5,y+.5),34),up(P(x+.5,y+.5),46),'#eceff1',1.5);poly([up(P(x+.5,y+.5),46),[P(x+.5,y+.5)[0]+7*zoom,P(x+.5,y+.5)[1]-43*zoom],up(P(x+.5,y+.5),40)],'#fdd835');}
+function inView(x,y,pad){const p=P(x,y);return p[0]>-pad&&p[0]<cw+pad&&p[1]>-pad&&p[1]<ch+pad;}
+
+function render(){
+  const sky=ctx.createLinearGradient(0,0,0,ch);sky.addColorStop(0,'#0f2a3a');sky.addColorStop(1,'#1c4a4a');ctx.fillStyle=sky;ctx.fillRect(0,0,cw,ch);
+  poly([P(-8,-8),P(W+8,-8),P(W+8,H+8),P(-8,H+8)],'#3a5f36');
+  for(let y=0;y<H;y++)for(let x=0;x<W;x++){if(!inView(x+.5,y+.5,80))continue;const t=G.grid[y][x];
+    if(t.t==='grass'){diamond(x,y,1,t.v<.5?'#5b9a4a':'#579447');}
+    else{diamond(x,y,1,'#b0a99a','#8f8778',1);if(t.t==='entrance')diamond(x,y,1,'#c7bfa6');}}
+  drawFence(false);
+  // hover / build previews
+  const hv=G.hover,tool=G.tool;
+  if(hv&&tool&&!G.build){
+    let n=1,ok=true;
+    if(tool.kind==='ride')n=RIDES[tool.type].size;else if(tool.kind==='scenery')n=SCENERY[tool.type].size||1;
+    if(tool.kind==='ride'||tool.kind==='shop'||tool.kind==='scenery')ok=canPlace(hv.x,hv.y,n);
+    else if(tool.kind==='path'){const t=tile(hv.x,hv.y);ok=!!t&&t.t==='grass'&&!t.o;}
+    else if(tool.kind==='template'){const tt=templateTiles(hv.x,hv.y);ok=tt.every(t=>canPlace(t.x,t.y,1));for(const t of tt)diamond(t.x,t.y,1,ok?'rgba(105,240,174,.35)':'rgba(255,82,82,.35)');n=0;}
+    else if(tool.kind==='demolish'){const t=tile(hv.x,hv.y);ok=!!t&&(t.o||t.t==='path');}
+    if(n)diamond(hv.x,hv.y,n,ok?'rgba(105,240,174,.35)':'rgba(255,82,82,.35)',ok?'#69f0ae':'#ff5252',1.5);
+  }
+  if(G.build){const b=G.build;for(const t of b.tiles)diamond(t.x,t.y,1,'rgba(255,213,79,.25)','#ffd54f',1);
+    if(hv&&!b.closed){const st=buildCheck(hv.x,hv.y);if(st)diamond(hv.x,hv.y,1,st==='close'?'rgba(255,213,79,.5)':'rgba(105,240,174,.4)',st==='close'?'#ffd54f':'#69f0ae',1.5);}}
+  // sprites
+  const S=[];
+  for(const o of G.objs.values()){
+    if(o.kind==='coaster'){const c=o.curve;if(!c)continue;
+      o.tiles.forEach((t,i)=>{if(inView(t.x+.5,t.y+.5,160))S.push({d:t.x+t.y+1,f:()=>drawTrackTile(o,c,i,1)});});
+      for(let k=0;k<CARS;k++){const p=curveAt(c,o.train.s-k*CAR_GAP);S.push({d:p[0]+p[1]+0.01,f:()=>drawCar(o,c,k)});}
+      continue;}
+    if(!inView(o.x+o.n/2,o.y+o.n/2,200))continue;
+    const d=o.x+o.y+2*o.n-1;
+    if(o.kind==='ride')S.push({d,f:()=>DRAW[o.type](o)});else if(o.kind==='shop')S.push({d,f:()=>drawShop(o)});else S.push({d,f:()=>drawScenery(o)});
+  }
+  S.push({d:ENTRY.x+ENTRY.y+1,f:drawGate});
+  const selG=G.sel&&G.sel.g;
+  for(const g of G.guests){if(!g.visible||g.state==='ride')continue;if(!inView(g.x,g.y,40))continue;S.push({d:g.x+g.y+0.02,f:()=>drawGuest(g,g===selG)});}
+  S.sort((a,b)=>a.d-b.d);for(const s of S)s.f();
+  drawFence(true);
+  // coaster build preview on top
+  if(G.build&&G.build.tiles.length>1){const b=G.build,c=buildCurve(b.tiles,b.closed),fake={tiles:b.tiles,color:'#ff6f00'};for(let i=0;i<b.tiles.length;i++)drawTrackTile(fake,c,i,.95);}
+  if(G.build){for(const t of G.build.tiles){label(up(P(t.x+.5,t.y+.5),t.h*HZ+14),String(t.h),'rgba(0,0,0,.55)','#ffd54f');}}
+  // overlays
+  for(const o of G.objs.values()){if(o.kind!=='ride'&&o.kind!=='coaster')continue;if(!inView(o.x+o.n/2,o.y+o.n/2,120))continue;
+    const top=up(P(o.x+o.n/2,o.y+o.n/2),(o.kind==='coaster'?40:o.type==='ferris'?130:o.type==='drop'?130:o.type==='haunted'?84:70));
+    if(o.broken)label(top,'BROKEN DOWN','#c62828','#fff');else if(o.queue.length)label(top,o.queue.length+' waiting','rgba(0,0,0,.55)','#fff');}
+  if(G.sel&&G.sel.o&&G.objs.has(G.sel.o.id)){const o=G.sel.o;for(const t of objTiles(o))diamond(t.x,t.y,1,null,'#ffd54f',2);if(o.kind!=='coaster')diamond(o.x,o.y,o.n,null,'#ffd54f',2);}
+  if(selG&&G.guests.includes(selG)){const p=up(P(selG.x,selG.y),26);label(p,selG.thought,'rgba(255,255,255,.92)','#222');}
+}
+
+/* ═══════════════════════════ COASTER BUILDER ═══════════════════════════ */
+function buildCheck(x,y){ // returns 'add' | 'close' | null
+  const b=G.build,t=tile(x,y);if(!b||b.closed||!t)return null;
+  if(!b.tiles.length)return t.t==='grass'&&!t.o?'add':null;
+  const last=b.tiles[b.tiles.length-1];if(Math.abs(last.x-x)+Math.abs(last.y-y)!==1)return null;
+  const first=b.tiles[0];
+  if(first.x===x&&first.y===y)return b.tiles.length>=4&&Math.abs(last.h-first.h)<=1?'close':null;
+  if(t.t!=='grass'||t.o)return null;if(b.tiles.some(p=>p.x===x&&p.y===y))return null;
+  return 'add';
+}
+function buildAdd(x,y){
+  const b=G.build,st=buildCheck(x,y);if(!st)return;
+  if(st==='close'){b.closed=true;toast('Circuit closed – press Finish to build');renderPanel();return;}
+  const last=b.tiles[b.tiles.length-1];let h=b.tiles.length?clamp(b.h,last.h-1,last.h+1):0;b.h=h;
+  b.tiles.push({x,y,h});renderPanel();
+}
+function buildUndo(){const b=G.build;if(!b)return;if(b.closed)b.closed=false;else if(b.tiles.length){b.tiles.pop();if(b.tiles.length)b.h=b.tiles[b.tiles.length-1].h;else b.h=0;}renderPanel();}
+function buildHeight(d){const b=G.build;if(!b)return;const last=b.tiles[b.tiles.length-1];const lo=last?Math.max(0,last.h-1):0,hi=last?Math.min(MAX_H,last.h+1):0;b.h=clamp(b.h+d,lo,hi);renderPanel();}
+function buildFinish(){const b=G.build;if(!b||!b.closed)return;const cost=coasterCost(b.tiles);
+  if(G.cash<cost){toast('Not enough cash ('+money(cost)+' needed)');return;}
+  const o=addObj(makeCoaster(b.tiles));addCash(-cost);G.build=null;setTool(null);G.sel={o};toast('🎢 '+o.name+' built! Excitement '+o.exc.toFixed(1));renderPanel();}
+function buildCancel(){G.build=null;setTool(null);renderPanel();}
+
+/* ═══════════════════════════ UI ═══════════════════════════ */
+const TABS=[
+  {id:'build',name:'🛠 Build',items:[{kind:'inspect',icon:'🔍',name:'Inspect',cost:''},{kind:'path',icon:'🧱',name:'Path',cost:money(PATH_COST)},{kind:'demolish',icon:'💥',name:'Demolish',cost:'refund'}]},
+  {id:'coaster',name:'🎢 Coasters',items:[{kind:'coaster',icon:'🎢',name:'Custom Coaster',cost:money(COASTER_BASE)+' + track'},{kind:'template',icon:'🏗',name:'Starter Loop',cost:money(coasterCost(templateTiles(0,0)))}]},
+  {id:'rides',name:'🎡 Rides',items:Object.entries(RIDES).map(([k,d])=>({kind:'ride',type:k,icon:d.icon,name:d.name,cost:money(d.cost),ex:'Excitement '+d.exc.toFixed(1)+' · '+d.size+'×'+d.size,c:d.cost}))},
+  {id:'shops',name:'🍔 Shops',items:Object.entries(SHOPS).map(([k,d])=>({kind:'shop',type:k,icon:d.icon,name:d.name,cost:money(d.cost),ex:'sells at '+money(d.price),c:d.cost}))},
+  {id:'scenery',name:'🌳 Scenery',items:Object.entries(SCENERY).map(([k,d])=>({kind:'scenery',type:k,icon:d.icon,name:d.name,cost:money(d.cost),ex:'+'+d.joy+' mood',c:d.cost}))},
+];
+let curTab='build';
+function renderTabs(){
+  $('tabs').innerHTML=TABS.map(t=>`<div class="tab ${t.id===curTab?'on':''}" data-tab="${t.id}">${t.name}</div>`).join('');
+  $('tabs').querySelectorAll('.tab').forEach(el=>el.onclick=()=>{curTab=el.dataset.tab;renderTabs();});
+  const tab=TABS.find(t=>t.id===curTab);
+  $('items').innerHTML=tab.items.map((it,i)=>{const on=G.tool&&G.tool.kind===it.kind&&G.tool.type===it.type;return `<div class="item ${on?'on':''} ${it.c&&G.cash<it.c?'poor':''}" data-i="${i}"><div class="ic">${it.icon}</div><div class="nm">${it.name}</div><div class="ct">${it.cost}</div>${it.ex?`<div class="ex">${it.ex}</div>`:''}</div>`;}).join('');
+  $('items').querySelectorAll('.item').forEach(el=>el.onclick=()=>{const it=tab.items[+el.dataset.i];if(G.tool&&G.tool.kind===it.kind&&G.tool.type===it.type&&it.kind!=='coaster')setTool(null);else setTool({kind:it.kind,type:it.type});});
+}
+const HINTS={inspect:'Click a ride, shop or guest to inspect it. Drag to pan, wheel to zoom.',path:'Click or drag on grass to lay paths ($20 each). Rides need a path next to them.',demolish:'Click a path or building to remove it. Rides and shops refund 40%.',coaster:'Click or drag across neighbouring tiles to lay track. Q/E change height. Click the first piece to close the loop.',template:'Click to place a ready-made 7×4 coaster with a lift hill (needs free grass).',ride:'Click on free grass to place. Must touch a path to receive guests.',shop:'Click on free grass next to a path.',scenery:'Click on free grass. Guests walking nearby get happier.'};
+function setTool(t){
+  if(G.build&&(!t||t.kind!=='coaster')){G.build=null;}
+  G.tool=t;if(t&&t.kind==='coaster'&&!G.build)G.build={tiles:[],h:0,closed:false};
+  if(t&&t.kind!=='inspect')G.sel=null;
+  $('hint').textContent=t?HINTS[t.kind]:'Pick something to build from the toolbar. Drag to pan, wheel to zoom.';
+  canvas.style.cursor=t&&t.kind!=='inspect'?'crosshair':'grab';
+  renderTabs();renderPanel();
+}
+function bar(v,inv){const c=inv?(v>70?'bad':v>45?'warn':''):(v<30?'bad':v<55?'warn':'');return `<div class="bar"><i class="${c}" style="width:${clamp(v,0,100)}%"></i></div>`;}
+function renderPanel(){
+  const p=$('panel');let h='';
+  if(G.build){const b=G.build,cost=coasterCost(b.tiles);
+    h=`<h3>🎢 Coaster builder</h3><p>${b.closed?'Circuit closed. Press Finish to build.':b.tiles.length?'Click a tile next to the last piece. Click the first piece to close the loop.':'Click a grass tile to place the station.'}</p>
+    <div class="row"><span>Pieces</span><b>${b.tiles.length}</b></div><div class="row"><span>Cost so far</span><b>${money(cost)}</b></div>
+    <div class="stepper"><span>Next height</span><button id="b-hdn">−</button><b>${b.h}</b><button id="b-hup">+</button></div>
+    <p>Track can rise or fall one level per tile. Higher lift hills give bigger drops and more excitement.</p>
+    <div class="actions"><button class="btn" id="b-undo" ${b.tiles.length?'':'disabled'}>↶ Undo</button><button class="btn primary" id="b-finish" ${b.closed?'':'disabled'}>✔ Finish</button><button class="btn danger" id="b-cancel">✖ Cancel</button></div>`;
+    p.innerHTML=h;$('b-hdn').onclick=()=>buildHeight(-1);$('b-hup').onclick=()=>buildHeight(1);$('b-undo').onclick=buildUndo;$('b-finish').onclick=buildFinish;$('b-cancel').onclick=buildCancel;return;
+  }
+  if(G.sel&&G.sel.o&&G.objs.has(G.sel.o.id)){const o=G.sel.o;
+    if(o.kind==='ride'||o.kind==='coaster'){
+      h=`<h3>${o.kind==='coaster'?'🎢':RIDES[o.type].icon} ${esc(o.name)}<small>${o.broken?'⚠ broken':o.state==='running'?'running':'open'}</small></h3>
+      <div class="row"><span>Excitement</span><b>${o.exc.toFixed(2)}</b></div><div class="row"><span>Intensity</span><b>${o.inten.toFixed(2)}</b></div><div class="row"><span>Nausea</span><b>${o.naus.toFixed(2)}</b></div>`;
+      if(o.kind==='coaster')h+=`<div class="row"><span>Track length</span><b>${o.tiles.length} pieces</b></div><div class="row"><span>Max height / drop</span><b>${o.maxH} / ${o.drop} lvl</b></div><div class="row"><span>Top speed</span><b>${(o.maxV*3.6*3).toFixed(0)} km/h</b></div><div class="row"><span>Lap time</span><b>${o.lapTime.toFixed(0)} s</b></div>`;
+      h+=`<div class="row"><span>Queue / riders</span><b>${o.queue.length} / ${o.rideList.length}</b></div><div class="row"><span>Total riders</span><b>${o.riders}</b></div><div class="row"><span>Revenue</span><b>${money(o.revenue)}</b></div><div class="row"><span>Upkeep</span><b>${money(o.upkeep)}/day</b></div><div class="row"><span>Breakdowns</span><b>${o.breakdowns}</b></div>
+      <div class="stepper"><span>Ticket</span><button id="b-pdn">−</button><b>${money(o.price)}</b><button id="b-pup">+</button></div>
+      <p>Guests will pay about ${money(Math.round((o.exc*0.9+0.5)*2)/2)} for this ride.</p>`;
+      if(!entranceTiles(o).length)h+=`<p style="color:var(--red)">⚠ No path touches this ride – guests can't reach it.</p>`;
+      h+=`<div class="actions"><button class="btn danger" id="b-del">Demolish (refund ${money(Math.round((o.kind==='coaster'?o.cost:RIDES[o.type].cost)*0.4))})</button><button class="btn" id="b-close">Close</button></div>`;
+      p.innerHTML=h;$('b-pdn').onclick=()=>{o.price=Math.max(0,o.price-0.5);renderPanel();};$('b-pup').onclick=()=>{o.price=Math.min(25,o.price+0.5);renderPanel();};
+      $('b-del').onclick=()=>{addCash(Math.round((o.kind==='coaster'?o.cost:RIDES[o.type].cost)*0.4));removeObj(o);toast(o.name+' demolished');renderPanel();};$('b-close').onclick=()=>{G.sel=null;renderPanel();};return;
+    }
+    if(o.kind==='shop'){h=`<h3>${SHOPS[o.type].icon} ${esc(o.name)}</h3><div class="row"><span>Sells</span><b>${NEED_WORDS[SHOPS[o.type].need]}</b></div><div class="row"><span>Items sold</span><b>${o.sold}</b></div><div class="row"><span>Revenue</span><b>${money(o.revenue)}</b></div><div class="row"><span>Upkeep</span><b>${money(o.upkeep)}/day</b></div>
+      <div class="stepper"><span>Price</span><button id="b-pdn">−</button><b>${money(o.price)}</b><button id="b-pup">+</button></div>`;
+      if(!entranceTiles(o).length)h+=`<p style="color:var(--red)">⚠ No path touches this shop.</p>`;
+      h+=`<div class="actions"><button class="btn danger" id="b-del">Demolish (refund ${money(Math.round(SHOPS[o.type].cost*0.4))})</button><button class="btn" id="b-close">Close</button></div>`;
+      p.innerHTML=h;$('b-pdn').onclick=()=>{o.price=Math.max(0,o.price-0.5);renderPanel();};$('b-pup').onclick=()=>{o.price=Math.min(20,o.price+0.5);renderPanel();};
+      $('b-del').onclick=()=>{addCash(Math.round(SHOPS[o.type].cost*0.4));removeObj(o);renderPanel();};$('b-close').onclick=()=>{G.sel=null;renderPanel();};return;}
+    h=`<h3>${SCENERY[o.type].icon} ${esc(o.name)}</h3><p>Guests passing nearby gain +${SCENERY[o.type].joy} mood.</p><div class="actions"><button class="btn danger" id="b-del">Remove</button><button class="btn" id="b-close">Close</button></div>`;
+    p.innerHTML=h;$('b-del').onclick=()=>{removeObj(o);renderPanel();};$('b-close').onclick=()=>{G.sel=null;renderPanel();};return;
+  }
+  if(G.sel&&G.sel.g&&G.guests.includes(G.sel.g)){const g=G.sel.g;
+    h=`<h3>🧑 ${esc(g.name)}<small>${g.state}</small></h3><div class="thought">💭 ${esc(g.thought)}</div>
+    <div class="row"><span>Cash</span><b>${money(g.cash)}</b></div><div class="row"><span>Spent</span><b>${money(g.spent)}</b></div><div class="row"><span>Rides taken</span><b>${g.rides}</b></div><div class="row"><span>Likes</span><b>${['gentle','mild','thrilling','extreme'][g.pref-1]} rides</b></div>
+    <p>Happiness</p>${bar(g.happy)}<p>Energy</p>${bar(g.energy)}<p>Hunger</p>${bar(g.hunger,true)}<p>Thirst</p>${bar(g.thirst,true)}<p>Restroom</p>${bar(g.bladder,true)}<p>Nausea</p>${bar(g.nausea,true)}
+    <div class="actions"><button class="btn" id="b-close">Close</button></div>`;
+    p.innerHTML=h;$('b-close').onclick=()=>{G.sel=null;renderPanel();};return;
+  }
+  let rides=0,shops=0,scen=0,up=0;for(const o of G.objs.values()){if(o.kind==='ride'||o.kind==='coaster')rides++;else if(o.kind==='shop')shops++;else scen++;up+=o.upkeep||0;}
+  let hs=0;for(const g of G.guests)hs+=g.happy;
+  h=`<h3>🏞 Park overview</h3>
+  <div class="stepper"><span>Entry fee</span><button id="b-fdn">−</button><b>${money(G.entryFee)}</b><button id="b-fup">+</button></div>
+  <div class="row"><span>Guests in park</span><b>${G.guests.length}</b></div><div class="row"><span>Average mood</span><b>${G.guests.length?Math.round(hs/G.guests.length):'–'}%</b></div>
+  <div class="row"><span>Total visitors</span><b>${G.totalGuests}</b></div><div class="row"><span>Rides / shops / scenery</span><b>${rides} / ${shops} / ${scen}</b></div>
+  <div class="row"><span>Income today</span><b>${money(G.earnedToday)}</b></div><div class="row"><span>Expenses today</span><b>${money(G.spentToday)}</b></div><div class="row"><span>Daily upkeep</span><b>${money(up)}</b></div>
+  <p>${rides===0?'Build a ride next to the path so guests have something to do!':G.rating<400?'Add more rides, shops and scenery to raise the park rating.':'Keep guests fed and thrilled to push the rating higher.'}</p>
+  <div class="actions"><button class="btn" id="b-save">💾 Save</button><button class="btn" id="b-load">📂 Load</button><button class="btn danger" id="b-new">🆕 New park</button></div>`;
+  p.innerHTML=h;$('b-fdn').onclick=()=>{G.entryFee=Math.max(0,G.entryFee-1);renderPanel();};$('b-fup').onclick=()=>{G.entryFee=Math.min(50,G.entryFee+1);renderPanel();};
+  $('b-save').onclick=()=>save(false);$('b-load').onclick=()=>{if(!load())toast('No saved park found');};
+  $('b-new').onclick=()=>{if(confirmNew){newGame();toast('New park started');confirmNew=false;}else{confirmNew=true;toast('Click "New park" again to confirm – this erases the current park');setTimeout(()=>confirmNew=false,4000);}};
+}
+let confirmNew=false;
+let toastT=null;
+function toast(msg){const t=$('toast');t.textContent=msg;t.classList.add('show');clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove('show'),3200);}
+function updateHud(){
+  $('s-cash').textContent=money(Math.round(G.cash));$('s-cash').style.color=G.cash<0?'var(--red)':'';$('s-guests').textContent=G.guests.length;$('s-rating').textContent=Math.round(G.rating);
+  $('s-day').textContent='Day '+G.day;const hrs=9+G.time/DAY_LEN*12,hh=Math.floor(hrs),mm=Math.floor((hrs-hh)*60);$('s-time').textContent=`${String(hh).padStart(2,'0')}:${String(mm).padStart(2,'0')}`;
+  $('goal').innerHTML=G.goalDone?`🏆 Scenario complete – park rating ${GOAL_RATING} reached!`:`Goal: rating <b>${Math.round(G.rating)}</b>/${GOAL_RATING} · guests <b>${G.guests.length}</b>/${GOAL_GUESTS}`;
+}
+
+/* ═══════════════════════════ INPUT ═══════════════════════════ */
+let mouse={x:0,y:0,down:false,btn:0,sx:0,sy:0,moved:false,pan:false,paint:false};
+const keys={};
+function hoverTile(sx,sy){const w=screenToWorld(sx,sy),x=Math.floor(w.x),y=Math.floor(w.y);return tile(x,y)?{x,y}:null;}
+function applyTool(hv,fromDrag){
+  const t=G.tool;if(!t||!hv)return;
+  if(t.kind==='path'){const tl=tile(hv.x,hv.y);if(tl.t!=='grass'||tl.o)return;if(G.cash<PATH_COST){if(!fromDrag)toast('Not enough cash');return;}tl.t='path';addCash(-PATH_COST);refreshPaths();return;}
+  if(t.kind==='coaster'){buildAdd(hv.x,hv.y);return;}
+  if(fromDrag)return;
+  if(t.kind==='demolish'){const tl=tile(hv.x,hv.y);
+    if(tl.o){const o=G.objs.get(tl.o);if(o.kind==='coaster'||o.kind==='ride'||o.kind==='shop'){G.sel={o};renderPanel();toast('Use the Demolish button in the panel to remove '+o.name);}else removeObj(o);}
+    else if(tl.t==='path'){tl.t='grass';refreshPaths();}return;}
+  if(t.kind==='ride'||t.kind==='shop'||t.kind==='scenery'){
+    const d=t.kind==='ride'?RIDES[t.type]:t.kind==='shop'?SHOPS[t.type]:SCENERY[t.type],n=t.kind==='ride'?d.size:(d.size||1);
+    if(!canPlace(hv.x,hv.y,n)){toast('Cannot build here');return;}if(G.cash<d.cost){toast('Not enough cash');return;}
+    const o=addObj(t.kind==='ride'?makeRide(t.type,hv.x,hv.y):t.kind==='shop'?makeShop(t.type,hv.x,hv.y):makeScenery(t.type,hv.x,hv.y));addCash(-d.cost);
+    if(t.kind!=='scenery'&&!entranceTiles(o).length)toast(d.name+' built – now connect it with a path!');
+    renderTabs();return;}
+  if(t.kind==='template'){const tt=templateTiles(hv.x,hv.y);if(!tt.every(q=>canPlace(q.x,q.y,1))){toast('Not enough free space (needs 7×4)');return;}
+    const cost=coasterCost(tt);if(G.cash<cost){toast('Not enough cash');return;}const o=addObj(makeCoaster(tt));addCash(-cost);G.sel={o};setTool(null);toast('🎢 '+o.name+' built!');return;}
+  if(t.kind==='inspect')inspectAt(mouse.x,mouse.y);
+}
+function inspectAt(sx,sy){
+  let best=null,bd=12*zoom;for(const g of G.guests){if(!g.visible||g.state==='ride')continue;const p=P(g.x,g.y);const d=Math.hypot(p[0]-sx,p[1]-sy+9*zoom);if(d<bd){bd=d;best=g;}}
+  if(best){G.sel={g:best};renderPanel();return;}
+  const hv=hoverTile(sx,sy);if(hv){const tl=tile(hv.x,hv.y);if(tl.o){G.sel={o:G.objs.get(tl.o)};renderPanel();return;}}
+  G.sel=null;renderPanel();
+}
+canvas.addEventListener('contextmenu',e=>e.preventDefault());
+canvas.addEventListener('mousedown',e=>{mouse.down=true;mouse.btn=e.button;mouse.sx=e.clientX;mouse.sy=e.clientY;mouse.moved=false;mouse.pan=e.button!==0;mouse.paint=false;
+  if(e.button===0&&G.tool&&(G.tool.kind==='path'||G.tool.kind==='coaster')){mouse.paint=true;applyTool(hoverTile(e.clientX,e.clientY),false);}});
+addEventListener('mousemove',e=>{const dx=e.clientX-mouse.x,dy=e.clientY-mouse.y;mouse.x=e.clientX;mouse.y=e.clientY;G.hover=hoverTile(e.clientX,e.clientY);
+  if(!mouse.down)return;if(Math.hypot(e.clientX-mouse.sx,e.clientY-mouse.sy)>5)mouse.moved=true;
+  if(mouse.paint){applyTool(G.hover,true);return;}
+  if(mouse.pan||(mouse.moved&&(!G.tool||G.tool.kind==='inspect'||G.tool.kind==='demolish'))){camx-=dx/zoom;camy-=dy/zoom;mouse.pan=true;}});
+addEventListener('mouseup',e=>{if(!mouse.down)return;mouse.down=false;
+  if(e.button===0&&!mouse.pan&&!mouse.paint&&!mouse.moved){if(e.target!==canvas)return;const hv=hoverTile(e.clientX,e.clientY);if(G.tool&&G.tool.kind!=='inspect')applyTool(hv,false);else inspectAt(e.clientX,e.clientY);}
+  mouse.pan=false;mouse.paint=false;});
+canvas.addEventListener('wheel',e=>{e.preventDefault();const f=e.deltaY<0?1.12:1/1.12,nz=clamp(zoom*f,0.45,2.6);
+  const w0=screenToWorld(e.clientX,e.clientY);zoom=nz;const w1=screenToWorld(e.clientX,e.clientY);camx-=isoX(w1.x,w1.y)-isoX(w0.x,w0.y);camy-=isoY(w1.x,w1.y,0)-isoY(w0.x,w0.y,0);},{passive:false});
+// touch: single finger = pan / tap
+let touch=null;
+canvas.addEventListener('touchstart',e=>{const t=e.touches[0];touch={x:t.clientX,y:t.clientY,sx:t.clientX,sy:t.clientY,moved:false};mouse.x=t.clientX;mouse.y=t.clientY;},{passive:true});
+canvas.addEventListener('touchmove',e=>{if(!touch)return;const t=e.touches[0];camx-=(t.clientX-touch.x)/zoom;camy-=(t.clientY-touch.y)/zoom;touch.x=t.clientX;touch.y=t.clientY;if(Math.hypot(t.clientX-touch.sx,t.clientY-touch.sy)>8)touch.moved=true;e.preventDefault();},{passive:false});
+canvas.addEventListener('touchend',e=>{if(!touch)return;if(!touch.moved){mouse.x=touch.sx;mouse.y=touch.sy;const hv=hoverTile(touch.sx,touch.sy);if(G.tool&&G.tool.kind!=='inspect')applyTool(hv,false);else inspectAt(touch.sx,touch.sy);}touch=null;});
+addEventListener('keydown',e=>{if(e.target.tagName==='INPUT')return;keys[e.key.toLowerCase()]=true;
+  if(e.key==='Escape'){if(G.build)buildCancel();else{setTool(null);G.sel=null;renderPanel();}$('help').classList.remove('show');}
+  else if(e.key===' '){e.preventDefault();setSpeed(G.paused?G.speed:0);}
+  else if(e.key==='1'||e.key==='2'||e.key==='3')setSpeed(+e.key);
+  else if(e.key.toLowerCase()==='h')$('help').classList.toggle('show');
+  else if(e.key==='Delete')setTool({kind:'demolish'});
+  else if(G.build){if(e.key.toLowerCase()==='q')buildHeight(-1);else if(e.key.toLowerCase()==='e')buildHeight(1);else if(e.key==='Backspace'){e.preventDefault();buildUndo();}else if(e.key==='Enter')buildFinish();}});
+addEventListener('keyup',e=>{keys[e.key.toLowerCase()]=false;});
+function setSpeed(s){if(s===0){G.paused=true;}else{G.paused=false;G.speed=s;}for(let i=0;i<4;i++)$('sp'+i).classList.toggle('on',G.paused?i===0:i===G.speed);}
+for(let i=0;i<4;i++)$('sp'+i).onclick=()=>setSpeed(i);
+$('b-help').onclick=()=>$('help').classList.toggle('show');$('b-help-close').onclick=()=>$('help').classList.remove('show');
+$('help').addEventListener('click',e=>{if(e.target===$('help'))$('help').classList.remove('show');});
+
+/* ═══════════════════════════ SAVE / LOAD ═══════════════════════════ */
+const SAVE_KEY='coaster-park-tycoon-v1';
+function save(silent){
+  try{const objs=[...G.objs.values()].map(o=>{const c={...o};delete c.curve;delete c.queue;delete c.rideList;delete c.train;return c;});
+    const guests=G.guests.map(g=>({...g,path:[],target:null,state:g.state==='leaving'?'leaving':'walk',visible:true,x:g.entTile&&g.state!=='walk'?g.entTile.x+.5:g.x,y:g.entTile&&g.state!=='walk'?g.entTile.y+.5:g.y}));
+    const data={cash:G.cash,day:G.day,time:G.time,clock:G.clock,entryFee:G.entryFee,rating:G.rating,totalGuests:G.totalGuests,earnedTotal:G.earnedTotal,earnedToday:G.earnedToday,spentToday:G.spentToday,dayGuests:G.dayGuests,goalDone:G.goalDone,nextId:G.nextId,
+      grid:G.grid.map(r=>r.map(t=>[t.t==='grass'?0:t.t==='path'?1:2,t.o,+t.v.toFixed(2)])),objs,guests,cam:{x:camx,y:camy,z:zoom}};
+    localStorage.setItem(SAVE_KEY,JSON.stringify(data));if(!silent)toast('Park saved');}catch(e){if(!silent)toast('Could not save: '+e.message);}
+}
+function load(){
+  let data;try{data=JSON.parse(localStorage.getItem(SAVE_KEY));}catch(e){return false;}if(!data)return false;
+  Object.assign(G,{cash:data.cash,day:data.day,time:data.time,clock:data.clock,entryFee:data.entryFee,rating:data.rating,totalGuests:data.totalGuests,earnedTotal:data.earnedTotal,earnedToday:data.earnedToday||0,spentToday:data.spentToday||0,dayGuests:data.dayGuests||0,goalDone:data.goalDone,nextId:data.nextId,tool:null,sel:null,build:null});
+  G.grid=data.grid.map(r=>r.map(c=>({t:c[0]===0?'grass':c[0]===1?'path':'entrance',o:c[1],joy:0,v:c[2]})));
+  for(let y=0;y<H;y++)for(let x=0;x<W;x++)if(G.grid[y][x].t==='entrance')ENTRY={x,y};
+  G.objs=new Map();for(const o of data.objs){if(o.kind==='ride'||o.kind==='coaster'){o.queue=[];o.rideList=[];o.state='idle';o.wait=0;o.broken=false;}
+    if(o.kind==='coaster'){o.train={s:0,v:0,state:'station',maxV:0,lapT:0};o.curve=buildCurve(o.tiles,true);o.idleT=20;}G.objs.set(o.id,o);}
+  G.guests=data.guests;refreshPaths();recalcJoy();
+  if(data.cam){camx=data.cam.x;camy=data.cam.y;zoom=data.cam.z;}
+  setTool(null);renderPanel();toast('Park loaded');return true;
+}
+function newGame(){
+  Object.assign(G,{cash:START_CASH,day:1,time:0,clock:0,paused:false,objs:new Map(),nextId:1,guests:[],rating:0,entryFee:5,totalGuests:0,earnedToday:0,spentToday:0,earnedTotal:0,dayGuests:0,tool:null,hover:null,sel:null,build:null,goalDone:false});
+  newGrid();camx=isoX(W/2,H/2)+40;camy=isoY(W/2,H/2,0)+20;zoom=Math.min(1.3,Math.max(0.6,cw/1400));setSpeed(1);setTool(null);renderPanel();
+}
+
+/* ═══════════════════════════ MAIN LOOP ═══════════════════════════ */
+let last=performance.now(),panelT=0,autosaveT=0;
+function frame(now){
+  const real=Math.min(0.05,(now-last)/1000);last=now;
+  const pan=260*real/zoom;if(keys['w']||keys['arrowup'])camy-=pan;if(keys['s']||keys['arrowdown'])camy+=pan;if(keys['a']||keys['arrowleft'])camx-=pan;if(keys['d']||keys['arrowright'])camx+=pan;
+  if(!G.paused){let dt=real*G.speed;while(dt>0){const h=Math.min(dt,0.05);dt-=h;update(h);}}
+  render();updateHud();
+  panelT+=real;if(panelT>0.5){panelT=0;if(!G.build)renderPanel();renderTabsIfCashChanged();}
+  autosaveT+=real;if(autosaveT>30){autosaveT=0;save(true);}
+  requestAnimationFrame(frame);
+}
+let lastCashBucket=null;
+function renderTabsIfCashChanged(){const b=[...TABS.flatMap(t=>t.items)].map(it=>it.c?G.cash>=it.c?1:0:2).join('');if(b!==lastCashBucket){lastCashBucket=b;renderTabs();}}
+newGame();
+if(!load()){$('help').classList.add('show');}
+renderTabs();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
