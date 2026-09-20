@@ -166,7 +166,9 @@
     }
     #store-close:active { transform: scale(.97); }
 
-    #inventory .n2 { color: #8BE28B; }
+    #inventory .n2 { color: #8BE28B; display: inline-block; }
+    #coin-count.bump { animation: coinbump .35s ease; }
+    @keyframes coinbump { 30% { transform: scale(1.6); color: #fff; } }
 
     #speech-bubble {
       position: fixed; z-index: 140; transform: translate(-50%, -100%);
@@ -395,6 +397,32 @@
     })
   );
   scene.add(sky);
+
+  // ── Drifting clouds ──
+  const clouds = [];
+  {
+    const cloudMat = new THREE.MeshStandardMaterial({ color: 0xFFFFFF, flatShading: true, roughness: 1 });
+    for (let i = 0; i < 8; i++) {
+      const c = new THREE.Group();
+      const puffs = 2 + Math.floor(Math.random() * 3);
+      for (let j = 0; j < puffs; j++) {
+        const w = 3 + Math.random() * 4;
+        const puff = new THREE.Mesh(new THREE.BoxGeometry(w, 1 + Math.random(), 2 + Math.random() * 2), cloudMat);
+        puff.position.set(j * 2.2 - puffs, Math.random() * 0.6, (Math.random() - 0.5) * 1.5);
+        c.add(puff);
+      }
+      c.position.set((Math.random() - 0.5) * 220, 17 + Math.random() * 9, (Math.random() - 0.5) * 220);
+      c.userData.speed = 0.5 + Math.random() * 0.8;
+      scene.add(c);
+      clouds.push(c);
+    }
+  }
+  function updateClouds(delta) {
+    for (const c of clouds) {
+      c.position.x += c.userData.speed * delta;
+      if (c.position.x > 130) c.position.x = -130;
+    }
+  }
 
   // ═══════════════════════════════════════════════
   //  CAMERAS — a static isometric intro shot that turns into first-person
@@ -690,14 +718,19 @@
     const hairMat  = new THREE.MeshStandardMaterial({ color: hair, roughness: 0.9 });
     const shoeMat  = new THREE.MeshStandardMaterial({ color: 0x3E2723, roughness: 0.5 });
 
-    [-0.1, 0.1].forEach(lx => { // shoes + legs
-      const shoe = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.1, 0.3), shoeMat);
-      shoe.position.set(lx, 0.05, 0.03);
-      shoe.castShadow = true;
+    const legPivots = []; // legs hang from hip pivots so they can swing while walking
+    [-0.1, 0.1].forEach(lx => {
+      const pivot = new THREE.Group();
+      pivot.position.set(lx, 0.7, 0);
       const leg = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.56, 0.17), pantsMat);
-      leg.position.set(lx, 0.38, 0);
+      leg.position.y = -0.32;
       leg.castShadow = true;
-      body.add(shoe, leg);
+      const shoe = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.1, 0.3), shoeMat);
+      shoe.position.set(0, -0.65, 0.03);
+      shoe.castShadow = true;
+      pivot.add(leg, shoe);
+      body.add(pivot);
+      legPivots.push(pivot);
     });
     const hips = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.16, 0.21), pantsMat);
     hips.position.y = 0.72;
@@ -767,9 +800,20 @@
 
     group.userData.armPivot = armPivots[1]; // the right arm — CUBEY waves with it
     group.userData.armPivots = armPivots;
+    group.userData.legPivots = legPivots;
     group.userData.body = body;
     group.userData.faceBits = faceBits;
     return group;
+  }
+
+  // Swing a person's legs and arms; phase 0 puts everything back at rest.
+  function animateWalk(person, phase, amp = 0.55) {
+    const ud = person.userData;
+    const sw = Math.sin(phase) * amp;
+    ud.legPivots[0].rotation.x = sw;
+    ud.legPivots[1].rotation.x = -sw;
+    ud.armPivots[0].rotation.x = -sw * 0.7;
+    ud.armPivots[1].rotation.x = sw * 0.7;
   }
 
   function makeCubey() { // CUBEY — that's you
@@ -1236,11 +1280,13 @@
         inv[it.resource] += 1;
         refreshInventory();
         toast(`${RESOURCES[it.resource].emoji} Picked up ${it.resource === 'egg' ? 'an egg' : it.resource}!`, true);
+        sfx('pickup');
       } else if (it.hatchAt && now > it.hatchAt) {
         scene.remove(it.mesh);
         groundItems.splice(i, 1);
         addAnimal('chicken', it.x, it.z); // eggs are chicken eggs — they hatch into chicks
         toast('🐣 An egg hatched — an extra chicken joined your island!', true);
+        sfx('hatch');
       }
     }
   }
@@ -1435,6 +1481,7 @@
         g.position.z += (dz / dist) * step;
         g.rotation.y = Math.atan2(dx, dz);
         g.position.y = LAND_Y + Math.abs(Math.sin(t * 10)) * 0.05;
+        animateWalk(g, t * 11);
         continue;
       }
 
@@ -1444,10 +1491,12 @@
         if (parts.length) {
           refreshInventory();
           toast(`🏠 Your worker brought home ${parts.join(' + ')}`, true);
+          sfx('pickup');
         }
         v.carried = {}; v.stops = 0;
         v.state = 'rest'; v.t0 = now;
         g.visible = false;
+        animateWalk(g, 0);
         continue;
       }
 
@@ -1777,7 +1826,7 @@
 
   function buyLandAt(dir) {
     const cost = landCost();
-    if (!canAfford(cost)) { toast(`You need ${costText(cost)} to buy this land`, false); return; }
+    if (!canAfford(cost)) { toast(`You need ${costText(cost)} to buy this land`, false); sfx('deny'); return; }
     payCost(cost);
     totalLandPurchases++;
     expansions[dir]++;
@@ -1805,6 +1854,7 @@
     else placeBuyButton(dir);
     refreshButtonSprites();
     refreshInventory();
+    sfx('buy');
     toast(`Land purchased for ${costText(cost)}!`, true);
   }
 
@@ -1870,6 +1920,59 @@
   }
   refreshInventory();
 
+  // ── Tiny synthesized sound effects (WebAudio — no files needed).
+  let audioCtx = null;
+  function sfx(kind) {
+    try {
+      audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      const t0 = audioCtx.currentTime;
+      const mk = (type, f0, f1, dur, vol, delay = 0) => {
+        const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+        o.type = type;
+        o.frequency.setValueAtTime(f0, t0 + delay);
+        o.frequency.exponentialRampToValueAtTime(Math.max(f1, 1), t0 + delay + dur);
+        g.gain.setValueAtTime(vol, t0 + delay);
+        g.gain.exponentialRampToValueAtTime(0.0001, t0 + delay + dur);
+        o.connect(g).connect(audioCtx.destination);
+        o.start(t0 + delay);
+        o.stop(t0 + delay + dur + 0.02);
+      };
+      if (kind === 'hit')         { mk('triangle', 180, 60, 0.12, 0.3); }
+      else if (kind === 'pickup') { mk('sine', 520, 900, 0.09, 0.2); }
+      else if (kind === 'sell')   { mk('square', 660, 660, 0.07, 0.1); mk('square', 880, 880, 0.1, 0.1, 0.08); }
+      else if (kind === 'buy')    { mk('triangle', 440, 440, 0.09, 0.16); mk('triangle', 554, 554, 0.09, 0.16, 0.09); mk('triangle', 659, 659, 0.16, 0.16, 0.18); }
+      else if (kind === 'deny')   { mk('sawtooth', 200, 130, 0.16, 0.1); }
+      else if (kind === 'click')  { mk('sine', 700, 480, 0.05, 0.12); }
+      else if (kind === 'hatch')  { mk('sine', 700, 1100, 0.12, 0.16); mk('sine', 900, 1400, 0.14, 0.16, 0.1); }
+    } catch (e) { /* no audio available — stay silent */ }
+  }
+
+  // little squash-and-stretch when something gets hit
+  const punches = []; // { group, t0 }
+  function punch(group) { punches.push({ group, t0: performance.now() }); }
+  function updatePunches() {
+    const now = performance.now();
+    for (let i = punches.length - 1; i >= 0; i--) {
+      const pn = punches[i];
+      const k = (now - pn.t0) / 220;
+      if (k >= 1) {
+        pn.group.scale.setScalar(1);
+        punches.splice(i, 1);
+      } else {
+        const w = Math.sin(k * Math.PI);
+        pn.group.scale.set(1 + w * 0.12, 1 - w * 0.15, 1 + w * 0.12);
+      }
+    }
+  }
+
+  const coinCountWrapEl = coinCountEl;
+  function bumpCoins() { // the coin number pops when money comes in
+    coinCountWrapEl.classList.remove('bump');
+    void coinCountWrapEl.offsetWidth; // restart the animation
+    coinCountWrapEl.classList.add('bump');
+  }
+
   let toastTimer;
   function toast(msg, ok) {
     clearTimeout(toastTimer);
@@ -1904,6 +2007,7 @@
 
   function toggleHammer() {
     if (phase !== 'fps') return;
+    sfx('click');
     hammerHeld = !hammerHeld;
     hammer.visible = hammerHeld;
     hammerBtnEl.classList.toggle('held', hammerHeld);
@@ -1921,6 +2025,7 @@
 
   function goHome() {
     if (phase !== 'fps') return;
+    sfx('click');
     fadeEl.classList.add('show');
     setTimeout(() => {
       backSpot = { x: player.position.x, z: player.position.z, yaw, pitch };
@@ -1937,6 +2042,7 @@
 
   function goBack() {
     if (phase !== 'fps' || !backSpot) return;
+    sfx('click');
     fadeEl.classList.add('show');
     setTimeout(() => {
       player.position.set(backSpot.x, LAND_Y, backSpot.z);
@@ -1964,7 +2070,7 @@
     fastBuyEl.classList.toggle('on', fastMode);
     fastBuyEl.textContent = fastMode ? '⚡ ON — tap to turn off' : 'Turn Fast Mode on (FREE 👑)';
   }
-  storeBtnEl.addEventListener('pointerdown', e => { e.preventDefault(); storePanelEl.classList.add('show'); });
+  storeBtnEl.addEventListener('pointerdown', e => { e.preventDefault(); sfx('click'); storePanelEl.classList.add('show'); });
   document.getElementById('store-close').addEventListener('pointerdown', e => { e.preventDefault(); storePanelEl.classList.remove('show'); });
   fastBuyEl.addEventListener('pointerdown', e => {
     e.preventDefault();
@@ -2109,6 +2215,7 @@
 
     if (def.tool === 'hammer' && !hammerHeld) {
       toast('Too hard to break by hand — take out your hammer 🔨', false);
+      sfx('deny');
       return;
     }
 
@@ -2118,6 +2225,7 @@
       const hv = beeHives.find(v => v.group === h.group);
       if (hv.honeyPct < HIVE_COLLECT_PCT) {
         toast(`🍯 The hive is only ${hv.honeyPct}% full — bees fill it from flowers (ready at ${HIVE_COLLECT_PCT}%)`, false);
+        sfx('deny');
         return;
       }
       const gained = hv.honeyPct >= 100 ? 2 : 1; // a completely full hive gives extra
@@ -2132,6 +2240,8 @@
       }
       inv.honey += gained;
       refreshInventory();
+      sfx('pickup');
+      punch(h.group);
       if (hammerHeld) hammerSwingT0 = performance.now();
       return;
     }
@@ -2142,6 +2252,8 @@
     const yieldN   = chopWood ? WOOD_PER_TREE : def.yield;
 
     if (hammerHeld) hammerSwingT0 = performance.now();
+    sfx('hit');
+    punch(h.group);
 
     h.ready = false;
     h.regrowAt = performance.now() + growMs(def.regrowMs);
@@ -2264,10 +2376,12 @@
       parts.push(`${n} ${n > 1 ? r.plural : key}`);
       inv[key] = 0;
     }
-    if (earned <= 0) { showMessage('Sorry, you have nothing to sell.'); return; }
+    if (earned <= 0) { showMessage('Sorry, you have nothing to sell.'); sfx('deny'); return; }
     cubeCoins += earned;
     refreshInventory();
     const bonus = shopMult() > 1 ? ` (Level ${shopLevel} shop bonus!)` : '';
+    sfx('sell');
+    bumpCoins();
     showMessage(`Sold ${parts.join(', ')} for ${earned} cubecoins!${bonus}`);
   }
 
@@ -2279,21 +2393,26 @@
       const paid = Math.round(r.price * shopMult());
       cubeCoins += paid;
       refreshInventory();
+      sfx('sell');
+      bumpCoins();
       showMessage(`Sold 1 ${key} for ${paid} cubecoins!`);
       return;
     }
+    sfx('deny');
     showMessage('Sorry, you have nothing in your hand.');
   }
 
   function buyHouse() {
     if (!canAfford(HOUSE_COST)) {
       showMessage(`Sorry, a worker house costs ${costText(HOUSE_COST)}.`);
+      sfx('deny');
       return;
     }
-    if (!buildHouse()) { showMessage('No room for a house — buy more land first!'); return; }
+    if (!buildHouse()) { showMessage('No room for a house — buy more land first!'); sfx('deny'); return; }
     payCost(HOUSE_COST);
     refreshInventory();
     refreshWorkersBtn();
+    sfx('buy');
     showMessage('A worker house was built! Your worker will pick up eggs, milk, and wool and bring them home to you.');
   }
 
@@ -2331,7 +2450,9 @@
       const ease = tt * tt * (3 - 2 * tt);
       if (shopState === 'walking_out') shopkeeper.position.lerpVectors(shopInsidePos, shopStandPos, ease);
       else shopkeeper.position.lerpVectors(shopStandPos, shopInsidePos, ease);
+      animateWalk(shopkeeper, tt * 13, 0.45);
       if (tt >= 1) {
+        animateWalk(shopkeeper, 0);
         if (shopState === 'walking_out') { shopState = 'out'; showPrompt(); }
         else { shopState = 'inside'; shopkeeper.visible = false; }
       }
@@ -2639,6 +2760,8 @@
       }
     }
 
+    updateClouds(delta);
+    updatePunches();
     // Keep the sky dome centered on the viewer — the island can outgrow it otherwise.
     sky.position.x = activeCamera.position.x;
     sky.position.z = activeCamera.position.z;
