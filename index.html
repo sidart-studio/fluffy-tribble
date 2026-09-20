@@ -844,7 +844,7 @@
   const cubey = makeCubey(); // cubey doubles as the player once first-person begins
   const cubeyPos = cellWorld(0, 1);
   cubey.position.set(cubeyPos.x, LAND_Y, cubeyPos.z);
-  cubey.rotation.y = -0.3; // his face (+Z) and waving arm (+X) both sit toward the camera by default
+  cubey.rotation.y = Math.PI / 4; // face square at the intro camera, which looks in from the (1,1,1) diagonal
   scene.add(cubey);
 
   const player = cubey; // clearer name for the movement code below
