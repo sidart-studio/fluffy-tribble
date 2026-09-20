@@ -23,6 +23,7 @@ h2{font-size:12px;text-transform:uppercase;letter-spacing:1px;color:var(--muted)
 h2:first-child{margin-top:0}
 small,.muted{color:var(--muted)}
 #app{display:grid;grid-template-rows:58px 1fr;height:100%}
+@media (max-width:900px){#main{grid-template-columns:1fr;grid-template-rows:auto 60vh auto;overflow-y:auto}aside{border:none;border-bottom:1px solid var(--line)}#wrap{min-height:60vh}}
 #hud{display:flex;align-items:center;gap:20px;padding:0 16px;background:var(--panel);border-bottom:1px solid var(--line)}
 #hud .stats{display:flex;gap:22px;flex:1;justify-content:center}
 .stat{display:flex;align-items:center;gap:8px}
@@ -129,7 +130,7 @@ kbd{background:var(--panel2);border:1px solid var(--line);border-radius:4px;padd
 </div>
 
 <script type="importmap">
-{ "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js", "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/" } }
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/" } }
 </script>
 <script type="module">
 import * as THREE from 'three';
