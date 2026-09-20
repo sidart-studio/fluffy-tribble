@@ -1,0 +1,1042 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Park Tycoon</title>
+<style>
+:root{
+  --bg:#11171f; --panel:#1a2331; --panel2:#243140; --panel3:#2d3d50; --line:rgba(255,255,255,.08);
+  --text:#e9eff6; --muted:#8ea1b6; --accent:#ffb347; --good:#5ad17a; --bad:#ff6b6b; --blue:#5aa9ff;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;font-size:14px;overflow:hidden}
+button{font:inherit;color:inherit;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:6px 10px;cursor:pointer;transition:background .12s,border-color .12s}
+button:hover{background:var(--panel3)}
+button.active{border-color:var(--accent);background:rgba(255,179,71,.16);color:var(--accent)}
+button:disabled{opacity:.4;cursor:not-allowed}
+button.danger{border-color:rgba(255,107,107,.4);color:var(--bad)}
+button.danger:hover{background:rgba(255,107,107,.15)}
+button.primary{border-color:rgba(90,169,255,.5);color:var(--blue)}
+h1{font-size:17px;letter-spacing:.3px;white-space:nowrap}
+h2{font-size:12px;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin:14px 0 8px}
+h2:first-child{margin-top:0}
+small,.muted{color:var(--muted)}
+#app{display:grid;grid-template-rows:58px 1fr;height:100%}
+#hud{display:flex;align-items:center;gap:20px;padding:0 16px;background:var(--panel);border-bottom:1px solid var(--line)}
+#hud .stats{display:flex;gap:22px;flex:1;justify-content:center}
+.stat{display:flex;align-items:center;gap:8px}
+.stat .ico{font-size:20px}
+.stat .val{font-size:18px;font-weight:700;line-height:1;font-variant-numeric:tabular-nums}
+.stat .lbl{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.6px}
+.val.neg{color:var(--bad)}
+#speed{display:flex;gap:4px}
+#speed button{padding:5px 9px;min-width:36px}
+#main{display:grid;grid-template-columns:262px 1fr 272px;min-height:0}
+aside{background:var(--panel);overflow-y:auto;padding:12px;border-right:1px solid var(--line)}
+#info{border-right:none;border-left:1px solid var(--line)}
+#tools{display:flex;gap:6px;margin-bottom:10px}
+#tools button{flex:1;padding:7px 4px;font-size:13px}
+#tabs{display:flex;gap:4px;margin-bottom:10px;flex-wrap:wrap}
+#tabs button{flex:1;padding:6px 4px;font-size:12px}
+.item{display:flex;align-items:center;gap:10px;width:100%;text-align:left;padding:7px 9px;margin-bottom:6px;border-radius:10px}
+.item .ico{font-size:22px;width:30px;text-align:center}
+.item .nm{font-weight:600;font-size:13px}
+.item .cs{font-size:11px;color:var(--muted)}
+.item .cost{margin-left:auto;font-weight:700;color:var(--accent);font-variant-numeric:tabular-nums;font-size:13px}
+.row{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:5px 0;border-bottom:1px dashed var(--line);font-size:13px}
+.row:last-child{border-bottom:none}
+.row b{font-variant-numeric:tabular-nums}
+.pm{display:flex;align-items:center;gap:6px}
+.pm button{padding:3px 9px}
+.bar{height:6px;background:var(--panel2);border-radius:3px;overflow:hidden;margin-top:4px}
+.bar i{display:block;height:100%;background:var(--good);border-radius:3px}
+.desc{font-size:12px;color:var(--muted);line-height:1.45;margin:6px 0 10px}
+.tip{font-size:12px;background:rgba(255,179,71,.09);border-left:3px solid var(--accent);padding:6px 8px;border-radius:0 8px 8px 0;margin-bottom:6px;line-height:1.4}
+.ms{display:flex;gap:8px;align-items:flex-start;padding:5px 0;border-bottom:1px dashed var(--line);font-size:12px}
+.ms .chk{width:18px;text-align:center}
+.ms.done{color:var(--good)}
+.ms.done .d{color:var(--muted)}
+.ms .d{color:var(--muted)}
+.btns{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.btns button{flex:1}
+#wrap{position:relative;display:flex;align-items:center;justify-content:center;background:#0d1219;overflow:hidden}
+canvas{display:block;image-rendering:auto;border-radius:6px;box-shadow:0 0 0 1px rgba(255,255,255,.06),0 20px 60px rgba(0,0,0,.5)}
+#toasts{position:absolute;left:50%;top:14px;transform:translateX(-50%);display:flex;flex-direction:column;gap:6px;pointer-events:none;z-index:5;width:min(520px,90%)}
+.toast{background:rgba(20,28,40,.92);border:1px solid var(--line);border-left:3px solid var(--blue);padding:8px 12px;border-radius:8px;font-size:13px;animation:tin .25s ease-out;box-shadow:0 8px 24px rgba(0,0,0,.4)}
+.toast.bad{border-left-color:var(--bad)}
+.toast.good{border-left-color:var(--good)}
+.toast.fade{opacity:0;transition:opacity .5s}
+@keyframes tin{from{transform:translateY(-8px);opacity:0}to{transform:none;opacity:1}}
+#overlay{position:absolute;inset:0;background:rgba(8,12,18,.78);display:flex;align-items:center;justify-content:center;z-index:10}
+#overlay.hidden{display:none}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:26px 30px;max-width:560px;width:92%;box-shadow:0 30px 80px rgba(0,0,0,.6)}
+.card h1{font-size:24px;margin-bottom:6px}
+.card p{color:var(--muted);line-height:1.55;margin:8px 0}
+.card ul{margin:10px 0 14px 18px;color:var(--text);line-height:1.6;font-size:13px}
+.card .btns button{padding:10px}
+kbd{background:var(--panel2);border:1px solid var(--line);border-radius:4px;padding:0 5px;font-size:11px;font-family:inherit}
+#hint{position:absolute;bottom:10px;left:50%;transform:translateX(-50%);font-size:12px;color:var(--muted);background:rgba(20,28,40,.8);padding:5px 12px;border-radius:20px;pointer-events:none;white-space:nowrap}
+</style>
+</head>
+<body>
+<div id="app">
+  <header id="hud">
+    <h1>🎡 Park Tycoon</h1>
+    <div class="stats">
+      <div class="stat"><span class="ico">💰</span><div><div class="val" id="h-cash">$0</div><div class="lbl">Cash</div></div></div>
+      <div class="stat"><span class="ico">🧍</span><div><div class="val" id="h-guests">0</div><div class="lbl">Guests</div></div></div>
+      <div class="stat"><span class="ico">⭐</span><div><div class="val" id="h-rating">0</div><div class="lbl" id="h-rating-lbl">Rating</div></div></div>
+      <div class="stat"><span class="ico">📅</span><div><div class="val" id="h-day">Day 1</div><div class="lbl" id="h-clock">09:00</div></div></div>
+    </div>
+    <div id="speed">
+      <button data-speed="0" title="Pause (Space)">⏸</button>
+      <button data-speed="1" title="Normal speed (1)">▶</button>
+      <button data-speed="2" title="Fast (2)">▶▶</button>
+      <button data-speed="4" title="Fastest (3)">▶▶▶</button>
+    </div>
+    <button id="help-btn" title="How to play">?</button>
+  </header>
+  <div id="main">
+    <aside id="build">
+      <div id="tools">
+        <button id="t-select" title="Select / inspect (Esc)">🖱️ Select</button>
+        <button id="t-path" title="Footpath (P)">🟫 Path</button>
+        <button id="t-bull" title="Bulldoze (B)">🚜 Remove</button>
+      </div>
+      <div id="tabs">
+        <button data-tab="ride">🎢 Rides</button>
+        <button data-tab="shop">🍔 Shops</button>
+        <button data-tab="scenery">🌳 Scenery</button>
+        <button data-tab="staff">👷 Staff</button>
+        <button data-tab="park">📊 Park</button>
+      </div>
+      <div id="tab-body"></div>
+    </aside>
+    <div id="wrap">
+      <canvas id="game"></canvas>
+      <div id="toasts"></div>
+      <div id="hint"></div>
+      <div id="overlay"></div>
+    </div>
+    <aside id="info"></aside>
+  </div>
+</div>
+
+<script>
+'use strict';
+// ───────────────────────── constants ─────────────────────────
+const W = 26, H = 16, T = 40, DAY_LEN = 90, MAX_GUESTS = 320;
+const GRASS = 0, PATH = 1, BUILD = 2;
+const ENTRANCE = { x: Math.floor(W / 2), y: H - 1 };
+const SAVE_KEY = 'parkTycoonSave_v1';
+const DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+const GUEST_SPEED = 1.7, STAFF_SPEED = 2.2;
+
+const DEFS = {
+  path:     { cat: 'path', name: 'Footpath', icon: '▦', w: 1, h: 1, cost: 20, desc: 'Guests only walk on paths. Click and drag to draw.' },
+  // rides
+  carousel: { cat: 'ride', name: 'Carousel', icon: '🎠', w: 2, h: 2, cost: 1500, upkeep: 12, price: 3, cap: 10, dur: 8, exc: 3, inten: 1, naus: 0, rel: 0.985, color: '#f4a7c7' },
+  teacups:  { cat: 'ride', name: 'Spinning Teacups', icon: '☕', w: 2, h: 2, cost: 2200, upkeep: 15, price: 4, cap: 12, dur: 10, exc: 4, inten: 2, naus: 3, rel: 0.98, color: '#9bd7f0' },
+  bumper:   { cat: 'ride', name: 'Bumper Cars', icon: '🚗', w: 3, h: 2, cost: 3000, upkeep: 20, price: 4, cap: 12, dur: 12, exc: 5, inten: 2, naus: 1, rel: 0.975, color: '#f7c56a' },
+  ferris:   { cat: 'ride', name: 'Ferris Wheel', icon: '🎡', w: 2, h: 2, cost: 4500, upkeep: 25, price: 5, cap: 16, dur: 16, exc: 6, inten: 2, naus: 0, rel: 0.985, color: '#b8a1f2' },
+  haunted:  { cat: 'ride', name: 'Haunted House', icon: '👻', w: 2, h: 2, cost: 3800, upkeep: 22, price: 5, cap: 12, dur: 14, exc: 6, inten: 3, naus: 1, rel: 0.98, color: '#8e94a8' },
+  flume:    { cat: 'ride', name: 'Log Flume', icon: '🛶', w: 3, h: 3, cost: 7000, upkeep: 35, price: 6, cap: 16, dur: 20, exc: 7, inten: 3, naus: 2, rel: 0.97, color: '#6fc3e8' },
+  drop:     { cat: 'ride', name: 'Drop Tower', icon: '🗼', w: 2, h: 2, cost: 9000, upkeep: 40, price: 7, cap: 12, dur: 10, exc: 8, inten: 5, naus: 4, rel: 0.96, color: '#ff8a65' },
+  coaster:  { cat: 'ride', name: 'Roller Coaster', icon: '🎢', w: 4, h: 3, cost: 16000, upkeep: 60, price: 9, cap: 24, dur: 22, exc: 10, inten: 5, naus: 3, rel: 0.95, color: '#ff6b6b' },
+  // shops
+  burger:   { cat: 'shop', name: 'Burger Stand', icon: '🍔', w: 1, h: 1, cost: 800, upkeep: 8, price: 5, need: 'hunger', color: '#f2b56b' },
+  icecream: { cat: 'shop', name: 'Ice Cream', icon: '🍦', w: 1, h: 1, cost: 700, upkeep: 7, price: 3, need: 'hunger', color: '#fbe1ee' },
+  drink:    { cat: 'shop', name: 'Drink Stand', icon: '🥤', w: 1, h: 1, cost: 600, upkeep: 6, price: 2.5, need: 'thirst', color: '#7fd1f5' },
+  restroom: { cat: 'shop', name: 'Restroom', icon: '🚻', w: 1, h: 1, cost: 900, upkeep: 10, price: 0.5, need: 'bladder', color: '#a5c8e8' },
+  souvenir: { cat: 'shop', name: 'Souvenir Shop', icon: '🎁', w: 2, h: 1, cost: 1400, upkeep: 10, price: 8, need: 'souvenir', color: '#c8a2f2' },
+  // scenery
+  tree:     { cat: 'scenery', name: 'Tree', icon: '🌳', w: 1, h: 1, cost: 60, beauty: 3, color: '#4e9a4a' },
+  flower:   { cat: 'scenery', name: 'Flower Bed', icon: '🌷', w: 1, h: 1, cost: 40, beauty: 2, color: '#7fbf6a' },
+  bench:    { cat: 'scenery', name: 'Bench', icon: '🪑', w: 1, h: 1, cost: 80, beauty: 1, rest: true, color: '#c9a26b' },
+  bin:      { cat: 'scenery', name: 'Trash Bin', icon: '🗑️', w: 1, h: 1, cost: 50, beauty: 0, bin: true, color: '#8c9aa8' },
+  lamp:     { cat: 'scenery', name: 'Lamp Post', icon: '💡', w: 1, h: 1, cost: 70, beauty: 1, color: '#d9d3b8' },
+  fountain: { cat: 'scenery', name: 'Fountain', icon: '⛲', w: 2, h: 2, cost: 900, beauty: 8, color: '#86c9e6' },
+  statue:   { cat: 'scenery', name: 'Statue', icon: '🗿', w: 1, h: 1, cost: 1200, beauty: 6, color: '#b9b9b9' },
+};
+const STAFF = {
+  janitor:     { name: 'Janitor', icon: '🧹', hire: 300, wage: 20, color: '#ff9f43', desc: 'Sweeps litter off paths.' },
+  mechanic:    { name: 'Mechanic', icon: '🔧', hire: 500, wage: 35, color: '#4aa3ff', desc: 'Repairs broken rides.' },
+  entertainer: { name: 'Entertainer', icon: '🤹', hire: 400, wage: 25, color: '#c56cf0', desc: 'Cheers up nearby guests.' },
+};
+const MILESTONES = [
+  { id: 'g10', name: 'Grand Opening', desc: 'Welcome 10 guests', cond: s => s.totalGuests >= 10, bonus: 500 },
+  { id: 'r3', name: 'Thrill Seeker', desc: 'Build 3 rides', cond: () => countCat('ride') >= 3, bonus: 1000 },
+  { id: 'rt500', name: 'Rising Star', desc: 'Reach a park rating of 500', cond: s => s.rating >= 500, bonus: 2000 },
+  { id: 'g100', name: 'Crowd Pleaser', desc: 'Have 100 guests in the park at once', cond: s => s.guests.length >= 100, bonus: 3000 },
+  { id: 'coaster', name: 'Coaster King', desc: 'Build a Roller Coaster', cond: () => hasKey('coaster'), bonus: 4000 },
+  { id: 'rt750', name: 'Destination Park', desc: 'Reach a park rating of 750', cond: s => s.rating >= 750, bonus: 5000 },
+  { id: 'e50k', name: 'Tycoon', desc: 'Earn $50,000 in total income', cond: s => s.totalEarned >= 50000, bonus: 5000 },
+  { id: 'g200', name: 'Packed House', desc: 'Have 200 guests in the park at once', cond: s => s.guests.length >= 200, bonus: 8000 },
+  { id: 'rt900', name: 'World Class', desc: 'Reach a park rating of 900', cond: s => s.rating >= 900, bonus: 10000 },
+];
+
+// ───────────────────────── helpers ─────────────────────────
+const $ = s => document.querySelector(s);
+const fmt = n => Math.round(Math.abs(n)).toLocaleString();
+const money = n => (n < 0 ? '-$' : '$') + fmt(n);
+const rand = (a, b) => a + Math.random() * (b - a);
+const randInt = (a, b) => Math.floor(rand(a, b + 1));
+const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+const inb = (x, y) => x >= 0 && y >= 0 && x < W && y < H;
+const K = (x, y) => y * W + x;
+const KX = k => k % W, KY = k => Math.floor(k / W);
+const EMOJI_FONT = '"Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji",sans-serif';
+
+function blankLedger() { return { tickets: 0, rides: 0, shops: 0, upkeep: 0, wages: 0, marketing: 0, build: 0, interest: 0, guestsIn: 0 }; }
+function countCat(cat) { let n = 0; for (const b of Object.values(S.buildings)) if (DEFS[b.key].cat === cat) n++; return n; }
+function hasKey(key) { return Object.values(S.buildings).some(b => b.key === key); }
+function ratingLabel(r) { return r < 200 ? 'Awful' : r < 350 ? 'Poor' : r < 500 ? 'Okay' : r < 650 ? 'Good' : r < 800 ? 'Great' : r < 900 ? 'Excellent' : 'Legendary'; }
+
+// ───────────────────────── state ─────────────────────────
+let S = null;
+let reach = new Set(), beauty = null, binMap = null;
+let tool = { kind: 'select', key: null }, hover = null, selected = null, dragging = false, lastDragKey = -1;
+let curTab = 'ride', spawnAcc = 0, secAcc = 0, gameOver = false, lastToastKey = {};
+
+function newState() {
+  const grid = [];
+  for (let y = 0; y < H; y++) { const row = []; for (let x = 0; x < W; x++) row.push({ t: GRASS, b: 0 }); grid.push(row); }
+  S = {
+    grid, buildings: {}, nextId: 1, guests: [], staff: [], litter: {},
+    cash: 25000, ticket: 10, time: 0, day: 1, speed: 1, paused: false, rating: 0, marketing: 0, loan: 0,
+    today: blankLedger(), yesterday: null, totalEarned: 0, totalGuests: 0, milestones: {}, peakGuests: 0,
+  };
+  for (let i = 0; i < 4; i++) S.grid[H - 1 - i][ENTRANCE.x].t = PATH;
+  spawnAcc = 0; secAcc = 0; gameOver = false; selected = null;
+  recomputeStatic();
+  computeRating();
+}
+
+function recomputeStatic() {
+  reach = new Set();
+  const q = [K(ENTRANCE.x, ENTRANCE.y)]; reach.add(q[0]); let qi = 0;
+  while (qi < q.length) {
+    const k = q[qi++], x = KX(k), y = KY(k);
+    for (const [dx, dy] of DIRS) {
+      const nx = x + dx, ny = y + dy;
+      if (!inb(nx, ny) || S.grid[ny][nx].t !== PATH) continue;
+      const nk = K(nx, ny); if (reach.has(nk)) continue; reach.add(nk); q.push(nk);
+    }
+  }
+  beauty = new Float32Array(W * H); binMap = new Uint8Array(W * H);
+  for (const b of Object.values(S.buildings)) {
+    const d = DEFS[b.key]; if (d.cat !== 'scenery') continue;
+    const cx = b.x + d.w / 2 - .5, cy = b.y + d.h / 2 - .5;
+    for (let y = Math.max(0, b.y - 4); y < Math.min(H, b.y + d.h + 4); y++)
+      for (let x = Math.max(0, b.x - 4); x < Math.min(W, b.x + d.w + 4); x++) {
+        const dist = Math.hypot(x - cx, y - cy);
+        if (d.beauty && dist <= 3.5) beauty[K(x, y)] += d.beauty * (1 - dist / 4);
+        if (d.bin && dist <= 2.5) binMap[K(x, y)] = 1;
+      }
+  }
+}
+
+// ───────────────────────── building ─────────────────────────
+function canPlace(key, x, y) {
+  const d = DEFS[key];
+  for (let j = 0; j < d.h; j++) for (let i = 0; i < d.w; i++) {
+    const tx = x + i, ty = y + j;
+    if (!inb(tx, ty) || S.grid[ty][tx].t !== GRASS) return false;
+  }
+  return true;
+}
+function place(key, x, y) {
+  const d = DEFS[key];
+  if (!canPlace(key, x, y)) {
+    if (!(key === 'path' && inb(x, y) && S.grid[y][x].t === PATH)) toastOnce('place', "Can't build there", 'bad');
+    return false;
+  }
+  if (S.cash < d.cost) { toastOnce('cash', 'Not enough cash', 'bad'); return false; }
+  S.cash -= d.cost; S.today.build += d.cost;
+  if (key === 'path') { S.grid[y][x].t = PATH; recomputeStatic(); return true; }
+  const id = S.nextId++;
+  const b = { id, key, x, y };
+  if (d.cat === 'ride') Object.assign(b, { price: d.price, open: true, broken: false, queue: [], riders: [], state: 'idle', timer: 0, wait: 0, ridesGiven: 0, income: 0, breakdowns: 0, fixing: 0, age: 0 });
+  if (d.cat === 'shop') Object.assign(b, { price: d.price, sold: 0, income: 0 });
+  S.buildings[id] = b;
+  for (let j = 0; j < d.h; j++) for (let i = 0; i < d.w; i++) { const c = S.grid[y + j][x + i]; c.t = BUILD; c.b = id; }
+  recomputeStatic();
+  if ((d.cat === 'ride' || d.cat === 'shop') && adjTiles(b).length === 0) toast(`${d.name} built, but guests can't reach it yet. Connect it with a path.`, 'bad');
+  return true;
+}
+function bulldoze(x, y) {
+  if (!inb(x, y)) return;
+  const c = S.grid[y][x];
+  if (c.t === PATH) {
+    if (x === ENTRANCE.x && y === ENTRANCE.y) { toastOnce('ent', "You can't remove the park entrance", 'bad'); return; }
+    c.t = GRASS; S.cash += 10; delete S.litter[K(x, y)]; recomputeStatic();
+  } else if (c.t === BUILD) removeBuilding(c.b);
+}
+function removeBuilding(id) {
+  const b = S.buildings[id]; if (!b) return;
+  const d = DEFS[b.key];
+  if (d.cat === 'ride') for (const g of [...b.queue, ...b.riders]) releaseGuest(g, b, -5);
+  for (let j = 0; j < d.h; j++) for (let i = 0; i < d.w; i++) { const c = S.grid[b.y + j][b.x + i]; c.t = GRASS; c.b = 0; }
+  delete S.buildings[id];
+  const refund = Math.round(d.cost * 0.5); S.cash += refund;
+  recomputeStatic();
+  if (selected === id) selected = null;
+  toast(`${d.name} demolished (refund ${money(refund)})`);
+}
+function adjTiles(b) {
+  const d = DEFS[b.key], out = [];
+  for (let i = 0; i < d.w; i++) { out.push({ x: b.x + i, y: b.y - 1 }, { x: b.x + i, y: b.y + d.h }); }
+  for (let j = 0; j < d.h; j++) { out.push({ x: b.x - 1, y: b.y + j }, { x: b.x + d.w, y: b.y + j }); }
+  return out.filter(p => inb(p.x, p.y) && S.grid[p.y][p.x].t === PATH && reach.has(K(p.x, p.y)));
+}
+
+// ───────────────────────── pathfinding ─────────────────────────
+function bfs(sx, sy, goals) {
+  const gk = new Set(goals.map(p => K(p.x, p.y)));
+  const sk = K(sx, sy);
+  if (gk.has(sk)) return [];
+  if (S.grid[sy][sx].t !== PATH) return null;
+  const prev = new Map([[sk, -1]]); const q = [sk]; let qi = 0;
+  while (qi < q.length) {
+    const k = q[qi++], x = KX(k), y = KY(k);
+    for (const [dx, dy] of DIRS) {
+      const nx = x + dx, ny = y + dy;
+      if (!inb(nx, ny) || S.grid[ny][nx].t !== PATH) continue;
+      const nk = K(nx, ny); if (prev.has(nk)) continue;
+      prev.set(nk, k);
+      if (gk.has(nk)) {
+        const path = []; let c = nk;
+        while (c !== sk) { path.push({ x: KX(c), y: KY(c) }); c = prev.get(c); }
+        return path.reverse();
+      }
+      q.push(nk);
+    }
+  }
+  return null;
+}
+function floodPick(sx, sy, maxDepth) {
+  if (S.grid[sy][sx].t !== PATH) return null;
+  const sk = K(sx, sy); const prev = new Map([[sk, -1]]); const depth = new Map([[sk, 0]]);
+  const q = [sk]; let qi = 0; const cands = [];
+  while (qi < q.length) {
+    const k = q[qi++], x = KX(k), y = KY(k), dd = depth.get(k);
+    if (dd >= maxDepth) continue;
+    for (const [dx, dy] of DIRS) {
+      const nx = x + dx, ny = y + dy;
+      if (!inb(nx, ny) || S.grid[ny][nx].t !== PATH) continue;
+      const nk = K(nx, ny); if (prev.has(nk)) continue;
+      prev.set(nk, k); depth.set(nk, dd + 1); q.push(nk); cands.push(nk);
+    }
+  }
+  if (!cands.length) return null;
+  let c = cands[randInt(0, cands.length - 1)]; const path = [];
+  while (c !== sk) { path.push({ x: KX(c), y: KY(c) }); c = prev.get(c); }
+  return path.reverse();
+}
+function nearestPathTile(x, y) {
+  let best = null, bd = 1e9;
+  for (const k of reach) { const d = Math.abs(KX(k) - x) + Math.abs(KY(k) - y); if (d < bd) { bd = d; best = k; } }
+  return best === null ? ENTRANCE : { x: KX(best), y: KY(best) };
+}
+function moveAlong(o, dt, spd) {
+  let dist = spd * T * dt;
+  while (dist > 0 && o.route.length) {
+    const n = o.route[0];
+    if (S.grid[n.y][n.x].t !== PATH) { o.route = []; break; }
+    const cx = (n.x + .5) * T, cy = (n.y + .5) * T, dx = cx - o.x, dy = cy - o.y, L = Math.hypot(dx, dy);
+    if (L <= dist) { o.x = cx; o.y = cy; o.tx = n.x; o.ty = n.y; o.route.shift(); dist -= L; }
+    else { o.x += dx / L * dist; o.y += dy / L * dist; dist = 0; }
+  }
+}
+function ensureOnPath(o) {
+  if (S.grid[o.ty][o.tx].t === PATH) return;
+  const p = nearestPathTile(o.tx, o.ty);
+  o.tx = p.x; o.ty = p.y; o.x = (p.x + .5) * T; o.y = (p.y + .5) * T; o.route = [];
+  if (o.state === 'walking') o.state = 'idle';
+}
+
+// ───────────────────────── guests ─────────────────────────
+function spawnGuest() {
+  const g = {
+    id: S.nextId++, x: (ENTRANCE.x + .5) * T, y: (ENTRANCE.y + .5) * T, tx: ENTRANCE.x, ty: ENTRANCE.y, route: [], state: 'idle',
+    happy: rand(55, 80), hunger: rand(10, 45), thirst: rand(10, 45), bladder: rand(0, 35), energy: rand(60, 100), nausea: 0,
+    cash: S.ticket + rand(30, 110), pref: randInt(1, 5), ridden: {}, souvenir: false, target: null, intent: 'wander',
+    think: rand(0.2, 1.5), timeIn: 0, stay: rand(180, 400), hue: randInt(0, 359), ox: rand(-11, 11), oy: rand(-11, 11), litterTimer: 0, timer: 0,
+  };
+  g.cash -= S.ticket; S.cash += S.ticket; S.today.tickets += S.ticket; S.totalGuests++; S.today.guestsIn++;
+  S.guests.push(g);
+}
+function removeGuest(g) {
+  const i = S.guests.indexOf(g); if (i >= 0) S.guests.splice(i, 1);
+}
+function releaseGuest(g, b, dh) {
+  g.state = 'idle'; g.happy = clamp(g.happy + dh, 0, 100); g.think = rand(0.5, 1.5); g.target = null;
+  const adj = adjTiles(b);
+  if (adj.length) { const p = adj[randInt(0, adj.length - 1)]; g.tx = p.x; g.ty = p.y; g.x = (p.x + .5) * T; g.y = (p.y + .5) * T; }
+  else ensureOnPath(g);
+}
+function updateGuest(g, dt) {
+  g.timeIn += dt;
+  g.hunger = clamp(g.hunger + dt * 0.9, 0, 100); g.thirst = clamp(g.thirst + dt * 1.15, 0, 100);
+  g.bladder = clamp(g.bladder + dt * 0.7, 0, 100); g.energy = clamp(g.energy - dt * 0.45, 0, 100);
+  g.nausea = Math.max(0, g.nausea - dt * 1.5);
+  let dh = -0.16;
+  if (g.hunger > 75) dh -= 0.6; if (g.thirst > 75) dh -= 0.7; if (g.bladder > 80) dh -= 0.9;
+  if (g.energy < 20) dh -= 0.4; if (g.nausea > 60) dh -= 1.0;
+  const k = K(g.tx, g.ty);
+  dh += Math.min(beauty[k], 10) * 0.09;
+  const lit = S.litter[k] || 0; dh -= Math.min(lit, 3) * 0.25;
+  g.happy = clamp(g.happy + dh * dt, 0, 100);
+  if (g.litterTimer > 0) {
+    g.litterTimer -= dt;
+    if (g.litterTimer <= 0 && (g.state === 'idle' || g.state === 'walking')) {
+      if (!binMap[k] && Math.random() < 0.4 && S.grid[g.ty][g.tx].t === PATH) S.litter[k] = (S.litter[k] || 0) + 1;
+    }
+  }
+  if (g.state === 'queued' || g.state === 'riding') return;
+  ensureOnPath(g);
+  if (g.state === 'sitting') { g.timer -= dt; g.energy = clamp(g.energy + dt * 9, 0, 100); if (g.timer <= 0) { g.state = 'idle'; g.think = 0.3; } return; }
+  if (g.state === 'walking') { moveAlong(g, dt, GUEST_SPEED); if (!g.route.length) arrive(g); return; }
+  g.think -= dt; if (g.think > 0) return; g.think = rand(1, 3);
+  decide(g);
+}
+function goTo(g, goals, intent, target) {
+  if (!goals.length) return false;
+  const route = bfs(g.tx, g.ty, goals);
+  if (!route) return false;
+  g.route = route; g.intent = intent; g.target = target;
+  if (!route.length) { g.state = 'walking'; arrive(g); } else g.state = 'walking';
+  return true;
+}
+function decide(g) {
+  const wantLeave = g.happy < 12 || (g.cash < 2 && (g.hunger > 70 || g.thirst > 70)) || g.timeIn > g.stay;
+  if (wantLeave && goTo(g, [ENTRANCE], 'leave', null)) return;
+  const needs = [];
+  if (g.bladder > 62) needs.push(['bladder', g.bladder + 5]);
+  if (g.thirst > 58) needs.push(['thirst', g.thirst]);
+  if (g.hunger > 58) needs.push(['hunger', g.hunger]);
+  if (g.energy < 30) needs.push(['rest', 100 - g.energy]);
+  needs.sort((a, b) => b[1] - a[1]);
+  for (const [need] of needs) if (seekNeed(g, need)) return;
+  if (g.nausea < 55 && Math.random() < 0.8 && seekRide(g)) return;
+  if (!g.souvenir && g.cash > 20 && Math.random() < 0.12 && seekNeed(g, 'souvenir')) return;
+  wander(g);
+}
+function seekNeed(g, need) {
+  let best = null, bs = 1e9, bAdj = null;
+  for (const b of Object.values(S.buildings)) {
+    const d = DEFS[b.key];
+    if (need === 'rest') { if (!d.rest) continue; } else { if (d.cat !== 'shop' || d.need !== need) continue; if (b.price > g.cash) continue; }
+    const adj = adjTiles(b); if (!adj.length) continue;
+    const dist = Math.abs(b.x - g.tx) + Math.abs(b.y - g.ty) + rand(0, 4);
+    if (dist < bs) { bs = dist; best = b; bAdj = adj; }
+  }
+  if (!best) return false;
+  return goTo(g, bAdj, need, best.id);
+}
+function seekRide(g) {
+  let best = null, bs = -1e9, bAdj = null;
+  for (const b of Object.values(S.buildings)) {
+    const d = DEFS[b.key]; if (d.cat !== 'ride' || !b.open || b.broken) continue;
+    if (d.inten > g.pref + 1 || d.inten < g.pref - 3) continue;
+    if (b.price > g.cash) continue;
+    if (g.ridden[b.id] !== undefined && S.time - g.ridden[b.id] < 100) continue;
+    if (b.queue.length >= d.cap * 1.5) continue;
+    const adj = adjTiles(b); if (!adj.length) continue;
+    const dist = Math.abs(b.x - g.tx) + Math.abs(b.y - g.ty);
+    const score = d.exc * 2 + rand(0, 5) - dist * 0.25 - (b.queue.length / d.cap) * 3 - Math.max(0, b.price - d.price) * 1.2;
+    if (score > bs) { bs = score; best = b; bAdj = adj; }
+  }
+  if (!best) return false;
+  return goTo(g, bAdj, 'ride', best.id);
+}
+function wander(g) {
+  const route = floodPick(g.tx, g.ty, 7);
+  if (route && route.length) { g.route = route; g.state = 'walking'; g.intent = 'wander'; g.target = null; }
+}
+function arrive(g) {
+  g.state = 'idle';
+  const b = S.buildings[g.target];
+  switch (g.intent) {
+    case 'leave': removeGuest(g); return;
+    case 'ride': {
+      if (!b || b.broken || !b.open) { g.happy = clamp(g.happy - 3, 0, 100); break; }
+      if (b.queue.length >= DEFS[b.key].cap * 2) { g.happy = clamp(g.happy - 2, 0, 100); break; }
+      b.queue.push(g); g.state = 'queued'; break;
+    }
+    case 'hunger': case 'thirst': case 'bladder': case 'souvenir': if (b) buy(g, b); break;
+    case 'rest': if (b) { g.state = 'sitting'; g.timer = rand(6, 12); g.happy = clamp(g.happy + 3, 0, 100); } break;
+    default: break;
+  }
+  g.target = null; g.think = rand(0.4, 1.8);
+}
+function buy(g, b) {
+  const d = DEFS[b.key];
+  if (g.cash < b.price) { g.happy = clamp(g.happy - 2, 0, 100); return; }
+  g.cash -= b.price; S.cash += b.price; S.today.shops += b.price; b.sold++; b.income += b.price;
+  const over = Math.max(0, (b.price - d.price) / d.price);
+  let gain = 0;
+  switch (d.need) {
+    case 'hunger': g.hunger = Math.max(0, g.hunger - 75); gain = 6; g.litterTimer = binMap[K(g.tx, g.ty)] ? 0 : rand(6, 18); break;
+    case 'thirst': g.thirst = Math.max(0, g.thirst - 75); gain = 5; g.litterTimer = binMap[K(g.tx, g.ty)] ? 0 : rand(6, 18); break;
+    case 'bladder': g.bladder = 0; gain = 4; break;
+    case 'souvenir': g.souvenir = true; gain = 12; break;
+  }
+  g.happy = clamp(g.happy + gain - over * 8, 0, 100);
+}
+
+// ───────────────────────── rides ─────────────────────────
+function updateRide(b, dt) {
+  const d = DEFS[b.key];
+  b.age += dt;
+  if (b.broken) return;
+  if (b.state === 'running') {
+    b.timer -= dt;
+    if (b.timer <= 0) finishRide(b);
+  } else if (b.open && b.queue.length > 0) {
+    b.wait += dt;
+    if (b.queue.length >= d.cap || b.wait >= 4) {
+      const boarding = b.queue.splice(0, d.cap);
+      b.riders = [];
+      for (const g of boarding) {
+        if (g.cash < b.price) { releaseGuest(g, b, -2); continue; }
+        g.cash -= b.price; S.cash += b.price; S.today.rides += b.price; b.income += b.price;
+        g.state = 'riding'; b.riders.push(g);
+      }
+      if (b.riders.length) { b.state = 'running'; b.timer = d.dur; }
+      b.wait = 0;
+    }
+  }
+  if (b.open && Math.random() < (1 - d.rel) * dt * 0.09 * (1 + b.age / 900)) breakDown(b);
+}
+function finishRide(b) {
+  const d = DEFS[b.key];
+  for (const g of b.riders) {
+    const tooIntense = Math.max(0, d.inten - g.pref - 1) * 8;
+    const over = Math.max(0, (b.price - d.price) / d.price) * 6;
+    g.nausea = clamp(g.nausea + d.naus * 9, 0, 100);
+    g.energy = clamp(g.energy - 4, 0, 100);
+    g.ridden[b.id] = S.time;
+    releaseGuest(g, b, d.exc * 3.5 - tooIntense - over);
+  }
+  b.ridesGiven += b.riders.length; b.riders = []; b.state = 'idle';
+}
+function breakDown(b) {
+  const d = DEFS[b.key];
+  b.broken = true; b.breakdowns++; b.state = 'idle'; b.timer = 0; b.wait = 0;
+  for (const g of [...b.queue, ...b.riders]) releaseGuest(g, b, -8);
+  b.queue = []; b.riders = [];
+  toast(`${d.icon} ${d.name} has broken down!` + (S.staff.some(s => s.type === 'mechanic') ? '' : ' Hire a mechanic to repair it.'), 'bad');
+}
+
+// ───────────────────────── staff ─────────────────────────
+function hireStaff(type) {
+  const d = STAFF[type];
+  if (S.cash < d.hire) { toastOnce('cash', 'Not enough cash', 'bad'); return; }
+  S.cash -= d.hire; S.today.build += d.hire;
+  S.staff.push({ id: S.nextId++, type, x: (ENTRANCE.x + .5) * T, y: (ENTRANCE.y + .5) * T, tx: ENTRANCE.x, ty: ENTRANCE.y, route: [], state: 'idle', timer: 0, target: null, think: 0, done: 0 });
+  toast(`${d.icon} ${d.name} hired`, 'good');
+}
+function fireStaff(id) {
+  const i = S.staff.findIndex(s => s.id === id); if (i < 0) return;
+  const s = S.staff[i];
+  for (const b of Object.values(S.buildings)) if (b.fixing === s.id) b.fixing = 0;
+  S.staff.splice(i, 1);
+}
+function updateStaff(s, dt) {
+  ensureOnPath(s);
+  if (s.type === 'entertainer') {
+    for (const g of S.guests) {
+      if (g.state === 'queued' || g.state === 'riding') continue;
+      if (Math.abs(g.x - s.x) < T * 2.2 && Math.abs(g.y - s.y) < T * 2.2) g.happy = clamp(g.happy + dt * 0.9, 0, 100);
+    }
+  }
+  if (s.state === 'working') {
+    s.timer -= dt;
+    if (s.timer <= 0) {
+      if (s.type === 'janitor') { delete S.litter[s.target]; s.done++; }
+      else if (s.type === 'mechanic') { const b = S.buildings[s.target]; if (b) { b.broken = false; b.fixing = 0; s.done++; toast(`🔧 ${DEFS[b.key].name} repaired`, 'good'); } }
+      s.state = 'idle'; s.target = null; s.think = 0.3;
+    }
+    return;
+  }
+  if (s.state === 'walking') {
+    moveAlong(s, dt, STAFF_SPEED);
+    if (!s.route.length) {
+      s.state = 'idle';
+      if (s.type === 'janitor' && s.target !== null && S.litter[s.target]) { s.state = 'working'; s.timer = 1.0; }
+      else if (s.type === 'mechanic' && s.target !== null) { const b = S.buildings[s.target]; if (b && b.broken) { s.state = 'working'; s.timer = 7; } else { if (b) b.fixing = 0; s.target = null; } }
+      else s.target = null;
+    }
+    return;
+  }
+  s.think -= dt; if (s.think > 0) return; s.think = rand(0.8, 2);
+  if (s.type === 'janitor') {
+    const keys = Object.keys(S.litter).map(Number).filter(k => reach.has(k));
+    if (keys.length) {
+      keys.sort((a, b) => (Math.abs(KX(a) - s.tx) + Math.abs(KY(a) - s.ty)) - (Math.abs(KX(b) - s.tx) + Math.abs(KY(b) - s.ty)));
+      const k = keys[0];
+      const route = bfs(s.tx, s.ty, [{ x: KX(k), y: KY(k) }]);
+      if (route) { s.route = route; s.target = k; s.state = 'walking'; if (!route.length) { s.state = 'working'; s.timer = 1.0; } return; }
+    }
+  } else if (s.type === 'mechanic') {
+    const broken = Object.values(S.buildings).filter(b => b.broken && !b.fixing);
+    broken.sort((a, b) => (Math.abs(a.x - s.tx) + Math.abs(a.y - s.ty)) - (Math.abs(b.x - s.tx) + Math.abs(b.y - s.ty)));
+    for (const b of broken) {
+      const adj = adjTiles(b); if (!adj.length) continue;
+      const route = bfs(s.tx, s.ty, adj);
+      if (route) { b.fixing = s.id; s.route = route; s.target = b.id; s.state = 'walking'; if (!route.length) { s.state = 'working'; s.timer = 7; } return; }
+    }
+  }
+  const route = floodPick(s.tx, s.ty, 9);
+  if (route && route.length) { s.route = route; s.state = 'walking'; s.target = null; }
+}
+
+// ───────────────────────── economy & park ─────────────────────────
+function spawnRate() {
+  const maxTicket = 8 + S.rating / 18;
+  const pf = clamp(1.15 - S.ticket / maxTicket, 0.02, 1.15);
+  const base = 0.22 + (S.rating / 1000) * 1.7;
+  const mk = S.marketing > 0 ? 1.7 : 1;
+  const crowd = S.guests.length >= MAX_GUESTS ? 0 : 1;
+  const tod = (S.time % DAY_LEN) / DAY_LEN;
+  const todF = tod > 0.8 ? (1 - tod) / 0.2 : 1;
+  const openRides = Object.values(S.buildings).filter(b => DEFS[b.key].cat === 'ride' && b.open && !b.broken).length;
+  const rideF = openRides === 0 ? 0.35 : 1;
+  return base * pf * mk * crowd * todF * rideF;
+}
+function computeRating() {
+  const gs = S.guests;
+  const avgH = gs.length ? gs.reduce((a, g) => a + g.happy, 0) / gs.length : 60;
+  let rideScore = 0, broken = 0, scen = 0, shops = 0, unreachable = 0;
+  for (const b of Object.values(S.buildings)) {
+    const d = DEFS[b.key];
+    if (d.cat === 'ride') { if (b.broken) broken++; else if (b.open) rideScore += d.exc * 14; if (!adjTiles(b).length) unreachable++; }
+    else if (d.cat === 'scenery') scen += d.beauty;
+    else if (d.cat === 'shop') shops++;
+  }
+  const litterN = Object.values(S.litter).reduce((a, v) => a + v, 0);
+  const r = avgH * 4 + Math.min(rideScore, 350) + Math.min(scen * 2.2, 150) + Math.min(shops * 10, 80) - Math.min(litterN, 40) * 4 - broken * 35 - unreachable * 20;
+  S.rating = clamp(Math.round(r), 0, 1000);
+}
+function endDay() {
+  let upkeep = 0, wages = 0;
+  for (const b of Object.values(S.buildings)) upkeep += DEFS[b.key].upkeep || 0;
+  for (const s of S.staff) wages += STAFF[s.type].wage;
+  S.cash -= upkeep + wages; S.today.upkeep = upkeep; S.today.wages = wages;
+  if (S.loan > 0) { const interest = Math.round(S.loan * 0.01); S.cash -= interest; S.today.interest = interest; }
+  if (S.marketing > 0) S.marketing--;
+  const t = S.today;
+  const income = t.tickets + t.rides + t.shops, expenses = t.upkeep + t.wages + t.marketing + t.build + t.interest;
+  S.totalEarned += income;
+  S.yesterday = t; S.today = blankLedger(); S.day++;
+  // some long-staying guests head home overnight
+  for (const g of [...S.guests]) if (g.timeIn > 200 && Math.random() < 0.6 && g.state !== 'queued' && g.state !== 'riding') removeGuest(g);
+  toast(`📅 Day ${S.day - 1} closed · income ${money(income)} · expenses ${money(expenses)} · net ${money(income - expenses)}`, income - expenses >= 0 ? 'good' : 'bad');
+  save(true);
+  if (S.cash < -15000) doGameOver();
+}
+function checkMilestones() {
+  for (const m of MILESTONES) {
+    if (S.milestones[m.id]) continue;
+    if (m.cond(S)) { S.milestones[m.id] = S.day; S.cash += m.bonus; toast(`🏆 Milestone: ${m.name} — ${m.desc}. Bonus ${money(m.bonus)}!`, 'good'); }
+  }
+}
+function doGameOver() {
+  gameOver = true;
+  showOverlay(`<h1>💸 Bankrupt</h1><p>The bank has foreclosed on your park after your debt passed $15,000. You lasted <b>${S.day - 1}</b> days and welcomed <b>${fmt(S.totalGuests)}</b> guests.</p><div class="btns"><button id="ov-new" class="primary">Start a new park</button></div>`);
+  $('#ov-new').onclick = () => { localStorage.removeItem(SAVE_KEY); newState(); hideOverlay(); renderTab(); };
+}
+
+// ───────────────────────── save / load ─────────────────────────
+function serialize() {
+  const o = { ...S, buildings: {}, guests: S.guests.map(g => ({ ...g, route: [] })), staff: S.staff.map(s => ({ ...s, route: [] })) };
+  for (const [id, b] of Object.entries(S.buildings)) {
+    const c = { ...b };
+    if (b.queue) { c.queue = b.queue.map(g => g.id); c.riders = b.riders.map(g => g.id); }
+    o.buildings[id] = c;
+  }
+  return JSON.stringify(o);
+}
+function save(silent) {
+  try { localStorage.setItem(SAVE_KEY, serialize()); if (!silent) toast('💾 Park saved', 'good'); }
+  catch (e) { if (!silent) toast('Could not save (storage unavailable)', 'bad'); }
+}
+function load() {
+  let raw = null;
+  try { raw = localStorage.getItem(SAVE_KEY); } catch (e) { return false; }
+  if (!raw) return false;
+  try {
+    const o = JSON.parse(raw);
+    const byId = new Map(o.guests.map(g => [g.id, g]));
+    for (const b of Object.values(o.buildings)) {
+      if (b.queue) { b.queue = b.queue.map(id => byId.get(id)).filter(Boolean); b.riders = b.riders.map(id => byId.get(id)).filter(Boolean); }
+      if (b.fixing) b.fixing = 0;
+    }
+    for (const g of o.guests) if (g.state === 'walking') g.state = 'idle';
+    for (const s of o.staff) if (s.state === 'walking' || s.state === 'working') { s.state = 'idle'; s.target = null; }
+    S = o; S.paused = true; gameOver = false; selected = null; spawnAcc = 0;
+    recomputeStatic(); computeRating();
+    return true;
+  } catch (e) { console.error(e); return false; }
+}
+
+// ───────────────────────── simulation loop ─────────────────────────
+function tick(dt) {
+  S.time += dt;
+  if (Math.floor(S.time / DAY_LEN) + 1 > S.day) endDay();
+  if (gameOver) return;
+  spawnAcc += spawnRate() * dt;
+  while (spawnAcc >= 1) { spawnAcc -= 1; if (S.guests.length < MAX_GUESTS) spawnGuest(); }
+  for (const g of [...S.guests]) updateGuest(g, dt);
+  for (const b of Object.values(S.buildings)) if (b.queue) updateRide(b, dt);
+  for (const s of S.staff) updateStaff(s, dt);
+  secAcc += dt;
+  if (secAcc >= 1) {
+    secAcc -= 1;
+    computeRating(); checkMilestones();
+    if (S.guests.length > S.peakGuests) S.peakGuests = S.guests.length;
+    renderInfo(); if (curTab === 'park' || curTab === 'staff') renderTab();
+  }
+}
+let last = performance.now(), acc = 0;
+function frame(now) {
+  const dt = Math.min(0.1, (now - last) / 1000); last = now;
+  if (!S.paused && !gameOver) {
+    acc += dt * S.speed; const step = 1 / 30; let n = 0;
+    while (acc >= step && n < 24) { tick(step); acc -= step; n++; }
+    if (n >= 24) acc = 0;
+  }
+  render(); updateHUD();
+  requestAnimationFrame(frame);
+}
+
+// ───────────────────────── rendering ─────────────────────────
+const canvas = $('#game'), ctx = canvas.getContext('2d');
+canvas.width = W * T; canvas.height = H * T;
+function fitCanvas() {
+  const wrap = $('#wrap'), pad = 24;
+  const sw = wrap.clientWidth - pad, sh = wrap.clientHeight - pad;
+  const sc = Math.min(sw / canvas.width, sh / canvas.height, 1.6);
+  canvas.style.width = Math.floor(canvas.width * sc) + 'px'; canvas.style.height = Math.floor(canvas.height * sc) + 'px';
+}
+window.addEventListener('resize', fitCanvas);
+
+function rr(x, y, w, h, r) { ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); }
+function emoji(txt, x, y, size) { ctx.font = `${size}px ${EMOJI_FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(txt, x, y + size * 0.06); }
+function hash(k) { let h = (k * 2654435761) >>> 0; h ^= h >>> 13; h = (h * 1274126177) >>> 0; return (h >>> 0) / 4294967296; }
+
+function render() {
+  const g = S.grid;
+  // grass
+  ctx.fillStyle = '#5fae4a'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = 'rgba(255,255,255,.045)';
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if ((x + y) & 1) ctx.fillRect(x * T, y * T, T, T);
+  // paths
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    if (g[y][x].t !== PATH) continue;
+    ctx.fillStyle = reach.has(K(x, y)) ? '#d9cba4' : '#c4b799';
+    ctx.fillRect(x * T, y * T, T, T);
+    ctx.strokeStyle = 'rgba(90,70,40,.18)'; ctx.lineWidth = 1;
+    for (const [dx, dy] of DIRS) {
+      const nx = x + dx, ny = y + dy;
+      if (inb(nx, ny) && g[ny][nx].t === PATH) continue;
+      ctx.beginPath();
+      if (dx === 1) { ctx.moveTo((x + 1) * T - .5, y * T); ctx.lineTo((x + 1) * T - .5, (y + 1) * T); }
+      if (dx === -1) { ctx.moveTo(x * T + .5, y * T); ctx.lineTo(x * T + .5, (y + 1) * T); }
+      if (dy === 1) { ctx.moveTo(x * T, (y + 1) * T - .5); ctx.lineTo((x + 1) * T, (y + 1) * T - .5); }
+      if (dy === -1) { ctx.moveTo(x * T, y * T + .5); ctx.lineTo((x + 1) * T, y * T + .5); }
+      ctx.stroke();
+    }
+  }
+  // litter
+  for (const [ks, n] of Object.entries(S.litter)) {
+    const k = +ks, x = KX(k), y = KY(k);
+    for (let i = 0; i < Math.min(n, 5); i++) {
+      const px = x * T + 6 + hash(k * 7 + i) * (T - 12), py = y * T + 6 + hash(k * 13 + i + 99) * (T - 12);
+      ctx.fillStyle = i % 2 ? '#8b5a2b' : '#c94f4f'; ctx.beginPath(); ctx.arc(px, py, 2.6, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+  // entrance
+  ctx.fillStyle = 'rgba(200,60,60,.35)'; ctx.fillRect(ENTRANCE.x * T, ENTRANCE.y * T, T, T);
+  emoji('🎪', (ENTRANCE.x + .5) * T, (ENTRANCE.y + .45) * T, 26);
+  // buildings
+  for (const b of Object.values(S.buildings)) {
+    const d = DEFS[b.key], px = b.x * T, py = b.y * T, pw = d.w * T, ph = d.h * T;
+    if (d.cat === 'scenery') {
+      if (d.w > 1 || d.h > 1) { ctx.fillStyle = d.color; rr(px + 3, py + 3, pw - 6, ph - 6, 10); ctx.fill(); }
+      emoji(d.icon, px + pw / 2, py + ph / 2, Math.min(pw, ph) * 0.7);
+      continue;
+    }
+    ctx.fillStyle = d.color; rr(px + 2, py + 2, pw - 4, ph - 4, 9); ctx.fill();
+    ctx.strokeStyle = 'rgba(0,0,0,.28)'; ctx.lineWidth = 2; ctx.stroke();
+    if (d.cat === 'ride' && b.state === 'running') {
+      ctx.save(); ctx.translate(px + pw / 2, py + ph / 2); ctx.rotate(S.time * 2.2);
+      ctx.strokeStyle = 'rgba(255,255,255,.85)'; ctx.setLineDash([8, 7]); ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.arc(0, 0, Math.min(pw, ph) * 0.42, 0, Math.PI * 2); ctx.stroke(); ctx.restore();
+    }
+    emoji(d.icon, px + pw / 2, py + ph / 2 - (d.cat === 'ride' ? 4 : 0), Math.min(pw, ph) * (d.cat === 'ride' ? 0.5 : 0.62));
+    if (d.cat === 'ride') {
+      if (b.broken) { ctx.fillStyle = 'rgba(180,30,30,.45)'; rr(px + 2, py + 2, pw - 4, ph - 4, 9); ctx.fill(); emoji('⚠️', px + pw / 2, py + ph / 2, Math.min(pw, ph) * 0.45); }
+      else if (!b.open) { ctx.fillStyle = 'rgba(40,40,50,.55)'; rr(px + 2, py + 2, pw - 4, ph - 4, 9); ctx.fill(); ctx.fillStyle = '#fff'; ctx.font = 'bold 11px system-ui'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('CLOSED', px + pw / 2, py + ph / 2); }
+      const inside = b.queue.length + b.riders.length;
+      if (inside > 0 && !b.broken) {
+        ctx.fillStyle = 'rgba(0,0,0,.6)'; rr(px + pw - 34, py + ph - 18, 30, 14, 7); ctx.fill();
+        ctx.fillStyle = '#fff'; ctx.font = 'bold 10px system-ui'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('👥' + inside, px + pw - 19, py + ph - 11);
+      }
+    }
+    if ((d.cat === 'ride' || d.cat === 'shop') && !adjTiles(b).length) {
+      ctx.fillStyle = 'rgba(0,0,0,.55)'; rr(px + 4, py + 4, 22, 16, 6); ctx.fill(); emoji('🚧', px + 15, py + 12, 12);
+    }
+    if (selected === b.id) { ctx.strokeStyle = '#ffd54f'; ctx.lineWidth = 3; rr(px + 1, py + 1, pw - 2, ph - 2, 10); ctx.stroke(); }
+  }
+  // guests
+  ctx.lineWidth = 1.2;
+  for (const gu of S.guests) {
+    if (gu.state === 'queued' || gu.state === 'riding') continue;
+    const x = gu.x + gu.ox, y = gu.y + gu.oy;
+    ctx.fillStyle = 'rgba(0,0,0,.22)'; ctx.beginPath(); ctx.ellipse(x, y + 5, 5, 2.2, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = `hsl(${gu.hue},62%,52%)`; ctx.beginPath(); ctx.arc(x, y, 5, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = 'rgba(0,0,0,.4)'; ctx.stroke();
+    ctx.fillStyle = '#f5d6b8'; ctx.beginPath(); ctx.arc(x, y - 5.5, 3.2, 0, Math.PI * 2); ctx.fill();
+    const ic = gu.nausea > 70 ? '🤢' : gu.happy < 18 ? '😠' : gu.bladder > 85 ? '🚻' : gu.hunger > 82 ? '🍔' : gu.thirst > 82 ? '🥤' : gu.energy < 15 ? '😴' : gu.happy > 97 ? '😄' : null;
+    if (ic) emoji(ic, x, y - 15, 11);
+  }
+  // staff
+  for (const s of S.staff) {
+    const d = STAFF[s.type];
+    ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.beginPath(); ctx.ellipse(s.x, s.y + 7, 7, 3, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = d.color; rr(s.x - 8, s.y - 8, 16, 16, 5); ctx.fill(); ctx.strokeStyle = 'rgba(0,0,0,.45)'; ctx.lineWidth = 1.5; ctx.stroke();
+    emoji(d.icon, s.x, s.y, 11);
+    if (s.state === 'working') { ctx.fillStyle = '#fff'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center'; ctx.fillText(['·', '··', '···'][Math.floor(S.time * 3) % 3], s.x, s.y - 14); }
+  }
+  // day/night tint
+  const tod = (S.time % DAY_LEN) / DAY_LEN;
+  const dusk = tod > 0.72 ? (tod - 0.72) / 0.28 : 0;
+  if (dusk > 0) { ctx.fillStyle = `rgba(25,30,80,${dusk * 0.38})`; ctx.fillRect(0, 0, canvas.width, canvas.height); }
+  // ghost
+  if (hover && !gameOver) {
+    if (tool.kind === 'build') {
+      const d = DEFS[tool.key], ok = canPlace(tool.key, hover.x, hover.y) && S.cash >= d.cost;
+      ctx.fillStyle = ok ? 'rgba(90,209,122,.45)' : 'rgba(255,90,90,.45)';
+      ctx.fillRect(hover.x * T, hover.y * T, d.w * T, d.h * T);
+      ctx.strokeStyle = ok ? '#5ad17a' : '#ff6b6b'; ctx.lineWidth = 2; ctx.strokeRect(hover.x * T + 1, hover.y * T + 1, d.w * T - 2, d.h * T - 2);
+      if (tool.key !== 'path') { ctx.globalAlpha = .8; emoji(d.icon, (hover.x + d.w / 2) * T, (hover.y + d.h / 2) * T, Math.min(d.w, d.h) * T * 0.55); ctx.globalAlpha = 1; }
+    } else if (tool.kind === 'bulldoze') {
+      ctx.fillStyle = 'rgba(255,80,80,.35)'; ctx.fillRect(hover.x * T, hover.y * T, T, T);
+      ctx.strokeStyle = '#ff6b6b'; ctx.lineWidth = 2; ctx.strokeRect(hover.x * T + 1, hover.y * T + 1, T - 2, T - 2);
+    } else {
+      ctx.strokeStyle = 'rgba(255,255,255,.5)'; ctx.lineWidth = 1.5; ctx.strokeRect(hover.x * T + 1, hover.y * T + 1, T - 2, T - 2);
+    }
+  }
+  if (S.paused && !gameOver) {
+    ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 34px system-ui'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('⏸ PAUSED', canvas.width / 2, canvas.height / 2);
+    ctx.font = '14px system-ui'; ctx.fillText('press Space to resume', canvas.width / 2, canvas.height / 2 + 30);
+  }
+}
+
+// ───────────────────────── UI ─────────────────────────
+function updateHUD() {
+  const c = $('#h-cash'); c.textContent = money(S.cash); c.classList.toggle('neg', S.cash < 0);
+  $('#h-guests').textContent = S.guests.length;
+  $('#h-rating').textContent = S.rating; $('#h-rating-lbl').textContent = ratingLabel(S.rating);
+  $('#h-day').textContent = 'Day ' + S.day;
+  const tod = (S.time % DAY_LEN) / DAY_LEN, mins = Math.floor(9 * 60 + tod * 12 * 60);
+  $('#h-clock').textContent = String(Math.floor(mins / 60)).padStart(2, '0') + ':' + String(mins % 60).padStart(2, '0');
+  document.querySelectorAll('#speed button').forEach(b => b.classList.toggle('active', S.paused ? b.dataset.speed === '0' : +b.dataset.speed === S.speed));
+}
+function toast(msg, kind) {
+  const el = document.createElement('div'); el.className = 'toast' + (kind ? ' ' + kind : ''); el.textContent = msg;
+  const box = $('#toasts'); box.appendChild(el);
+  while (box.children.length > 5) box.firstChild.remove();
+  setTimeout(() => el.classList.add('fade'), 3800); setTimeout(() => el.remove(), 4400);
+}
+function toastOnce(key, msg, kind) { const now = performance.now(); if (lastToastKey[key] && now - lastToastKey[key] < 1500) return; lastToastKey[key] = now; toast(msg, kind); }
+function setTool(kind, key) {
+  tool = { kind, key: key || null };
+  $('#t-select').classList.toggle('active', kind === 'select');
+  $('#t-path').classList.toggle('active', kind === 'build' && key === 'path');
+  $('#t-bull').classList.toggle('active', kind === 'bulldoze');
+  document.querySelectorAll('.item[data-key]').forEach(b => b.classList.toggle('active', kind === 'build' && b.dataset.key === key));
+  const hint = $('#hint');
+  hint.textContent = kind === 'build' ? (key === 'path' ? 'Click or drag to lay path · Right-click / Esc to cancel' : `Place ${DEFS[key].name} (${money(DEFS[key].cost)}) · Right-click / Esc to cancel`) : kind === 'bulldoze' ? 'Click or drag to remove · 50% refund on buildings' : 'Click a ride or shop to inspect it';
+}
+function renderTab() {
+  document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('active', b.dataset.tab === curTab));
+  const body = $('#tab-body'); let html = '';
+  if (curTab === 'ride' || curTab === 'shop' || curTab === 'scenery') {
+    for (const [key, d] of Object.entries(DEFS)) {
+      if (d.cat !== curTab) continue;
+      const sub = d.cat === 'ride' ? `${d.w}×${d.h} · excitement ${d.exc} · intensity ${d.inten} · ${money(d.upkeep)}/day` : d.cat === 'shop' ? `${d.w}×${d.h} · sells at ${money(d.price)} · ${money(d.upkeep)}/day` : `${d.w}×${d.h} · beauty ${d.beauty}${d.bin ? ' · guests bin litter nearby' : ''}${d.rest ? ' · guests rest here' : ''}`;
+      html += `<button class="item" data-key="${key}"><span class="ico">${d.icon}</span><span><div class="nm">${d.name}</div><div class="cs">${sub}</div></span><span class="cost">${money(d.cost)}</span></button>`;
+    }
+  } else if (curTab === 'staff') {
+    html += '<h2>Hire</h2>';
+    for (const [type, d] of Object.entries(STAFF)) html += `<button class="item" data-hire="${type}"><span class="ico">${d.icon}</span><span><div class="nm">${d.name}</div><div class="cs">${d.desc} ${money(d.wage)}/day</div></span><span class="cost">${money(d.hire)}</span></button>`;
+    html += `<h2>Your staff (${S.staff.length})</h2>`;
+    if (!S.staff.length) html += '<div class="desc">No staff yet. Janitors keep paths clean, mechanics keep rides running.</div>';
+    for (const s of S.staff) { const d = STAFF[s.type]; html += `<div class="row"><span>${d.icon} ${d.name} <small>· ${s.state === 'working' ? 'working' : s.state === 'walking' && s.target !== null ? 'on the way' : 'patrolling'}${s.done ? ` · ${s.done} jobs` : ''}</small></span><button class="danger" data-fire="${s.id}" style="padding:2px 8px">Fire</button></div>`; }
+  } else if (curTab === 'park') {
+    const t = S.today, y = S.yesterday;
+    const inc = t.tickets + t.rides + t.shops, exp = t.build + t.marketing;
+    html += `<h2>Admission</h2><div class="row"><span>Ticket price</span><span class="pm"><button data-ticket="-1">−</button><b>${money(S.ticket)}</b><button data-ticket="1">+</button></span></div>
+      <div class="desc">Higher prices earn more per guest but fewer people come. Guests tolerate roughly ${money(8 + S.rating / 18)} at your current rating.</div>
+      <h2>Marketing</h2>${S.marketing > 0 ? `<div class="row"><span>📣 Campaign active</span><b>${S.marketing} day${S.marketing > 1 ? 's' : ''} left</b></div>` : `<button class="item" id="mk-btn"><span class="ico">📣</span><span><div class="nm">Ad campaign</div><div class="cs">+70% visitors for 3 days</div></span><span class="cost">$1,500</span></button>`}
+      <h2>Bank</h2><div class="row"><span>Loan balance</span><b>${money(S.loan)}</b></div><div class="desc">1% interest per day. Bankrupt at −$15,000.</div>
+      <div class="btns"><button id="loan-take" ${S.loan >= 30000 ? 'disabled' : ''}>Borrow $5,000</button><button id="loan-repay" ${S.loan <= 0 || S.cash < 5000 ? 'disabled' : ''}>Repay $5,000</button></div>
+      <h2>Today so far</h2>
+      <div class="row"><span>🎟️ Tickets (${t.guestsIn})</span><b>${money(t.tickets)}</b></div><div class="row"><span>🎢 Rides</span><b>${money(t.rides)}</b></div><div class="row"><span>🍔 Shops</span><b>${money(t.shops)}</b></div>
+      <div class="row"><span>🏗️ Construction</span><b style="color:var(--bad)">${money(-exp)}</b></div><div class="row"><span>Upkeep + wages due tonight</span><b style="color:var(--bad)">${money(-dailyCosts())}</b></div>
+      <div class="row"><span><b>Projected net</b></span><b style="color:${inc - exp - dailyCosts() >= 0 ? 'var(--good)' : 'var(--bad)'}">${money(inc - exp - dailyCosts())}</b></div>`;
+    if (y) { const yi = y.tickets + y.rides + y.shops, ye = y.upkeep + y.wages + y.marketing + y.build + y.interest; html += `<h2>Yesterday</h2><div class="row"><span>Income</span><b style="color:var(--good)">${money(yi)}</b></div><div class="row"><span>Expenses</span><b style="color:var(--bad)">${money(-ye)}</b></div><div class="row"><span>Net</span><b>${money(yi - ye)}</b></div><div class="row"><span>Guests admitted</span><b>${y.guestsIn}</b></div>`; }
+    html += '<h2>Milestones</h2>';
+    for (const m of MILESTONES) { const done = !!S.milestones[m.id]; html += `<div class="ms${done ? ' done' : ''}"><span class="chk">${done ? '✅' : '⬜'}</span><span><b>${m.name}</b> <span class="d">· ${m.desc}${done ? ` (day ${S.milestones[m.id]})` : ` · +${money(m.bonus)}`}</span></span></div>`; }
+    html += `<h2>Game</h2><div class="btns"><button id="save-btn">💾 Save</button><button id="load-btn">📂 Load</button><button id="new-btn" class="danger">🆕 New park</button></div><div class="desc" style="margin-top:8px">Auto-saves at the end of each day.</div>`;
+  }
+  body.innerHTML = html;
+  body.querySelectorAll('.item[data-key]').forEach(b => { b.onclick = () => setTool('build', b.dataset.key); b.classList.toggle('active', tool.kind === 'build' && tool.key === b.dataset.key); });
+  body.querySelectorAll('[data-hire]').forEach(b => b.onclick = () => { hireStaff(b.dataset.hire); renderTab(); });
+  body.querySelectorAll('[data-fire]').forEach(b => b.onclick = () => { fireStaff(+b.dataset.fire); renderTab(); });
+  body.querySelectorAll('[data-ticket]').forEach(b => b.onclick = () => { S.ticket = clamp(S.ticket + (+b.dataset.ticket), 0, 100); renderTab(); });
+  const mk = $('#mk-btn'); if (mk) mk.onclick = () => { if (S.cash < 1500) return toastOnce('cash', 'Not enough cash', 'bad'); S.cash -= 1500; S.today.marketing += 1500; S.marketing = 3; toast('📣 Ad campaign launched! Expect more visitors.', 'good'); renderTab(); };
+  const lt = $('#loan-take'); if (lt) lt.onclick = () => { S.loan += 5000; S.cash += 5000; toast('🏦 Borrowed $5,000'); renderTab(); };
+  const lr = $('#loan-repay'); if (lr) lr.onclick = () => { const amt = Math.min(5000, S.loan); S.loan -= amt; S.cash -= amt; toast(`🏦 Repaid ${money(amt)}`); renderTab(); };
+  const sb = $('#save-btn'); if (sb) sb.onclick = () => save(false);
+  const lb = $('#load-btn'); if (lb) lb.onclick = () => { if (load()) { toast('📂 Park loaded (paused)'); renderTab(); renderInfo(); } else toast('No saved park found', 'bad'); };
+  const nb = $('#new-btn'); if (nb) nb.onclick = () => { if (confirm('Start a new park? Your current park will be lost.')) { localStorage.removeItem(SAVE_KEY); newState(); renderTab(); renderInfo(); toast('🆕 New park started', 'good'); } };
+}
+function dailyCosts() { let c = 0; for (const b of Object.values(S.buildings)) c += DEFS[b.key].upkeep || 0; for (const s of S.staff) c += STAFF[s.type].wage; if (S.loan > 0) c += Math.round(S.loan * 0.01); return c; }
+function needBar(label, v, invert) { const pct = clamp(v, 0, 100); const col = (invert ? pct < 40 : pct > 60) ? 'var(--good)' : (invert ? pct < 70 : pct > 30) ? 'var(--accent)' : 'var(--bad)'; return `<div style="margin-bottom:6px"><div class="row" style="border:none;padding:2px 0"><span>${label}</span><b>${Math.round(pct)}%</b></div><div class="bar"><i style="width:${pct}%;background:${col}"></i></div></div>`; }
+function renderInfo() {
+  const box = $('#info'); let html = '';
+  const b = selected ? S.buildings[selected] : null;
+  if (b) {
+    const d = DEFS[b.key];
+    html += `<h2>${d.cat === 'ride' ? 'Ride' : d.cat === 'shop' ? 'Shop' : 'Scenery'}</h2><div style="display:flex;align-items:center;gap:10px;margin-bottom:8px"><span style="font-size:34px">${d.icon}</span><div><div style="font-weight:700;font-size:16px">${d.name}</div><small>${d.w}×${d.h} · upkeep ${money(d.upkeep || 0)}/day</small></div></div>`;
+    if (!adjTiles(b).length && d.cat !== 'scenery') html += `<div class="tip">🚧 Not connected. Lay a path next to it so guests can reach it.</div>`;
+    if (d.cat === 'ride') {
+      const status = b.broken ? '⚠️ Broken down' + (b.fixing ? ' (mechanic on the way)' : '') : !b.open ? 'Closed' : b.state === 'running' ? `Running (${Math.ceil(b.timer)}s)` : b.queue.length ? 'Loading' : 'Waiting for guests';
+      html += `<div class="row"><span>Status</span><b>${status}</b></div><div class="row"><span>Price</span><span class="pm"><button data-price="-0.5">−</button><b>${money(b.price)}</b><button data-price="0.5">+</button></span></div>
+        <div class="desc">Suggested ${money(d.price)}. Guests get grumpy if you charge much more.</div>
+        <div class="row"><span>In queue / riding</span><b>${b.queue.length} / ${b.riders.length}</b></div><div class="row"><span>Capacity · duration</span><b>${d.cap} · ${d.dur}s</b></div>
+        <div class="row"><span>Excitement · intensity · nausea</span><b>${d.exc} · ${d.inten} · ${d.naus}</b></div><div class="row"><span>Reliability</span><b>${Math.round(d.rel * 100)}%</b></div>
+        <div class="row"><span>Total riders</span><b>${b.ridesGiven}</b></div><div class="row"><span>Total income</span><b>${money(b.income)}</b></div><div class="row"><span>Breakdowns</span><b>${b.breakdowns}</b></div>
+        <div class="btns"><button id="b-toggle">${b.open ? '⛔ Close ride' : '✅ Open ride'}</button><button id="b-demo" class="danger">🚜 Demolish</button></div>`;
+    } else if (d.cat === 'shop') {
+      html += `<div class="row"><span>Price</span><span class="pm"><button data-price="-0.5">−</button><b>${money(b.price)}</b><button data-price="0.5">+</button></span></div><div class="desc">Suggested ${money(d.price)}.</div>
+        <div class="row"><span>Items sold</span><b>${b.sold}</b></div><div class="row"><span>Total income</span><b>${money(b.income)}</b></div><div class="btns"><button id="b-demo" class="danger">🚜 Demolish</button></div>`;
+    } else {
+      html += `<div class="row"><span>Beauty</span><b>${d.beauty}</b></div><div class="btns"><button id="b-demo" class="danger">🚜 Demolish</button></div>`;
+    }
+    html += `<div class="btns"><button id="b-close">Back to park overview</button></div>`;
+  } else {
+    const gs = S.guests, n = gs.length || 1;
+    const avg = k => gs.reduce((a, g) => a + g[k], 0) / n;
+    const pct = f => Math.round(gs.filter(f).length / n * 100);
+    const litterN = Object.values(S.litter).reduce((a, v) => a + v, 0);
+    const rides = Object.values(S.buildings).filter(b => DEFS[b.key].cat === 'ride'), broken = rides.filter(b => b.broken).length, unreachable = rides.filter(b => !adjTiles(b).length).length;
+    const shops = Object.values(S.buildings).filter(b => DEFS[b.key].cat === 'shop');
+    html += `<h2>Park overview</h2>
+      <div class="row"><span>Rating</span><b>${S.rating} <small>· ${ratingLabel(S.rating)}</small></b></div>
+      <div class="row"><span>Guests in park</span><b>${gs.length} <small>· peak ${S.peakGuests}</small></b></div>
+      <div class="row"><span>Total visitors</span><b>${fmt(S.totalGuests)}</b></div>
+      <div class="row"><span>Rides · shops · staff</span><b>${rides.length} · ${shops.length} · ${S.staff.length}</b></div>
+      <div class="row"><span>Litter on paths</span><b style="color:${litterN > 8 ? 'var(--bad)' : 'inherit'}">${litterN}</b></div>
+      <h2>Guest mood</h2>${gs.length ? needBar('Happiness', avg('happy')) + needBar('Hunger', avg('hunger'), true) + needBar('Thirst', avg('thirst'), true) + needBar('Restroom need', avg('bladder'), true) + needBar('Energy', avg('energy')) : '<div class="desc">No guests yet. Build a ride and connect it to the entrance with a path.</div>'}`;
+    const tips = [];
+    if (!rides.length) tips.push('Build your first ride from the Rides tab and connect it to the entrance path.');
+    if (unreachable) tips.push(`${unreachable} ride${unreachable > 1 ? 's are' : ' is'} not connected to a path.`);
+    if (broken) tips.push(`${broken} ride${broken > 1 ? 's are' : ' is'} broken.` + (S.staff.some(s => s.type === 'mechanic') ? '' : ' Hire a mechanic.'));
+    if (gs.length >= 5) {
+      if (pct(g => g.hunger > 65) > 30) tips.push('Many guests are hungry. Build food stalls.');
+      if (pct(g => g.thirst > 65) > 30) tips.push('Guests are thirsty. Add drink stands.');
+      if (pct(g => g.bladder > 70) > 25) tips.push('Guests need restrooms.');
+      if (pct(g => g.energy < 30) > 25) tips.push('Guests are tired. Place benches along paths.');
+      if (pct(g => g.nausea > 60) > 20) tips.push('Guests feel sick after intense rides. Mix in gentle rides and benches.');
+    }
+    if (litterN > 8) tips.push('Litter is piling up. Hire a janitor or add trash bins near food stalls.');
+    if (S.rating < 400 && countCat('scenery') < 5 && rides.length) tips.push('Scenery like trees and fountains lifts guest happiness and park rating.');
+    if (S.cash < 0) tips.push('Cash is negative. Raise prices, close unprofitable rides, or take a loan.');
+    if (tips.length) { html += '<h2>Advisor</h2>'; for (const t of tips) html += `<div class="tip">${t}</div>`; }
+    html += `<h2>Guest preferences</h2><div class="desc">Guests have an intensity preference from 1 to 5 and will skip rides that are too wild for them. Offer a mix, keep them fed, and keep paths clean.</div>`;
+  }
+  box.innerHTML = html;
+  if (b) {
+    box.querySelectorAll('[data-price]').forEach(bt => bt.onclick = () => { b.price = clamp(Math.round((b.price + (+bt.dataset.price)) * 2) / 2, 0, 50); renderInfo(); });
+    const tg = $('#b-toggle'); if (tg) tg.onclick = () => { b.open = !b.open; if (!b.open) { for (const g of [...b.queue, ...b.riders]) releaseGuest(g, b, -4); b.queue = []; b.riders = []; b.state = 'idle'; } renderInfo(); };
+    const dm = $('#b-demo'); if (dm) dm.onclick = () => { removeBuilding(b.id); renderInfo(); };
+    const cl = $('#b-close'); if (cl) cl.onclick = () => { selected = null; renderInfo(); };
+  }
+}
+function showOverlay(html) { const o = $('#overlay'); o.innerHTML = `<div class="card">${html}</div>`; o.classList.remove('hidden'); }
+function hideOverlay() { $('#overlay').classList.add('hidden'); }
+function showHelp(firstTime) {
+  showOverlay(`<h1>🎡 Park Tycoon</h1><p>Build and run your own theme park. Lay paths, build rides and shops, hire staff, and keep guests happy to grow your rating and your fortune.</p>
+    <ul><li><b>Paths</b> connect everything. Guests only walk on paths, starting from the entrance 🎪 at the bottom.</li>
+    <li><b>Rides</b> earn ticket money and boost your rating. They break down over time, so hire a <b>mechanic</b>.</li>
+    <li><b>Shops</b> feed guests and stop them leaving hungry. Food creates litter, so add bins and a <b>janitor</b>.</li>
+    <li><b>Scenery</b> makes guests happier. <b>Benches</b> let tired guests rest.</li>
+    <li>Set your <b>admission price</b> and run ad campaigns from the Park tab. Upkeep and wages are charged each night.</li>
+    <li>Keys: <kbd>Space</kbd> pause · <kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> speed · <kbd>P</kbd> path · <kbd>B</kbd> bulldoze · <kbd>Esc</kbd> select · right-click cancels a tool.</li></ul>
+    <div class="btns"><button id="ov-ok" class="primary">${firstTime ? 'Open the park!' : 'Back to the park'}</button></div>`);
+  $('#ov-ok').onclick = () => { hideOverlay(); if (firstTime) { S.paused = false; } };
+}
+
+// ───────────────────────── input ─────────────────────────
+function tileFromEvent(e) {
+  const r = canvas.getBoundingClientRect();
+  const x = Math.floor((e.clientX - r.left) / r.width * W), y = Math.floor((e.clientY - r.top) / r.height * H);
+  return inb(x, y) ? { x, y } : null;
+}
+function applyTool(t) {
+  if (!t || gameOver) return;
+  if (tool.kind === 'build') {
+    if (place(tool.key, t.x, t.y)) { if (DEFS[tool.key].cat !== 'path' && DEFS[tool.key].cat !== 'scenery' && DEFS[tool.key].cost > 500) { /* keep tool for repeat placement */ } }
+  } else if (tool.kind === 'bulldoze') bulldoze(t.x, t.y);
+}
+canvas.addEventListener('mousemove', e => {
+  hover = tileFromEvent(e);
+  if (dragging && hover && (tool.kind === 'bulldoze' || (tool.kind === 'build' && tool.key === 'path'))) {
+    const k = K(hover.x, hover.y); if (k !== lastDragKey) { lastDragKey = k; applyTool(hover); }
+  }
+});
+canvas.addEventListener('mouseleave', () => { hover = null; dragging = false; });
+canvas.addEventListener('mousedown', e => {
+  if (e.button !== 0) return;
+  const t = tileFromEvent(e); if (!t) return;
+  if (tool.kind === 'select') {
+    const c = S.grid[t.y][t.x];
+    selected = c.t === BUILD ? c.b : null; renderInfo(); return;
+  }
+  dragging = true; lastDragKey = K(t.x, t.y); applyTool(t);
+});
+window.addEventListener('mouseup', () => { dragging = false; });
+canvas.addEventListener('contextmenu', e => { e.preventDefault(); if (tool.kind !== 'select') setTool('select'); else if (selected) { selected = null; renderInfo(); } });
+window.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT') return;
+  if (e.code === 'Space') { e.preventDefault(); S.paused = !S.paused; }
+  else if (e.key === '1') { S.speed = 1; S.paused = false; } else if (e.key === '2') { S.speed = 2; S.paused = false; } else if (e.key === '3') { S.speed = 4; S.paused = false; }
+  else if (e.key === 'Escape') { if (!$('#overlay').classList.contains('hidden') && !gameOver) hideOverlay(); else setTool('select'); }
+  else if (e.key === 'p' || e.key === 'P') setTool('build', 'path');
+  else if (e.key === 'b' || e.key === 'B') setTool('bulldoze');
+});
+$('#t-select').onclick = () => setTool('select');
+$('#t-path').onclick = () => setTool('build', 'path');
+$('#t-bull').onclick = () => setTool('bulldoze');
+document.querySelectorAll('#tabs button').forEach(b => b.onclick = () => { curTab = b.dataset.tab; renderTab(); });
+document.querySelectorAll('#speed button').forEach(b => b.onclick = () => { const s = +b.dataset.speed; if (s === 0) S.paused = true; else { S.speed = s; S.paused = false; } });
+$('#help-btn').onclick = () => showHelp(false);
+
+// ───────────────────────── boot ─────────────────────────
+newState();
+const loaded = load();
+if (loaded) { toast('📂 Welcome back! Your park was restored (paused).'); S.paused = true; hideOverlay(); }
+else { S.paused = true; showHelp(true); }
+fitCanvas(); setTool('select'); renderTab(); renderInfo(); updateHUD();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
