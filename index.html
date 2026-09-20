@@ -242,6 +242,7 @@
       <div class="speech-btn" data-action="all">All my inventory</div>
       <div class="speech-btn" data-action="hand">This thing on your hand</div>
       <div class="speech-btn" data-action="house">Buy worker house · 3 ⛏️ + 3 🧊</div>
+      <div class="speech-btn" data-action="workers" id="workers-btn" hidden>⏸ Send workers home</div>
       <div class="speech-btn cancel" data-action="cancel">Cancel</div>
     </div>
   </div>
@@ -1333,12 +1334,13 @@
   }
 
   // ── Worker houses — bought at the shop with iron and ice. A worker lives in
-  // each: they walk out, gather up to three things (loose items first, then
-  // anything soft enough to pick), carry them home, and add them to YOUR
-  // inventory.
+  // each: they walk out, pick up things LYING ON THE GROUND (eggs, milk,
+  // wool — up to three per trip), carry them home, and add them to YOUR
+  // inventory. They never chop or harvest plants — those are all yours.
+  // The shopkeeper can send them all home if you want them to stop.
   const villagers = []; // { group, home, state, t0, target, carried, stops }
   const VILLAGER_SPEED = 1.8;
-  const VILLAGER_KINDS = ['tree', 'bamboo', 'corn', 'flower', 'berry', 'pumpkin']; // no hammer, no hive smarts
+  let workersPaused = false;
 
   function makeHouse() {
     const g = new THREE.Group();
@@ -1403,15 +1405,9 @@
   function villagerFindTarget(v) {
     const px = v.group.position.x, pz = v.group.position.z;
     let best = null, bd = Infinity;
-    for (const it of groundItems) {
+    for (const it of groundItems) { // only loose items — never plants or trees
       const d = Math.hypot(it.x - px, it.z - pz);
       if (d < bd) { bd = d; best = { item: it }; }
-    }
-    if (best) return best;
-    for (const h of harvestables) {
-      if (!h.ready || !VILLAGER_KINDS.includes(h.kind)) continue;
-      const d = Math.hypot(h.x - px, h.z - pz);
-      if (d < bd) { bd = d; best = { node: h }; }
     }
     return best;
   }
@@ -1420,8 +1416,9 @@
     const now = performance.now();
     for (const v of villagers) {
       const g = v.group;
+      if (workersPaused && v.state === 'gather') v.state = 'return'; // head home with what they have
       if (v.state === 'rest') {
-        if (now - v.t0 > 2500) {
+        if (!workersPaused && now - v.t0 > 2500) {
           v.target = villagerFindTarget(v);
           if (v.target) { v.state = 'gather'; g.visible = true; }
           else v.t0 = now; // nothing to do — check again in a bit
@@ -1429,9 +1426,7 @@
         continue;
       }
 
-      const dest = v.state === 'return' ? v.home
-        : v.target.item ? v.target.item
-        : v.target.node;
+      const dest = v.state === 'return' ? v.home : v.target.item;
       const dx = dest.x - g.position.x, dz = dest.z - g.position.z;
       const dist = Math.hypot(dx, dz);
       if (dist > 0.35) {
@@ -1456,26 +1451,13 @@
         continue;
       }
 
-      // arrived at the target — grab it if it's still there
-      if (v.target.item) {
-        const idx = groundItems.indexOf(v.target.item);
-        if (idx !== -1) {
-          scene.remove(v.target.item.mesh);
-          groundItems.splice(idx, 1);
-          v.carried[v.target.item.resource] = (v.carried[v.target.item.resource] || 0) + 1;
-          v.stops++;
-        }
-      } else {
-        const h = v.target.node;
-        if (h.ready) {
-          const def = HARVEST_DEFS[h.kind];
-          h.ready = false;
-          h.regrowAt = now + growMs(def.regrowMs);
-          if (def.hide) h.group.visible = false;
-          if (h.coconutMeshes) h.coconutMeshes.forEach(m => (m.visible = false));
-          v.carried[def.resource] = (v.carried[def.resource] || 0) + def.yield;
-          v.stops++;
-        }
+      // arrived at the item — grab it if it's still there
+      const idx = groundItems.indexOf(v.target.item);
+      if (idx !== -1) {
+        scene.remove(v.target.item.mesh);
+        groundItems.splice(idx, 1);
+        v.carried[v.target.item.resource] = (v.carried[v.target.item.resource] || 0) + 1;
+        v.stops++;
       }
       if (v.stops >= 3) { v.state = 'return'; continue; }
       v.target = villagerFindTarget(v);
@@ -2246,6 +2228,7 @@
     dialogMode = 'prompt';
     speechTextEl.textContent = 'What do you want to sell?';
     speechButtonsEl.style.display = 'flex';
+    refreshWorkersBtn();
   }
 
   function showMessage(text, revertMs = 1900) {
@@ -2310,7 +2293,8 @@
     if (!buildHouse()) { showMessage('No room for a house — buy more land first!'); return; }
     payCost(HOUSE_COST);
     refreshInventory();
-    showMessage('A worker house was built! Your worker will gather things and bring them home to you.');
+    refreshWorkersBtn();
+    showMessage('A worker house was built! Your worker will pick up eggs, milk, and wool and bring them home to you.');
   }
 
   speechButtonsEl.addEventListener('pointerdown', e => {
@@ -2318,8 +2302,22 @@
     if (action === 'all') sellAll();
     else if (action === 'hand') sellHand();
     else if (action === 'house') buyHouse();
+    else if (action === 'workers') toggleWorkers();
     else if (action === 'cancel') shopExit();
   });
+
+  const workersBtnEl = document.getElementById('workers-btn');
+  function refreshWorkersBtn() { // only shown once you actually have workers
+    workersBtnEl.hidden = villagers.length === 0;
+    workersBtnEl.textContent = workersPaused ? '▶ Wake the workers up' : '⏸ Send workers home';
+  }
+  function toggleWorkers() {
+    workersPaused = !workersPaused;
+    refreshWorkersBtn();
+    showMessage(workersPaused
+      ? 'Okay — your workers are going home to rest. They will stay inside until you wake them.'
+      : 'Your workers are back to work, picking things up for you!');
+  }
 
   function worldToScreen(vec3) {
     const v = vec3.clone().project(fpsCamera);
