@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Diner Tycoon Models</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #20242c; color: #eee; font-family: system-ui, sans-serif; overflow: hidden; }
+  canvas { display: block; width: 100vw; height: 100vh; }
+  #info { position: fixed; left: 12px; top: 12px; background: rgba(0,0,0,.55); padding: 10px 12px; border-radius: 8px; font-size: 12px; line-height: 1.5; max-width: 60vw; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="info">Loading models…</div>
+<script type="importmap">{ "imports": { "three": "../vendor/three/three.module.js", "three/addons/": "../vendor/three/addons/" } }</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { loadModelFitted } from '../src/glb-loader.js';
+
+const canvas = document.getElementById('c');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setSize(innerWidth, innerHeight, false);
+renderer.shadowMap.enabled = true;
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x20242c);
+const camera = new THREE.PerspectiveCamera(40, innerWidth / innerHeight, 0.1, 100);
+camera.position.set(0, 4, 10);
+const controls = new OrbitControls(camera, canvas);
+controls.target.set(0, 0.9, 0);
+scene.add(new THREE.HemisphereLight(0xffffff, 0x445566, 1.2));
+const sun = new THREE.DirectionalLight(0xffffff, 2); sun.position.set(4, 8, 6); sun.castShadow = true; scene.add(sun);
+const floor = new THREE.Mesh(new THREE.PlaneGeometry(30, 30), new THREE.MeshStandardMaterial({ color: 0x394048 }));
+floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; scene.add(floor);
+scene.add(new THREE.GridHelper(30, 30, 0x556677, 0x445566));
+
+const manifest = await (await fetch('../models/manifest.json')).json();
+const entries = Object.entries(manifest.models);
+const mixers = [];
+const report = [];
+let x = -((entries.length - 1) * 1.6) / 2;
+for (const [key, e] of entries) {
+  try {
+    const m = await loadModelFitted(`../models/${e.file}`, { height: e.height });
+    m.rotation.y = THREE.MathUtils.degToRad(e.rotationY ?? 0);
+    m.position.set(x, 0, 0);
+    scene.add(m);
+    let meshes = 0, skinned = 0, textured = 0;
+    m.traverse((o) => { if (o.isMesh) { meshes++; if (o.isSkinnedMesh) skinned++; if (o.material.map) textured++; } });
+    const clips = m.animations.map((c) => c.name.replace('Armature|', ''));
+    if (m.animations.length) {
+      const mixer = new THREE.AnimationMixer(m.userData.model);
+      const clip = m.animations.find((c) => /walk/i.test(c.name)) ?? m.animations[0];
+      mixer.clipAction(clip).play();
+      mixers.push(mixer);
+    }
+    const s = m.userData.size;
+    report.push(`${key}: ${meshes} mesh${skinned ? ` (${skinned} skinned)` : ''}, ${textured} textured, size ${s.x.toFixed(2)}×${s.y.toFixed(2)}×${s.z.toFixed(2)}${clips.length ? `, clips: ${clips.join(', ')}` : ''}`);
+  } catch (err) {
+    report.push(`${key}: FAILED ${err.message}`);
+    console.error(key, err);
+  }
+  x += 1.6;
+}
+document.getElementById('info').textContent = report.join('\n');
+window.__report = report;
+const clock = new THREE.Clock();
+renderer.setAnimationLoop(() => {
+  const dt = clock.getDelta();
+  for (const mx of mixers) mx.update(dt);
+  controls.update();
+  renderer.render(scene, camera);
+});
+addEventListener('resize', () => { renderer.setSize(innerWidth, innerHeight, false); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); });
+</script>
+</body>
+</html>

@@ -1,0 +1,14 @@
+{
+  "models": {
+    "register":  { "file": "cash_register.glb",  "height": 1.0,  "rotationY": -90, "credit": "Cash register by Poly by Google (CC-BY 3.0)" },
+    "cashStack": { "file": "cash_stack.glb",     "height": 0.22, "rotationY": 0,   "credit": "Cash Stack by J-Toastie (CC-BY 3.0)" },
+    "cashier":   { "file": "food_worker.glb",    "height": 1.75, "rotationY": 0,   "credit": "Food Worker by J-Toastie (CC-BY 3.0)" },
+    "runner":    { "file": "retail_worker.glb",  "height": 1.75, "rotationY": 0,   "credit": "Retail Worker by J-Toastie (CC-BY 3.0)" },
+    "kitchen":   { "file": "kitchen.glb",        "height": 2.2,  "rotationY": 0,   "credit": "Kitchen by sirkitree (CC-BY 3.0)" },
+    "cabinet":   { "file": "kitchen_cabinet.glb","height": 1.0,  "rotationY": 0,   "credit": "Kitchen Cabinet by Kay Lousberg (CC0)" },
+    "knife":     { "file": "chef_knife.glb",     "height": 0.5,  "rotationY": 0,   "credit": "Chef Knife by Kay Lousberg (CC0)" }
+  },
+  "pending": {
+    "chef": { "note": "Chef model not received yet; a placeholder cook stands in the kitchen." }
+  }
+}
