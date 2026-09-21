@@ -2446,22 +2446,34 @@
   const shopHeadOffset = new THREE.Vector3(0, 1.95 * SHOPKEEPER_SCALE, 0); // just above the person's head
   function updateShopkeeper(delta) {
     if (shopState === 'walking_out' || shopState === 'walking_in') {
-      const tt = Math.min((performance.now() - shopAnimT0) / SHOP_WALK_MS, 1);
+      const elapsed = performance.now() - shopAnimT0;
+      const tt = Math.min(elapsed / SHOP_WALK_MS, 1);
       const ease = tt * tt * (3 - 2 * tt);
-      if (shopState === 'walking_out') shopkeeper.position.lerpVectors(shopInsidePos, shopStandPos, ease);
-      else shopkeeper.position.lerpVectors(shopStandPos, shopInsidePos, ease);
-      animateWalk(shopkeeper, tt * 13, 0.45);
+      const from = shopState === 'walking_out' ? shopInsidePos : shopStandPos;
+      const to   = shopState === 'walking_out' ? shopStandPos : shopInsidePos;
+      shopkeeper.position.lerpVectors(from, to, ease);
+      // face where he's going, stride at a steady rate, with a light bob
+      shopkeeper.rotation.y = Math.atan2(to.x - from.x, to.z - from.z);
+      const stride = elapsed / 85;
+      animateWalk(shopkeeper, stride, 0.5);
+      shopkeeper.position.y = LAND_Y + Math.abs(Math.sin(stride)) * 0.035;
       if (tt >= 1) {
         animateWalk(shopkeeper, 0);
+        shopkeeper.position.y = LAND_Y;
         if (shopState === 'walking_out') { shopState = 'out'; showPrompt(); }
         else { shopState = 'inside'; shopkeeper.visible = false; }
       }
-    }
-
-    if (shopkeeper.visible) { // always turn to face the player while outside
+    } else if (shopState === 'out') {
+      // standing at his spot — turn smoothly toward the player
       const fdx = player.position.x - shopkeeper.position.x;
       const fdz = player.position.z - shopkeeper.position.z;
-      if (Math.hypot(fdx, fdz) > 0.2) shopkeeper.rotation.y = Math.atan2(fdx, fdz);
+      if (Math.hypot(fdx, fdz) > 0.2) {
+        const want = Math.atan2(fdx, fdz);
+        let diff = want - shopkeeper.rotation.y;
+        while (diff > Math.PI) diff -= Math.PI * 2;
+        while (diff < -Math.PI) diff += Math.PI * 2;
+        shopkeeper.rotation.y += diff * Math.min(1, delta * 7);
+      }
     }
 
     if (dialogMode === 'message' && performance.now() > dialogRevertAt) {
