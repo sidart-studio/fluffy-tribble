@@ -174,12 +174,54 @@ export function buildChefPlaceholder() {
   return g;
 }
 
-export function buildFood(item) {
+/**
+ * A plate of food. `protos.kebab` is the fitted Poly kebab model; skewers are
+ * cloned from it and their meat cubes tinted per dish. Anything without a
+ * model falls back to primitives.
+ */
+/** A toque to attach to the chef's head bone. */
+export function buildToque() {
+  const g = new THREE.Group();
+  const white = mat(0xf7f7f2, { roughness: 0.9 });
+  const band = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.19, 0.16, 18), white); band.position.y = 0.08; g.add(band);
+  const puff = new THREE.Mesh(new THREE.SphereGeometry(0.24, 18, 12), white); puff.position.y = 0.22; puff.scale.y = 0.65; g.add(puff);
+  g.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+  return g;
+}
+
+export function buildFood(item, protos = {}) {
   const g = new THREE.Group();
   const plate = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.18, 0.03, 20), mat(0xf7f7f2, { roughness: 0.3 })));
   plate.position.y = 0.015; g.add(plate);
   const c = item.color;
+  const skewer = (tint, dx = 0, dz = 0, yaw = 0) => {
+    if (!protos.kebab) { const k = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.06, 0.06), mat(tint ?? c)); k.position.set(dx, 0.06, dz); k.rotation.y = yaw; return k; }
+    const k = protos.kebab.clone(true);
+    k.traverse((o) => {
+      if (o.isMesh) {
+        o.material = o.material.clone();
+        if (tint && /lambert3SG/.test(o.material.name)) o.material.color.setHex(tint);
+        o.castShadow = true;
+      }
+    });
+    // the model is an upright skewer: lay it across the plate
+    const size = protos.kebab.userData.size;
+    k.rotation.set(0, yaw, Math.PI / 2);
+    k.position.set(dx - size.y / 2 * Math.cos(yaw) * 0, 0.03 + size.x / 2, dz);
+    return k;
+  };
   switch (item.shape) {
+    case 'kebab': {
+      g.add(skewer(item.meat));
+      const lemon = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.02, 12), mat(0xfff176)); lemon.position.set(0.14, 0.04, 0.12); g.add(lemon);
+      break;
+    }
+    case 'platter': {
+      g.add(skewer(0xf0c987, 0, -0.07, 0.1));
+      g.add(skewer(0x6b3a26, 0, 0.0, 0));
+      g.add(skewer(0x8d4a3a, 0, 0.07, -0.1));
+      break;
+    }
     case 'burger': {
       const bun = shadowed(new THREE.Mesh(new THREE.SphereGeometry(0.15, 16, 10, 0, Math.PI * 2, 0, Math.PI / 2), mat(0xd9954a))); bun.position.y = 0.16; g.add(bun);
       const patty = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 0.05, 16), mat(0x5b3a29)); patty.position.y = 0.1; g.add(patty);
@@ -216,8 +258,9 @@ export function buildFood(item) {
       break;
     }
     case 'special': {
-      const dome = new THREE.Mesh(new THREE.SphereGeometry(0.2, 20, 12, 0, Math.PI * 2, 0, Math.PI / 2), mat(0xd9dde3, { metalness: 0.9, roughness: 0.2 })); dome.position.y = 0.03; g.add(dome);
-      const knob = new THREE.Mesh(new THREE.SphereGeometry(0.03, 10, 8), mat(0xd9dde3, { metalness: 0.9 })); knob.position.y = 0.25; g.add(knob);
+      g.add(skewer(0xc63d5c, 0, -0.05, 0.15));
+      g.add(skewer(0xf0c987, 0, 0.06, -0.15));
+      const flame = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.14, 8), new THREE.MeshStandardMaterial({ color: 0xffb74d, emissive: 0xff7043, emissiveIntensity: 2 })); flame.position.set(-0.18, 0.12, 0); g.add(flame);
       const glow = new THREE.PointLight(c, 1.5, 1.2); glow.position.y = 0.3; g.add(glow);
       break;
     }

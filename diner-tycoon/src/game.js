@@ -6,7 +6,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { loadModelFitted, parseGLTF, fitModel, applyClipPose } from './glb-loader.js';
 import { Sfx } from './audio.js';
-import { L, COUNTER_TOP, buildWorld, buildTable, buildCustomer, buildChefPlaceholder, buildFood, buildCoin, buildBill } from './world.js';
+import { L, COUNTER_TOP, buildWorld, buildTable, buildCustomer, buildChefPlaceholder, buildFood, buildCoin, buildBill, buildToque } from './world.js';
 import { DAY_LENGTH, START_CASH, START_REPUTATION, QUEUE_PATIENCE, FOOD_PATIENCE, EAT_TIME, SAVE_KEY, MENU, UPGRADES, MILESTONES, upgradeCost } from './config.js';
 
 const $ = (id) => document.getElementById(id);
@@ -32,11 +32,31 @@ function lerpAngle(a, b, t) {
 }
 function faceTo(obj, target) { obj.rotation.y = Math.atan2(target.x - obj.position.x, target.z - obj.position.z); }
 
-/** A rigged worker (Food Worker / Retail Worker) with idle + walk clips. */
-class Worker {
-  constructor(model, scene) {
+/** A rigged person (Food Worker / Retail Worker rig) with idle + walk clips. */
+class Character {
+  constructor(model, scene, { tint = null, hat = null } = {}) {
     this.obj = model;
     scene.add(model);
+    if (tint != null) {
+      model.traverse((o) => {
+        if (o.isMesh) { o.material = o.material.clone(); o.material.color.multiply(new THREE.Color(tint)); }
+      });
+    }
+    if (hat) {
+      const head = (model.userData.model ?? model).getObjectByName('Head');
+      if (head) {
+        // Bones live in the armature's centimetre space (scale 100). Express
+        // the hat in rig units: the head bone sits at the neck and the chibi
+        // head is about 1.4 rig units tall and 1.2 wide.
+        model.updateMatrixWorld(true);
+        const headScale = new THREE.Vector3(); head.getWorldScale(headScale);
+        const rigScale = new THREE.Vector3(); (model.userData.model ?? model).getWorldScale(rigScale);
+        const rigPerLocal = headScale.x / (rigScale.x || 1);
+        hat.scale.setScalar(2.2 / rigPerLocal);
+        hat.position.set(0, 1.3 / rigPerLocal, 0);
+        head.add(hat);
+      } else model.add(hat);
+    }
     // Stand the rig upright before the mixer records its "original state":
     // the idle clip only animates a few bones, the rest keep this pose.
     if (model.animations?.length) applyClipPose(model.userData.model ?? model, model.animations);
@@ -171,9 +191,15 @@ export class Game {
       catch (err) { console.error(`[tycoon] ${key} failed`, err); this.models[key] = null; }
     }
     this.placeStatic();
-    if (this.manifest.models.chef && this.models.chef) {
+    if (this.models.chef) {
       this.scene.remove(this.chef);
       this.chef = this.models.chef; this.chef.position.copy(L.chef); this.chef.rotation.y += Math.PI; this.scene.add(this.chef);
+    } else if (this.models.cashier) {
+      this.scene.remove(this.chef);
+      this.chefRig = new Character(cloneRig(this.models.cashier), this.scene, { tint: 0xf4f4f0, hat: buildToque() });
+      this.chef = this.chefRig.obj;
+      this.chef.position.copy(L.chef);
+      this.chef.rotation.y = Math.PI;
     }
     $('credits').textContent = `Models: ${this.credits.join(' · ')}`;
     $('shop-credits').textContent = `Models: ${this.credits.join(' · ')}`;
@@ -198,7 +224,7 @@ export class Game {
     this.knifeProto = this.models.knife;
     this.cabinetProto = this.models.cabinet;
     if (this.models.cashier) {
-      this.cashier = new Worker(this.models.cashier, this.scene);
+      this.cashier = new Character(this.models.cashier, this.scene);
       this.cashier.obj.position.copy(L.cashier);
       this.cashier.obj.rotation.y = 0; // faces +z, toward the guests
     }
@@ -272,7 +298,7 @@ export class Game {
     while (this.runners.length < this.lvl('runner')) {
       const idx = this.runners.length;
       const model = this.models.runner ? cloneRig(this.models.runner) : placeholderPerson(0x2e7d32);
-      const w = new Worker(model, this.scene);
+      const w = new Character(model, this.scene);
       w.obj.position.copy(L.runnerIdle[idx % L.runnerIdle.length]);
       w.state = 'idle'; w.order = null; w.idleSpot = L.runnerIdle[idx % L.runnerIdle.length];
       this.runners.push(w);
@@ -308,10 +334,19 @@ export class Game {
 
   // ---------------------------------------------------------- customers
   spawnCustomer() {
-    const obj = buildCustomer();
+    let obj, rig = null;
+    const protos = [this.models.runner, this.models.cashier].filter(Boolean);
+    if (protos.length) {
+      const tint = new THREE.Color().setHSL(Math.random(), 0.5, 0.78);
+      rig = new Character(cloneRig(pick(protos)), this.scene, { tint });
+      obj = rig.obj;
+      const hand = new THREE.Group(); hand.name = 'hand'; hand.position.set(0, 1.0, 0.42); obj.add(hand);
+    } else {
+      obj = buildCustomer();
+      this.scene.add(obj);
+    }
     obj.position.copy(L.spawn);
-    this.scene.add(obj);
-    const c = { obj, state: 'enter', path: [L.corridor.clone(), null], patience: QUEUE_PATIENCE, waitSpot: null, seat: null, order: null, timer: 0, speed: rand(1.6, 2.1), happy: true, bob: Math.random() * 6 };
+    const c = { obj, rig, state: 'enter', path: [L.corridor.clone(), null], patience: QUEUE_PATIENCE, waitSpot: null, seat: null, order: null, timer: 0, speed: rand(1.6, 2.1), happy: true, bob: Math.random() * 6 };
     this.customers.push(c);
     return c;
   }
@@ -401,7 +436,7 @@ export class Game {
         }
         case 'eating': {
           c.timer -= dt;
-          o.position.y = Math.abs(Math.sin(this.time * 6)) * 0.02;
+          if (c.rig) this.bob(c, false, dt); else o.position.y = Math.abs(Math.sin(this.time * 6)) * 0.02;
           if (c.timer <= 0) {
             if (c.plate) { o.getObjectByName('hand').remove(c.plate); c.plate = null; }
             c.seat.table.userData.taken[c.seat.index] = null;
@@ -422,6 +457,7 @@ export class Game {
   }
 
   bob(c, moving, dt) {
+    if (c.rig) { c.rig.play(moving ? 'walk' : 'idle'); c.rig.update(dt); c.obj.position.y = 0; return; }
     if (moving) { c.bob += dt * 11; c.obj.position.y = Math.abs(Math.sin(c.bob)) * 0.06; }
     else c.obj.position.y = 0;
   }
@@ -518,7 +554,7 @@ export class Game {
       if (o.remaining <= 0) {
         const slot = this.passPlates.findIndex((p) => !p);
         if (slot < 0) { o.remaining = 0; continue; } // pass is full, hold it
-        const plate = buildFood(o.item);
+        const plate = buildFood(o.item, { kebab: this.models.kebab });
         plate.position.copy(L.passSlots[slot]);
         this.scene.add(plate);
         o.plate = plate; o.passSlot = slot; o.state = 'ready';
@@ -528,7 +564,8 @@ export class Game {
     }
     // chef animation: bob while cooking
     const busy = cooking.length > 0;
-    this.chef.position.y = busy ? Math.abs(Math.sin(this.time * 8)) * 0.05 : 0;
+    if (this.chefRig) { this.chefRig.play(busy ? 'walk' : 'idle'); this.chefRig.update(dt); }
+    else this.chef.position.y = busy ? Math.abs(Math.sin(this.time * 8)) * 0.05 : 0;
     this.chef.rotation.y = Math.PI + (busy ? Math.sin(this.time * 3) * 0.25 : 0);
   }
 
@@ -833,6 +870,7 @@ export class Game {
     } else if (this.cashier) {
       this.cashier.update(real);
       for (const r of this.runners) r.update(real);
+      if (this.chefRig) this.chefRig.update(real);
     }
     this.updateFloaters(real);
     this.renderer.render(this.scene, this.camera);
@@ -867,6 +905,7 @@ function cloneRig(source) {
     if (o.isSkinnedMesh) {
       const bones = o.skeleton.bones.map((b) => map.get(b.uuid) ?? b);
       o.bind(new THREE.Skeleton(bones, o.skeleton.boneInverses), o.bindMatrix);
+      o.material = o.material.clone();
     }
   });
   // animation tracks are bound by uuid; remap to the clone's bones

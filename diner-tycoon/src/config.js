@@ -9,13 +9,14 @@ export const EAT_TIME = 9;
 export const SAVE_KEY = 'short-order-tycoon:save:v1';
 
 export const MENU = [
+  // Every skewer uses the Poly kebab model; `meat` tints its meat cubes.
   { id: 'soda', name: 'Fizzy Soda', price: 3.5, cook: 1.5, tier: 0, color: 0x8d3b2f, shape: 'cup' },
-  { id: 'fries', name: 'Crispy Fries', price: 5, cook: 4, tier: 0, color: 0xf2c14e, shape: 'fries' },
-  { id: 'burger', name: 'Diner Burger', price: 9, cook: 6, tier: 0, color: 0xb5651d, shape: 'burger' },
+  { id: 'chicken', name: 'Chicken Kebab', price: 8, cook: 6, tier: 0, color: 0xf2c14e, shape: 'kebab', meat: 0xf0c987 },
+  { id: 'beef', name: 'Beef Kebab', price: 10, cook: 7, tier: 0, color: 0xb5651d, shape: 'kebab', meat: 0x6b3a26 },
+  { id: 'veggie', name: 'Veggie Kebab', price: 7.5, cook: 4.5, tier: 1, color: 0x6abf4b, shape: 'kebab', meat: 0x7cb342 },
   { id: 'shake', name: 'Malt Shake', price: 7, cook: 3, tier: 1, color: 0xf7b6c2, shape: 'cup' },
-  { id: 'pizza', name: 'Pizza Slice', price: 11, cook: 8, tier: 1, color: 0xe8a33d, shape: 'slice' },
-  { id: 'pasta', name: 'Pasta Night', price: 15, cook: 9, tier: 2, color: 0xffd97a, shape: 'bowl' },
-  { id: 'steak', name: 'Steak Plate', price: 22, cook: 12, tier: 2, color: 0x7a3e2a, shape: 'steak' },
+  { id: 'lamb', name: 'Lamb Kebab', price: 14, cook: 9, tier: 2, color: 0x8d4a3a, shape: 'kebab', meat: 0x8d4a3a },
+  { id: 'platter', name: 'Mixed Platter', price: 21, cook: 12, tier: 2, color: 0xe8a33d, shape: 'platter' },
   { id: 'special', name: "Chef's Special", price: 34, cook: 14, tier: 3, color: 0xc63d5c, shape: 'special' },
 ];
 
@@ -29,7 +30,7 @@ export const UPGRADES = [
   { id: 'cabinet', name: 'Kitchen cabinet', desc: 'Wall storage. Each cabinet trims 12% off cook time.', cost: 110, growth: 1.7, max: 3, icon: '🗄️' },
   { id: 'tables', name: 'Dining table', desc: 'Four seats. Seated guests eat in and tip.', cost: 100, growth: 1.5, max: 4, icon: '🪑' },
   { id: 'sign', name: 'Neon sign', desc: 'Word gets around. 25% more walk-ins per level.', cost: 90, growth: 1.7, max: 5, icon: '💡' },
-  { id: 'menu', name: 'Expand the menu', desc: 'Unlock pricier dishes: shakes & pizza, then pasta & steak, then the special.', cost: 220, growth: 2.2, max: 3, icon: '📖' },
+  { id: 'menu', name: 'Expand the menu', desc: 'Unlock pricier dishes: veggie skewers & shakes, then lamb & the mixed platter, then the special.', cost: 220, growth: 2.2, max: 3, icon: '📖' },
   { id: 'auto', name: 'Cash drawer', desc: 'The cashier banks the register every 6 seconds. No more clicking.', cost: 300, growth: 1, max: 1, icon: '💵' },
 ];
 

@@ -1,9 +1,12 @@
 # Short Order Tycoon
 
-A 3D diner tycoon built with Three.js around the models in `models/`: the
-Poly by Google cash register, J-Toastie's Food Worker (the cashier), Retail
-Worker (the runner) and Cash Stack, Kay Lousberg's kitchen cabinet and chef's
-knife, and sirkitree's kitchen.
+A 3D kebab diner tycoon built with Three.js around the models in `models/`:
+the Poly by Google cash register and kebab, J-Toastie's Food Worker (the
+cashier), Retail Worker (the runner) and Cash Stack, Kay Lousberg's kitchen
+cabinet and chef's knife, and sirkitree's kitchen. Every person in the game,
+guests and chef included, is one of the two J-Toastie character rigs with a
+different tint; every skewer on the menu is the Poly kebab with its meat
+recolored per dish.
 
 Guests queue at the register. The cashier takes their order and their money,
 which piles up as a cash stack on the register until you bank it. The kitchen
@@ -46,7 +49,7 @@ on the title screen.
 | Kitchen cabinet | Places a cabinet on the back wall; cook time −12% each |
 | Dining table | Four seats; seated guests tip and rate you higher |
 | Neon sign | 25% more walk-ins per level |
-| Expand the menu | Unlocks shakes and pizza, then pasta and steak, then the Chef's Special |
+| Expand the menu | Unlocks veggie skewers and shakes, then lamb and the mixed platter, then the Chef's Special |
 | Cash drawer | The cashier banks the register automatically |
 
 ## Building
@@ -63,8 +66,8 @@ dependencies beyond Node.
 ## Adding models
 
 Drop a `.glb` into `models/` and describe it in `models/manifest.json`. The
-`chef` slot is reserved for the chef model: when a file is listed there, it
-replaces the placeholder cook in the kitchen. See `models/ATTRIBUTION.md`.
+`chef` slot is reserved for a dedicated chef model: until one is listed, the
+chef is the Food Worker rig in whites with a toque. See `models/ATTRIBUTION.md`.
 
 FBX files can be converted with the bundled tool:
 
