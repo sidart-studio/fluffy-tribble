@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>Checkout Rush</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%278%27 fill=%27%231e88e5%27/%3E%3Ctext x=%2716%27 y=%2723%27 font-size=%2718%27 text-anchor=%27middle%27%3E%F0%9F%9B%92%3C/text%3E%3C/svg%3E">
+<style>
+  :root { --ink: #10202b; --paper: #fffdf7; --accent: #1e88e5; --gold: #ffb300; --bad: #e53935; --good: #43a047; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; overflow: hidden; background: #0f1a22; font-family: "Segoe UI", system-ui, -apple-system, sans-serif; color: #fff; }
+  #c { display: block; width: 100vw; height: 100vh; touch-action: none; cursor: crosshair; }
+  button { font: inherit; cursor: pointer; }
+
+  /* HUD */
+  #hud { position: fixed; inset: 0; pointer-events: none; display: none; }
+  #hud.show { display: block; }
+  .bar { position: absolute; top: 0; left: 0; right: 0; display: flex; justify-content: space-between; align-items: flex-start; padding: 12px 16px; gap: 12px; }
+  .stats { display: flex; gap: 14px; background: rgba(10,20,28,.7); backdrop-filter: blur(8px); border-radius: 14px; padding: 8px 14px; }
+  .stat { text-align: center; min-width: 58px; }
+  .stat b { display: block; font-size: 22px; line-height: 1.05; color: var(--gold); font-variant-numeric: tabular-nums; }
+  .stat small { font-size: 10px; letter-spacing: .6px; text-transform: uppercase; color: rgba(255,255,255,.6); }
+  #hud-strikes span { font-size: 20px; color: var(--bad); }
+  #hud-strikes span.lost { color: rgba(255,255,255,.18); }
+  .controls { display: flex; gap: 8px; pointer-events: auto; }
+  .controls button, .overlay button { padding: 9px 14px; border-radius: 10px; border: 1px solid rgba(255,255,255,.2); background: rgba(10,20,28,.7); color: #fff; font-weight: 600; }
+  #btn-total { background: var(--accent); border-color: transparent; }
+  #btn-total.ready { animation: pulse .8s infinite alternate; background: var(--gold); color: var(--ink); }
+  @keyframes pulse { from { transform: scale(1); } to { transform: scale(1.07); box-shadow: 0 0 22px rgba(255,179,0,.7); } }
+
+  #receipt { position: absolute; right: 16px; bottom: 16px; width: 230px; max-height: 36vh; background: var(--paper); color: var(--ink); border-radius: 4px 4px 12px 12px; padding: 12px 14px 14px; box-shadow: 0 10px 30px rgba(0,0,0,.35); font-family: "Courier New", monospace; font-size: 12.5px; display: flex; flex-direction: column; }
+  #receipt::before { content: ""; position: absolute; top: -8px; left: 0; right: 0; height: 8px; background: linear-gradient(135deg, transparent 50%, var(--paper) 50%), linear-gradient(225deg, transparent 50%, var(--paper) 50%); background-size: 12px 8px; }
+  #receipt h3 { font-size: 13px; text-align: center; letter-spacing: 2px; border-bottom: 1px dashed #999; padding-bottom: 6px; margin-bottom: 6px; }
+  #receipt ul { list-style: none; }
+  #receipt-lines { overflow-y: auto; flex: 1; min-height: 40px; }
+  #receipt li { display: flex; justify-content: space-between; gap: 8px; padding: 2px 0; }
+  #receipt li.empty { color: #888; justify-content: center; }
+  #receipt li.sub { border-top: 1px dashed #999; margin-top: 6px; padding-top: 6px; }
+  #receipt li.total { font-weight: 800; font-size: 15px; }
+  #receipt li.bonus { color: var(--good); }
+
+  #toast { position: absolute; left: 50%; top: 84px; transform: translateX(-50%); padding: 10px 18px; border-radius: 12px; font-weight: 700; font-size: 16px; background: rgba(10,20,28,.8); opacity: 0; transition: opacity .15s, transform .15s; white-space: nowrap; max-width: 92vw; text-overflow: ellipsis; overflow: hidden; }
+  #toast.show { opacity: 1; }
+  #toast.bad { background: var(--bad); }
+  #toast.good { background: var(--good); }
+  #toast.warn { background: var(--gold); color: var(--ink); }
+
+  #floaters { position: absolute; inset: 0; overflow: hidden; }
+  .floater { position: absolute; left: 0; top: 0; font-weight: 800; font-size: 20px; text-shadow: 0 2px 6px rgba(0,0,0,.6); white-space: nowrap; will-change: transform, opacity; }
+  .floater.good { color: #7fff9b; }
+  .floater.warn { color: var(--gold); }
+  .floater.gold { color: var(--gold); font-size: 30px; }
+
+  #help { position: absolute; left: 16px; bottom: 34px; font-size: 12px; color: rgba(255,255,255,.7); background: rgba(10,20,28,.55); padding: 6px 10px; border-radius: 8px; max-width: calc(100vw - 280px); }
+  #credits { position: absolute; left: 16px; bottom: 12px; font-size: 11px; color: rgba(255,255,255,.55); }
+
+  /* overlays */
+  .overlay { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(6,12,18,.7); backdrop-filter: blur(6px); padding: 16px; }
+  .overlay.show { display: flex; }
+  .panel { width: min(560px, 100%); background: #14232d; border: 1px solid rgba(255,255,255,.1); border-radius: 18px; padding: 28px 30px; text-align: center; box-shadow: 0 30px 80px rgba(0,0,0,.5); }
+  .panel h1 { font-size: 40px; letter-spacing: 1px; margin-bottom: 4px; }
+  .panel h1 span { color: var(--gold); }
+  .panel p.tag { color: rgba(255,255,255,.7); margin-bottom: 18px; }
+  .howto { text-align: left; background: rgba(255,255,255,.05); border-radius: 12px; padding: 14px 16px; margin: 0 0 18px; font-size: 14px; line-height: 1.55; }
+  .howto li { margin-left: 18px; }
+  .howto b { color: var(--gold); }
+  .panel .big { font-size: 56px; font-weight: 800; color: var(--gold); line-height: 1; }
+  .panel button.primary { background: var(--gold); color: var(--ink); border-color: transparent; font-size: 17px; padding: 12px 26px; }
+  .panel button.primary:disabled { opacity: .5; cursor: progress; }
+  #load-status { min-height: 18px; font-size: 12px; color: rgba(255,255,255,.55); margin-top: 12px; }
+  #over-sub { color: rgba(255,255,255,.7); margin: 8px 0 18px; }
+
+  @media (max-width: 700px) {
+    .bar { flex-direction: column; align-items: stretch; padding: 8px 10px; gap: 8px; }
+    .stats { justify-content: space-between; padding: 6px 10px; }
+    .stat { min-width: 40px; } .stat b { font-size: 18px; } .stat small { font-size: 9px; }
+    #toast { top: 118px; font-size: 14px; }
+    #receipt { width: 150px; font-size: 10.5px; max-height: 30vh; padding: 8px 10px 10px; }
+    .controls { flex-wrap: wrap; justify-content: flex-end; }
+    .controls button { padding: 7px 9px; font-size: 12px; }
+    #btn-fx { display: none; }
+    #help { display: none; }
+    #credits { font-size: 9px; }
+    .panel { padding: 20px; } .panel h1 { font-size: 30px; }
+  }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div id="hud">
+  <div class="bar">
+    <div class="stats">
+      <div class="stat"><b id="hud-score">0</b><small>Score</small></div>
+      <div class="stat"><b id="hud-combo">–</b><small>Combo</small></div>
+      <div class="stat"><b id="hud-customer">–</b><small>Customer</small></div>
+      <div class="stat"><b id="hud-left">–</b><small>Items left</small></div>
+      <div class="stat"><b id="hud-strikes"></b><small>Strikes</small></div>
+    </div>
+    <div class="controls">
+      <button id="btn-total">Total (Space)</button>
+      <button id="btn-pause">Pause</button>
+      <button id="btn-mute">Mute</button>
+      <button id="btn-fx" title="Toggle shadows and high-DPI rendering (L)">Graphics: high</button>
+    </div>
+  </div>
+  <div id="receipt">
+    <h3>CHECKOUT 3</h3>
+    <ul id="receipt-lines"></ul>
+    <ul id="receipt-foot"></ul>
+  </div>
+  <div id="toast" class="toast"></div>
+  <div id="floaters"></div>
+  <div id="help">Click items in the red zone to scan · leave the customer's stuff alone · Space to total · P pause · M mute · L graphics</div>
+  <div id="credits"></div>
+</div>
+
+<div id="overlay-title" class="overlay show">
+  <div class="panel">
+    <h1>Checkout <span>Rush</span></h1>
+    <p class="tag">You are the cashier. The belt does not wait.</p>
+    <ul class="howto">
+      <li><b>Scan</b> each grocery by clicking it while it sits in the glowing red scanner zone. Too early resets your combo.</li>
+      <li><b>Miss</b> one and it slides past: that is a strike. Three strikes and your shift is over.</li>
+      <li><b>Hands off</b> the customer's wallet, phone, keys… and whatever else ends up on the belt. Scanning those is a strike too.</li>
+      <li><b>Total</b> with Space or by tapping the cash register once the belt is clear. Fast, flawless checkouts pay the biggest bonus.</li>
+    </ul>
+    <button id="btn-start" class="primary" disabled>Start shift</button>
+    <div id="load-status">Loading…</div>
+  </div>
+</div>
+
+<div id="overlay-over" class="overlay">
+  <div class="panel">
+    <h1>Shift <span>over</span></h1>
+    <div class="big" id="over-score">0</div>
+    <p id="over-sub"></p>
+    <button id="btn-restart" class="primary">Clock in again</button>
+  </div>
+</div>
+
+<script type="importmap">
+{ "imports": { "three": "./vendor/three/three.module.js" } }
+</script>
+<script type="module">
+  import { CheckoutRush } from './src/game.js';
+  const game = new CheckoutRush({ canvas: document.getElementById('c') });
+  game.loadModels();
+  window.__checkout = game; // handy for debugging
+</script>
+</body>
+</html>

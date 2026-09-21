@@ -1,0 +1,10 @@
+{
+  "register": {
+    "file": "cash_register.glb",
+    "height": 1.15,
+    "rotationY": -70,
+    "credit": "Cash register by Poly by Google (CC-BY 3.0)"
+  },
+  "items": [],
+  "decoys": []
+}
