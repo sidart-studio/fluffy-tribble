@@ -2650,9 +2650,31 @@ class Character {
     }
     this.current = null;
     this.play('idle');
+    // Whatever the character carries rides between the two hand bones, so it
+    // swings with the arms instead of floating in front of the face.
     this.carry = new THREE.Group();
-    this.carry.position.set(0, 1.0, 0.42);
+    this.carry.name = 'hand';
+    const rig = model.userData.model ?? model;
+    this.handL = rig.getObjectByName('Hand.L');
+    this.handR = rig.getObjectByName('Hand.R');
+    this.carry.position.set(0, 0.55, 0.35);
     model.add(this.carry);
+    this.carryTarget = null; // optional lift target (e.g. the mouth), in model space
+    this.carryBlend = 0;
+    this.carryYaw = 0;
+    this.carryTilt = 0;
+    this.updateCarry();
+  }
+  updateCarry() {
+    if (!this.handL || !this.handR) return;
+    this.obj.updateMatrixWorld(true);
+    const a = this.handL.getWorldPosition(_v1), b = this.handR.getWorldPosition(_v2);
+    const mid = a.add(b).multiplyScalar(0.5);
+    this.obj.worldToLocal(mid);
+    mid.y += 0.04; mid.z = Math.max(mid.z, 0) + 0.46; // held out in front of the belly, clear of the chunky body
+    if (this.carryTarget && this.carryBlend > 0) mid.lerp(this.carryTarget, this.carryBlend);
+    this.carry.position.copy(mid);
+    this.carry.rotation.set(this.carryTilt * this.carryBlend, this.carryYaw * this.carryBlend, 0);
   }
   play(name, fade = 0.2) {
     const next = this.actions[name] ?? this.actions.idle;
@@ -2661,8 +2683,9 @@ class Character {
     if (this.current) this.current.fadeOut(fade);
     this.current = next;
   }
-  update(dt) { this.mixer.update(dt); }
+  update(dt) { this.mixer.update(dt); this.updateCarry(); }
 }
+const _v1 = new THREE.Vector3(), _v2 = new THREE.Vector3();
 
 // ----------------------------------------------------------------- game
 class Game {
@@ -2977,8 +3000,7 @@ class Game {
     if (protos.length) {
       const tint = new THREE.Color().setHSL(Math.random(), 0.5, 0.78);
       rig = new Character(cloneRig(pick(protos)), this.scene, { tint });
-      obj = rig.obj;
-      const hand = new THREE.Group(); hand.name = 'hand'; hand.position.set(0, 1.0, 0.42); obj.add(hand);
+      obj = rig.obj; // rig.carry is named 'hand' and follows the hand bones
     } else {
       obj = buildCustomer();
       this.scene.add(obj);
@@ -3080,7 +3102,7 @@ class Game {
           if (c.rig) this.bob(c, false, dt); else o.position.y = Math.abs(Math.sin(this.time * 6)) * 0.02;
           this.updateEating(c, dt);
           if (c.timer <= 0) {
-            if (c.plate) { const hand = o.getObjectByName('hand'); hand.remove(c.plate); if (c.eat) { hand.position.copy(c.eat.rest); hand.rotation.set(0, c.eat.restRot, 0); } c.plate = null; }
+            if (c.plate) { const hand = o.getObjectByName('hand'); hand.remove(c.plate); if (c.eat && !c.rig) { hand.position.copy(c.eat.rest); hand.rotation.set(0, c.eat.restRot, 0); } if (c.rig) { c.rig.carryBlend = 0; c.rig.carryTarget = null; } c.plate = null; }
             c.seat.table.userData.taken[c.seat.index] = null;
             this.finishCustomer(c, true);
           }
@@ -3135,10 +3157,14 @@ class Game {
     else if (phase < 0.55) k = 1;
     else k = 1 - (phase - 0.55) / 0.45;
     k = k * k * (3 - 2 * k);
-    hand.position.lerpVectors(e.rest, mouth, k);
-    // turn the plate so the skewer tip points at the face
-    hand.rotation.y = e.restRot + k * (-Math.PI / 2);
-    hand.rotation.x = k * 0.35;
+    if (c.rig) {
+      // the rig keeps the plate in the hands; blend it up to the mouth for the bite
+      c.rig.carryTarget = mouth; c.rig.carryBlend = k; c.rig.carryYaw = -Math.PI / 2; c.rig.carryTilt = 0.35;
+    } else {
+      hand.position.lerpVectors(e.rest, mouth, k);
+      hand.rotation.y = e.restRot + k * (-Math.PI / 2);
+      hand.rotation.x = k * 0.35;
+    }
     const biteIndex = Math.floor(e.t / period);
     if (biteIndex > e.bites && biteIndex <= e.total) {
       e.bites = biteIndex;
