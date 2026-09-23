@@ -41,6 +41,14 @@
   @media (prefers-reduced-motion: reduce) { .btn.hot { animation: none; } }
   .btn:focus-visible, .u-buy:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
 
+  .views { position: absolute; right: 14px; top: calc(64px + env(safe-area-inset-top, 0px)); display: flex; gap: 6px; }
+  .btn.small { padding: 6px 10px; font-size: 12px; box-shadow: none; border: 1px solid var(--chrome); }
+  #summary { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(340px, 90vw); background: var(--paper); border-radius: 16px; box-shadow: var(--shadow); padding: 16px 18px 12px; border-top: 8px solid var(--cherry); cursor: pointer; }
+  #summary h3 { margin: 0 0 8px; font-family: var(--font-display); font-size: 24px; color: var(--cherry); }
+  #summary ul { list-style: none; margin: 0; padding: 0; }
+  #summary li { display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px dashed var(--chrome); font-variant-numeric: tabular-nums; }
+  #summary li b.bad { color: var(--bad); }
+  #summary small { display: block; text-align: center; color: var(--ink-soft); margin-top: 8px; font-size: 11px; }
   .register-strip { position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(14px + env(safe-area-inset-bottom, 0px)); display: flex; align-items: center; gap: 12px; background: var(--panel); border-radius: 14px; box-shadow: var(--shadow); padding: 10px 14px; }
   .register-strip .stat b { font-size: 22px; color: var(--gold); }
   .kpis { display: flex; gap: 12px; }
@@ -99,8 +107,17 @@
     .ticket { gap: 10px; padding: 8px 10px; } .stat { min-width: 50px; } .stat b { font-size: 19px; }
     .clock { width: 80px; }
     #shop { left: 10px; right: 10px; width: auto; top: auto; bottom: calc(76px + env(safe-area-inset-bottom, 0px)); max-height: 60vh; }
+    .views { top: calc(112px + env(safe-area-inset-top, 0px)); }
     #log { display: none; }
-    .register-strip { left: 10px; right: 10px; transform: none; justify-content: space-between; }
+    .views { position: absolute; right: 14px; top: calc(64px + env(safe-area-inset-top, 0px)); display: flex; gap: 6px; }
+  .btn.small { padding: 6px 10px; font-size: 12px; box-shadow: none; border: 1px solid var(--chrome); }
+  #summary { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(340px, 90vw); background: var(--paper); border-radius: 16px; box-shadow: var(--shadow); padding: 16px 18px 12px; border-top: 8px solid var(--cherry); cursor: pointer; }
+  #summary h3 { margin: 0 0 8px; font-family: var(--font-display); font-size: 24px; color: var(--cherry); }
+  #summary ul { list-style: none; margin: 0; padding: 0; }
+  #summary li { display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px dashed var(--chrome); font-variant-numeric: tabular-nums; }
+  #summary li b.bad { color: var(--bad); }
+  #summary small { display: block; text-align: center; color: var(--ink-soft); margin-top: 8px; font-size: 11px; }
+  .register-strip { left: 10px; right: 10px; transform: none; justify-content: space-between; }
     .kpis { display: none; }
   }
 </style>
@@ -120,6 +137,17 @@
       <button id="btn-pause" class="btn">Pause</button>
       <button id="btn-mute" class="btn">Mute</button>
     </div>
+  </div>
+  <div class="views">
+    <button class="btn small" data-view="overview" title="V cycles views">Overview</button>
+    <button class="btn small" data-view="register">Register</button>
+    <button class="btn small" data-view="kitchen">Kitchen</button>
+    <button class="btn small" data-view="tables">Tables</button>
+  </div>
+  <div id="summary" hidden>
+    <h3 id="summary-title">Day closed</h3>
+    <ul id="summary-body"></ul>
+    <small>Tap to dismiss</small>
   </div>
 
   <div class="register-strip">

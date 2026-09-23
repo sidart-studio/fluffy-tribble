@@ -139,16 +139,19 @@ export class Game {
     controls.mouseButtons = { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.PAN };
     this.controls = controls;
 
-    scene.add(new THREE.HemisphereLight(0xfff4e0, 0x8c7b6b, 0.85));
+    this.hemi = new THREE.HemisphereLight(0xfff4e0, 0x8c7b6b, 0.85);
+    scene.add(this.hemi);
     const sun = new THREE.DirectionalLight(0xfff1dc, 2.0);
+    this.sun = sun;
     sun.position.set(6, 12, 8);
     sun.castShadow = true;
     sun.shadow.mapSize.set(2048, 2048);
     Object.assign(sun.shadow.camera, { left: -12, right: 12, top: 12, bottom: -12, near: 1, far: 40 });
     sun.shadow.bias = -0.0006;
     scene.add(sun);
-    const warm = new THREE.PointLight(0xffc98a, 20, 9, 2); warm.position.set(2.5, 2.8, 0.5); scene.add(warm);
     const kitchenLight = new THREE.PointLight(0xdfefff, 14, 8, 2); kitchenLight.position.set(1, 2.6, -3.5); scene.add(kitchenLight);
+    this.lamps = []; // { obj, light, bulbMats } filled by placeLamps()
+    this.skyDay = new THREE.Color(0xf6e7d2); this.skyDusk = new THREE.Color(0xe8a87c); this.skyNight = new THREE.Color(0x2a3350);
 
     buildWorld(scene);
     this.chef = buildChefPlaceholder();
@@ -284,6 +287,8 @@ export class Game {
     this.tables = [];
     for (const c of this.cabinets) this.scene.remove(c);
     this.cabinets = [];
+    for (const l of this.lamps) this.scene.remove(l.obj);
+    this.lamps = [];
     if (this.knife) { this.scene.remove(this.knife); this.knife = null; }
     this.cashierBusy = null;
     this.cashierTimer = 0;
@@ -294,6 +299,7 @@ export class Game {
   stars() { return this.s.reputation / 20; }
 
   applyUpgradesToWorld() {
+    this.placeLamps();
     // runners
     while (this.runners.length < this.lvl('runner')) {
       const idx = this.runners.length;
@@ -315,6 +321,8 @@ export class Game {
       const p = L.cabinets[this.cabinets.length];
       c.position.set(p.x, p.y - 0.5, p.z); this.scene.add(c); this.cabinets.push(c);
     }
+    // lamps: the Ali12 light over the counter from the start, more over the tables per level
+    this.placeLamps();
     // knife on the cutting board
     if (this.lvl('knife') > 0 && !this.knife) {
       const k = this.knifeProto ? this.knifeProto.clone(true) : placeholderBox(0.05, 0.5, 0.03, 0xcccccc);
@@ -324,8 +332,55 @@ export class Game {
     }
   }
 
+  placeLamps() {
+    const wanted = LAMP_SPOTS.slice(0, 2 + this.lvl('lamps') * 2);
+    while (this.lamps.length < wanted.length) {
+      const spot = wanted[this.lamps.length];
+      const lamp = this.buildLamp();
+      lamp.obj.position.copy(spot);
+      this.scene.add(lamp.obj);
+      this.lamps.push(lamp);
+    }
+    this.updateLighting();
+  }
+
+  buildLamp() {
+    const group = new THREE.Group();
+    const bulbMats = [];
+    let model;
+    if (this.models.light) {
+      model = this.models.light.clone(true);
+      model.traverse((o) => {
+        if (!o.isMesh) return;
+        o.material = o.material.clone();
+        if (/light/i.test(o.material.name)) { o.material.emissive.setHex(0xffb347); o.material.emissiveIntensity = 2; bulbMats.push(o.material); }
+        if (/glass/i.test(o.material.name)) { o.material.transparent = true; o.material.opacity = 0.55; o.material.roughness = 0.1; o.material.metalness = 0.2; }
+        o.castShadow = false;
+      });
+    } else {
+      const shade = new THREE.Mesh(new THREE.ConeGeometry(0.35, 0.3, 16, 1, true), new THREE.MeshStandardMaterial({ color: 0xc73e3a, side: THREE.DoubleSide }));
+      shade.position.y = 0.15;
+      model = new THREE.Group(); model.add(shade);
+      const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.08, 10, 8), new THREE.MeshStandardMaterial({ color: 0xfff1c9, emissive: 0xffe3a3, emissiveIntensity: 1.5 }));
+      bulb.position.y = 0.05; model.add(bulb); bulbMats.push(bulb.material);
+    }
+    // the fitted model stands on y=0; hang it from the ceiling by its top
+    const h = this.models.light ? this.models.light.userData.size.y : 0.45;
+    model.position.y = -h;
+    group.add(model);
+    const cord = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 3.2 - LAMP_Y - 0.02), new THREE.MeshStandardMaterial({ color: 0x222222 }));
+    cord.position.y = (3.2 - LAMP_Y) / 2;
+    group.add(cord);
+    const light = new THREE.PointLight(0xffc98a, 14, 8, 2);
+    light.position.y = -h * 0.75;
+    group.add(light);
+    return { obj: group, light, bulbMats, baseIntensity: 14 };
+  }
+
   // ---------------------------------------------------------- economy helpers
-  arrivalsPerMinute() { return (3.0 + this.stars() * 1.6) * (1 + 0.25 * this.lvl('sign')); }
+  arrivalsPerMinute() { return (3.0 + this.stars() * 1.6) * (1 + 0.25 * this.lvl('sign')) * (this.rush > 0 ? 1.9 : 1); }
+  /** Cosy lighting keeps guests patient: +12% per lamp level. */
+  patienceMult() { return 1 + 0.12 * this.lvl('lamps'); }
   orderTime() { return 4.2 * Math.pow(0.85, this.lvl('cashier')); }
   cookTime(item) { return 1.6 * Math.pow(0.8, this.lvl('knife')) + item.cook * Math.pow(0.88, this.lvl('cabinet')); }
   runnerSpeed() { return 2.1 * (1 + 0.2 * this.lvl('shoes')); }
@@ -346,7 +401,10 @@ export class Game {
       this.scene.add(obj);
     }
     obj.position.copy(L.spawn);
-    const c = { obj, rig, state: 'enter', path: [L.corridor.clone(), null], patience: QUEUE_PATIENCE, waitSpot: null, seat: null, order: null, timer: 0, speed: rand(1.6, 2.1), happy: true, bob: Math.random() * 6 };
+    const bubble = makeBubble();
+    bubble.position.y = 2.25;
+    obj.add(bubble);
+    const c = { obj, rig, bubble, patienceMax: QUEUE_PATIENCE * this.patienceMult(), state: 'enter', path: [L.corridor.clone(), null], patience: QUEUE_PATIENCE * this.patienceMult(), waitSpot: null, seat: null, order: null, timer: 0, speed: rand(1.6, 2.1), happy: true, bob: Math.random() * 6 };
     this.customers.push(c);
     return c;
   }
@@ -453,7 +511,19 @@ export class Game {
         }
       }
     }
+    for (const c of this.customers) this.updateBubble(c);
     this.customers = this.customers.filter((c) => !c.dead);
+  }
+
+  updateBubble(c) {
+    const b = c.bubble;
+    if (!b) return;
+    const waiting = c.state === 'queue' || c.state === 'toWait' || c.state === 'waitFood';
+    b.visible = waiting || c.state === 'ordering';
+    if (!b.visible) return;
+    const frac = Math.max(0, Math.min(1, c.patience / (c.patienceMax || 1)));
+    const item = c.state === 'queue' ? null : c.item;
+    drawBubble(b, { frac, item, ordering: c.state === 'ordering' });
   }
 
   bob(c, moving, dt) {
@@ -473,9 +543,9 @@ export class Game {
   finishCustomer(c, seated) {
     let tip = 0;
     if (seated) {
-      tip = Math.round(c.item.price * rand(0.15, 0.35) * 100) / 100;
+      tip = Math.round(c.item.price * rand(0.15, 0.35) * (1 + 0.1 * this.lvl('lamps')) * 100) / 100;
       this.s.till += tip;
-      this.s.stats.earnedTotal += tip; this.s.stats.earnedToday += tip;
+      this.s.stats.earnedTotal += tip; this.s.stats.earnedToday += tip; this.s.stats.tipsToday = (this.s.stats.tipsToday ?? 0) + tip;
       this.float(c.obj.position, `tip ${money2(tip)}`, 'gold');
     }
     this.leave(c, true, seated ? 'ate in' : 'took it to go');
@@ -536,7 +606,7 @@ export class Game {
     // find a waiting spot
     const spot = L.waitSpots.find((w) => !w.taken) ?? L.waitSpots[L.waitSpots.length - 1];
     spot.taken = true; c.waitSpot = spot;
-    c.state = 'toWait'; c.patience = FOOD_PATIENCE;
+    c.state = 'toWait'; c.patience = FOOD_PATIENCE * this.patienceMult(); c.patienceMax = c.patience;
     if (!this.tutorial.paid) { this.tutorial.paid = true; this.toast('First sale! Cash piles up on the register. Click the register (or Collect) to bank it.', 'info', 5000); }
     this.updateHud();
   }
@@ -694,18 +764,65 @@ export class Game {
   }
 
   // ---------------------------------------------------------- day cycle
+  /** 0 = opening (morning), 1 = closing (night). */
+  dayFraction() { return this.s ? this.s.dayTime / DAY_LENGTH : 0.3; }
+
+  updateLighting() {
+    const f = this.dayFraction();
+    // daylight peaks mid-day and fades to evening in the last third
+    const daylight = f < 0.55 ? 1 : Math.max(0.12, 1 - (f - 0.55) / 0.4);
+    const evening = 1 - daylight;
+    this.sun.intensity = 0.35 + 1.75 * daylight;
+    this.sun.color.setHex(f > 0.7 ? 0xffb07a : 0xfff1dc);
+    this.hemi.intensity = 0.35 + 0.55 * daylight;
+    const sky = new THREE.Color();
+    if (f < 0.55) sky.copy(this.skyDay);
+    else if (f < 0.8) sky.lerpColors(this.skyDay, this.skyDusk, (f - 0.55) / 0.25);
+    else sky.lerpColors(this.skyDusk, this.skyNight, (f - 0.8) / 0.2);
+    this.scene.background.copy(sky);
+    this.scene.fog.color.copy(sky);
+    const glow = 0.25 + 0.75 * evening;
+    for (const lamp of this.lamps) {
+      lamp.light.intensity = lamp.baseIntensity * (0.35 + 0.9 * evening);
+      for (const m of lamp.bulbMats) m.emissiveIntensity = 0.6 + 2.4 * glow;
+    }
+    this.renderer.toneMappingExposure = 1.0 + 0.15 * evening;
+  }
+
   updateDay(dt) {
     this.s.dayTime += dt;
+    // rush hour: a burst of walk-ins just after mid-day
+    const f = this.dayFraction();
+    if (!this.rushAnnounced && f > 0.45 && f < 0.7) { this.rushAnnounced = true; this.rush = 22; this.toast('🔥 Rush hour! Extra guests for a while.', 'warn', 3500); this.log('Rush hour: walk-ins doubled for a bit.'); }
+    if (this.rush > 0) this.rush -= dt;
     if (this.s.dayTime >= DAY_LENGTH) {
       this.s.dayTime -= DAY_LENGTH;
       const st = this.s.stats;
       this.log(`Day ${this.s.day} closed: ${money(st.earnedToday)} earned, ${st.servedToday} served, ${st.angryToday} walked out.`);
       this.toast(`Day ${this.s.day} closed · ${money(st.earnedToday)} · ${st.servedToday} guests`, 'info', 4500);
+      this.showDaySummary(st);
       this.s.day += 1;
-      st.earnedToday = 0; st.servedToday = 0; st.angryToday = 0;
+      this.rushAnnounced = false;
+      st.tipsToday = 0; st.earnedToday = 0; st.servedToday = 0; st.angryToday = 0;
       this.sfx.bell();
       this.save();
     }
+  }
+
+  showDaySummary(st) {
+    const el = $('summary');
+    const stars = this.stars();
+    $('summary-title').textContent = `Day ${this.s.day} closed`;
+    $('summary-body').innerHTML = `
+      <li><span>Sales</span><b>${money2(st.earnedToday - (st.tipsToday ?? 0))}</b></li>
+      <li><span>Tips</span><b>${money2(st.tipsToday ?? 0)}</b></li>
+      <li><span>Guests served</span><b>${st.servedToday}</b></li>
+      <li><span>Walked out</span><b class="${st.angryToday ? 'bad' : ''}">${st.angryToday}</b></li>
+      <li><span>Rating</span><b>${'★'.repeat(Math.round(stars))}${'☆'.repeat(5 - Math.round(stars))} ${stars.toFixed(1)}</b></li>
+      <li><span>In the bank</span><b>${money(this.s.cash)}</b></li>`;
+    el.hidden = false;
+    clearTimeout(this.summaryTimer);
+    this.summaryTimer = setTimeout(() => { el.hidden = true; }, 7000);
   }
 
   // ---------------------------------------------------------- effects
@@ -811,12 +928,16 @@ export class Game {
       this.startNew();
     });
     $('shop-list').addEventListener('click', (e) => { const b = e.target.closest('.u-buy'); if (b) this.buy(b.dataset.id); });
+    document.querySelectorAll('[data-view]').forEach((b) => b.addEventListener('click', () => this.viewPreset(b.dataset.view)));
+    $('summary').addEventListener('click', () => { $('summary').hidden = true; });
+    this.canvas.addEventListener('pointerdown', () => { this.camTween = null; }, { capture: true });
     addEventListener('keydown', (e) => {
       if (!this.running) return;
       if (e.code === 'Space') { e.preventDefault(); this.collect(true); }
       else if (e.key === 'p' || e.key === 'P') this.togglePause();
       else if (e.key === 'b' || e.key === 'B') $('shop').classList.toggle('open');
       else if (e.key === '1' || e.key === '2' || e.key === '3') { this.speed = Number(e.key); this.updateHud(); }
+      else if (e.key === 'v' || e.key === 'V') { const order = ['overview', 'register', 'kitchen', 'tables']; this.viewIdx = ((this.viewIdx ?? 0) + 1) % order.length; this.viewPreset(order[this.viewIdx]); }
     });
     // click = collect from the register / cash stack (distinguish from orbit drag)
     let down = null;
@@ -835,6 +956,28 @@ export class Game {
     addEventListener('visibilitychange', () => { if (document.hidden) this.save(); });
   }
 
+  viewPreset(name) {
+    const presets = {
+      overview: { pos: [7, 9.5, 12.5], target: [0.3, 0.6, 0.8] },
+      register: { pos: [4.5, 3.2, 5.0], target: [2.6, 1.0, 1.0] },
+      kitchen: { pos: [1.5, 3.4, 1.8], target: [0.8, 1.0, -3.0] },
+      tables: { pos: [8.5, 5.0, 9.0], target: [4.5, 0.6, 4.0] },
+    };
+    const p = presets[name];
+    if (!p) return;
+    this.camTween = { from: this.camera.position.clone(), to: new THREE.Vector3(...p.pos), tFrom: this.controls.target.clone(), tTo: new THREE.Vector3(...p.target), t: 0 };
+  }
+
+  updateCameraTween(dt) {
+    const tw = this.camTween;
+    if (!tw) return;
+    tw.t = Math.min(1, tw.t + dt * 1.6);
+    const e = tw.t * tw.t * (3 - 2 * tw.t);
+    this.camera.position.lerpVectors(tw.from, tw.to, e);
+    this.controls.target.lerpVectors(tw.tFrom, tw.tTo, e);
+    if (tw.t >= 1) this.camTween = null;
+  }
+
   togglePause() {
     if (!this.running) return;
     this.paused = !this.paused;
@@ -845,6 +988,7 @@ export class Game {
   // ---------------------------------------------------------- frame
   frame() {
     const real = Math.min(this.clock.getDelta(), 0.1);
+    this.updateCameraTween(real);
     this.controls.update();
     if (this.running && !this.paused) {
       const dt = real * this.speed;
@@ -861,6 +1005,7 @@ export class Game {
       this.updateRunners(dt);
       if (this.lvl('auto') > 0) { this.autoTimer += dt; if (this.autoTimer >= 6 && this.s.till > 0) { this.autoTimer = 0; this.collect(false); } }
       this.updateDay(dt);
+      this.updateLighting();
       this.updateCashStack();
       this.updateCoins(dt);
       this.checkMilestones();
@@ -875,6 +1020,58 @@ export class Game {
     this.updateFloaters(real);
     this.renderer.render(this.scene, this.camera);
   }
+}
+
+// lamp hanging points: the first two light the counters, the rest come with the Lighting upgrade
+const LAMP_Y = 3.05; // top of the pendant; the fitted model is 0.9 tall, so the bulb hangs at ~2.2
+const LAMP_SPOTS = [
+  new THREE.Vector3(2.6, LAMP_Y, 0.4), new THREE.Vector3(-2.3, LAMP_Y, 0.4),
+  new THREE.Vector3(5.6, LAMP_Y, 3.2), new THREE.Vector3(-5.6, LAMP_Y, 3.2),
+  new THREE.Vector3(5.6, LAMP_Y, 5.4), new THREE.Vector3(-5.6, LAMP_Y, 5.4),
+  new THREE.Vector3(0.3, LAMP_Y, -1.5), new THREE.Vector3(0.3, LAMP_Y, 4.2),
+];
+
+// speech bubble + patience bar drawn on a canvas sprite
+function makeBubble() {
+  const canvas = document.createElement('canvas');
+  canvas.width = 128; canvas.height = 96;
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false }));
+  sprite.scale.set(0.8, 0.6, 1);
+  sprite.userData.canvas = canvas;
+  sprite.userData.last = '';
+  sprite.renderOrder = 10;
+  return sprite;
+}
+function drawBubble(sprite, { frac, item, ordering }) {
+  const key = `${Math.round(frac * 40)}|${item?.id ?? ''}|${ordering ? 1 : 0}`;
+  if (sprite.userData.last === key) return;
+  sprite.userData.last = key;
+  const c = sprite.userData.canvas, ctx = c.getContext('2d');
+  ctx.clearRect(0, 0, c.width, c.height);
+  // bubble
+  ctx.fillStyle = 'rgba(255,250,241,0.95)';
+  roundRect(ctx, 8, 6, 112, 64, 14); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(54, 70); ctx.lineTo(64, 84); ctx.lineTo(74, 70); ctx.fill();
+  // content: dish dot or "…"
+  if (item) {
+    ctx.fillStyle = '#' + item.color.toString(16).padStart(6, '0');
+    ctx.beginPath(); ctx.arc(64, 30, 14, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#2b2f38'; ctx.font = 'bold 14px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText(item.shape === 'kebab' || item.shape === 'platter' || item.shape === 'special' ? '🍢' : '🥤', 64, 35);
+  } else {
+    ctx.fillStyle = '#2b2f38'; ctx.font = 'bold 26px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText(ordering ? '$' : '…', 64, 40);
+  }
+  // patience bar
+  ctx.fillStyle = 'rgba(43,47,56,0.15)'; roundRect(ctx, 20, 54, 88, 8, 4); ctx.fill();
+  ctx.fillStyle = frac > 0.5 ? '#3f8f4a' : frac > 0.25 ? '#e0a02c' : '#c73e3a';
+  roundRect(ctx, 20, 54, Math.max(6, 88 * frac), 8, 4); ctx.fill();
+  sprite.material.map.needsUpdate = true;
+}
+function roundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
 }
 
 // ----------------------------------------------------------------- helpers

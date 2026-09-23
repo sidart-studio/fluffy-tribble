@@ -47,6 +47,12 @@
       "height": 0.5,
       "rotationY": 0,
       "credit": "Kebab by Poly by Google (CC-BY 3.0)"
+    },
+    "light": {
+      "file": "the_light.glb",
+      "height": 0.9,
+      "rotationY": 0,
+      "credit": "the light by Ali12 (CC-BY 3.0)"
     }
   },
   "pending": {

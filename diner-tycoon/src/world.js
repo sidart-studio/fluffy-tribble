@@ -102,14 +102,7 @@ export function buildWorld(scene) {
   const menuFace = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 0.85), new THREE.MeshBasicMaterial({ map: textTexture('SHORT ORDER  ·  MENU', '#ffd166', '#2b2f38', 44) }));
   menuFace.position.set(-3.6, 2.55, -5.9); scene.add(menuFace);
 
-  // ceiling lights (pendants)
-  for (const [x, z] of [[-4.5, 2.5], [0, 2.5], [4.5, 2.5], [-4.5, -1], [4.5, -1]]) {
-    const shade = new THREE.Mesh(new THREE.ConeGeometry(0.35, 0.3, 16, 1, true), new THREE.MeshStandardMaterial({ color: 0xc73e3a, side: THREE.DoubleSide, roughness: 0.5 }));
-    shade.position.set(x, 2.75, z); scene.add(shade);
-    const cord = new THREE.Mesh(new THREE.CylinderGeometry(0.01, 0.01, 0.5), mat(0x222222)); cord.position.set(x, 3.1, z); scene.add(cord);
-    const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.08, 10, 8), new THREE.MeshStandardMaterial({ color: 0xfff1c9, emissive: 0xffe3a3, emissiveIntensity: 1.5 }));
-    bulb.position.set(x, 2.65, z); scene.add(bulb);
-  }
+  // ceiling lamps are placed by the game (the Ali12 light model), see game.js placeLamps()
 
   // plants by the door
   for (const x of [-5.6, 6.9]) scene.add(plant(x, 5.6));

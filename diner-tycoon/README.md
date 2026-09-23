@@ -3,7 +3,8 @@
 A 3D kebab diner tycoon built with Three.js around the models in `models/`:
 the Poly by Google cash register and kebab, J-Toastie's Food Worker (the
 cashier), Retail Worker (the runner) and Cash Stack, Kay Lousberg's kitchen
-cabinet and chef's knife, and sirkitree's kitchen. Every person in the game,
+cabinet and chef's knife, sirkitree's kitchen, and Ali12's hanging light, which
+lights the counters and every dining table. Every person in the game,
 guests and chef included, is one of the two J-Toastie character rigs with a
 different tint; every skewer on the menu is the Poly kebab with its meat
 recolored per dish.
@@ -36,6 +37,7 @@ on the title screen.
 | Game speed | 1× / 2× / 3× button, or keys 1, 2, 3 |
 | Pause | P |
 | Look around | Drag to orbit, wheel to zoom, right-drag to pan |
+| Camera views | Overview / Register / Kitchen / Tables buttons, or V to cycle |
 
 ## Upgrades
 
@@ -48,9 +50,18 @@ on the title screen.
 | Extra stove | One more dish cooks at once |
 | Kitchen cabinet | Places a cabinet on the back wall; cook time −12% each |
 | Dining table | Four seats; seated guests tip and rate you higher |
+| Mood lighting | Two more Ali12 lamps over the dining room; guests wait 12% longer and tip 10% more per level |
 | Neon sign | 25% more walk-ins per level |
 | Expand the menu | Unlocks veggie skewers and shakes, then lamb and the mixed platter, then the Chef's Special |
 | Cash drawer | The cashier banks the register automatically |
+
+## A day in the diner
+
+Each day lasts two minutes. Daylight fades into a warm evening in the last
+third and the lamps take over. Just after midday a rush hour doubles walk-ins
+for a while. Guests show a speech bubble with what they ordered and a
+patience bar; when the bar runs out they leave and cost you a star. At
+closing time a summary card shows sales, tips, guests, walkouts and rating.
 
 ## Building
 
