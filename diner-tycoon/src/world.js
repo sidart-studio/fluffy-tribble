@@ -14,17 +14,19 @@ export const L = {
   pickupSlots: [new THREE.Vector3(-3.0, COUNTER_TOP, 1.2), new THREE.Vector3(-2.3, COUNTER_TOP, 1.2), new THREE.Vector3(-1.6, COUNTER_TOP, 1.2)],
   pickupStand: new THREE.Vector3(-2.3, 0, 0.35),
   waitSpots: [],
-  passSlots: [new THREE.Vector3(-1.0, COUNTER_TOP, -2.6), new THREE.Vector3(-0.3, COUNTER_TOP, -2.6), new THREE.Vector3(0.4, COUNTER_TOP, -2.6), new THREE.Vector3(1.1, COUNTER_TOP, -2.6)],
-  passStand: new THREE.Vector3(0.0, 0, -1.8),
-  runnerIdle: [new THREE.Vector3(-1.2, 0, -1.2), new THREE.Vector3(-0.2, 0, -0.9), new THREE.Vector3(0.8, 0, -1.2)],
+  passSlots: [new THREE.Vector3(-1.0, COUNTER_TOP, -1.85), new THREE.Vector3(-0.3, COUNTER_TOP, -1.85), new THREE.Vector3(0.4, COUNTER_TOP, -1.85), new THREE.Vector3(1.1, COUNTER_TOP, -1.85)],
+  passStand: new THREE.Vector3(0.0, 0, -1.1),
+  runnerIdle: [new THREE.Vector3(-1.4, 0, -0.45), new THREE.Vector3(-0.4, 0, -0.3), new THREE.Vector3(-2.4, 0, -0.45)],
   // kitchen: the sirkitree set is a corner unit open toward +z; the chef works inside it
   kitchen: new THREE.Vector3(1.7, 0, -4.55),
-  chef: new THREE.Vector3(1.7, 0, -3.9),
-  stove: new THREE.Vector3(1.7, 0, -4.0),       // stand here facing the back wall to cook
-  prep: new THREE.Vector3(1.9, 0, -3.3),        // behind the pass, facing the cutting board
-  passStandChef: -3.3,                          // z where the chef stands to set plates on the pass
+  chef: new THREE.Vector3(1.9, 0, -4.9),
+  stove: new THREE.Vector3(1.9, 0, -4.9),       // between the island and the back counter, facing the range
+  prep: new THREE.Vector3(1.9, 0, -2.62),       // in the corridor behind the pass, facing the cutting board
+  stove2: new THREE.Vector3(3.0, 0, -5.05),     // the sous chef's burner, at the right end of the range
+  prep2: new THREE.Vector3(0.4, 0, -2.62),      // the sous chef's board
+  passStandChef: -2.62,                         // z where the chef stands to set plates on the pass
   cabinets: [new THREE.Vector3(-1.3, 1.45, -5.7), new THREE.Vector3(-2.5, 1.45, -5.7), new THREE.Vector3(-3.7, 1.45, -5.7)],
-  knife: new THREE.Vector3(1.9, COUNTER_TOP + 0.02, -2.55),
+  knife: new THREE.Vector3(1.9, COUNTER_TOP + 0.02, -1.8),
   door: new THREE.Vector3(-7.0, 0, 6.2),
   register2: new THREE.Vector3(0.9, COUNTER_TOP, 1.2),
   cashier2: new THREE.Vector3(0.6, 0, 0.3),
@@ -35,7 +37,7 @@ export const L = {
   corridor: new THREE.Vector3(-3.5, 0, 6.0),
   tables: [new THREE.Vector3(5.6, 0, 3.2), new THREE.Vector3(5.6, 0, 5.4), new THREE.Vector3(-5.6, 0, 3.2), new THREE.Vector3(-5.6, 0, 5.4)],
 };
-for (let i = 0; i < 9; i++) L.waitSpots.push(new THREE.Vector3(-3.4 + (i % 3) * 0.9, 0, 2.4 + Math.floor(i / 3) * 0.85));
+for (let i = 0; i < 16; i++) L.waitSpots.push(new THREE.Vector3(-3.6 + (i % 4) * 0.8, 0, 2.4 + Math.floor(i / 4) * 0.8));
 
 const mat = (color, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.75, metalness: 0.05, ...extra });
 
@@ -74,8 +76,9 @@ export function buildWorld(scene) {
   const frame = shadowed(new THREE.Mesh(new THREE.BoxGeometry(1.6, 2.4, 0.15), mat(0xc73e3a))); frame.position.set(L.door.x, 1.2, 6.1); scene.add(frame);
   const doorGlass = new THREE.Mesh(new THREE.BoxGeometry(1.2, 2.0, 0.06), new THREE.MeshStandardMaterial({ color: 0xcfe9ff, transparent: true, opacity: 0.4 })); doorGlass.position.set(L.door.x, 1.1, 6.1); scene.add(doorGlass);
   // low front wall segments either side of the door so the room reads as a room
-  const fw1 = shadowed(new THREE.Mesh(new THREE.BoxGeometry(5.0, 1.0, 0.2), wallMat)); fw1.position.set(-4.5 + 1.15, 0.5, 6.1); fw1.position.x = -3.4; scene.add(fw1);
-  const fw2 = shadowed(new THREE.Mesh(new THREE.BoxGeometry(8.0, 1.0, 0.2), wallMat)); fw2.position.set(4.0, 0.5, 6.1); scene.add(fw2);
+  // low front wall from the door's right edge (-6.2) to the right side wall, plus a stub left of the door
+  const fw1 = shadowed(new THREE.Mesh(new THREE.BoxGeometry(14.2, 1.0, 0.2), wallMat)); fw1.position.set(0.9, 0.5, 6.1); scene.add(fw1);
+  const fw0 = shadowed(new THREE.Mesh(new THREE.BoxGeometry(0.3, 1.0, 0.2), wallMat)); fw0.position.set(-7.95, 0.5, 6.1); scene.add(fw0);
 
   // front counter (order + pickup) with chrome trim and red base
   const counterBase = shadowed(new THREE.Mesh(new THREE.BoxGeometry(7.4, COUNTER_TOP - 0.05, 0.9), mat(0xc73e3a, { roughness: 0.5 })));
@@ -92,15 +95,15 @@ export function buildWorld(scene) {
 
   // kitchen pass counter
   const pass = shadowed(new THREE.Mesh(new THREE.BoxGeometry(4.4, COUNTER_TOP - 0.05, 0.8), mat(0xd9dde3, { metalness: 0.7, roughness: 0.35 })));
-  pass.position.set(0.3, (COUNTER_TOP - 0.05) / 2, -2.6); scene.add(pass);
+  pass.position.set(0.3, (COUNTER_TOP - 0.05) / 2, -1.85); scene.add(pass);
   const passTop = shadowed(new THREE.Mesh(new THREE.BoxGeometry(4.5, 0.06, 0.9), mat(0xe8ebef, { metalness: 0.8, roughness: 0.25 })));
-  passTop.position.set(0.3, COUNTER_TOP - 0.03, -2.6); scene.add(passTop);
+  passTop.position.set(0.3, COUNTER_TOP - 0.03, -1.85); scene.add(passTop);
   const heatLamp = new THREE.Mesh(new THREE.BoxGeometry(4.0, 0.08, 0.3), mat(0x3a3f47, { metalness: 0.6 }));
-  heatLamp.position.set(0.3, 2.1, -2.6); scene.add(heatLamp);
+  heatLamp.position.set(0.3, 2.1, -1.85); scene.add(heatLamp);
   for (let i = 0; i < 4; i++) {
     const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.06, 10, 8), new THREE.MeshStandardMaterial({ color: 0xffb36b, emissive: 0xff8a3d, emissiveIntensity: 2 }));
-    bulb.position.set(-1.0 + i * 0.85, 2.02, -2.6); scene.add(bulb);
-    const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.01, 0.01, 1.1), mat(0x3a3f47)); rod.position.set(-1.0 + i * 0.85, 2.65, -2.6); scene.add(rod);
+    bulb.position.set(-1.0 + i * 0.85, 2.02, -1.85); scene.add(bulb);
+    const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.01, 0.01, 1.1), mat(0x3a3f47)); rod.position.set(-1.0 + i * 0.85, 2.65, -1.85); scene.add(rod);
   }
   // cutting board where the knife goes
   const board = shadowed(new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.03, 0.35), mat(0xc8a06a, { roughness: 0.9 })));

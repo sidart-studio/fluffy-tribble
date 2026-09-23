@@ -55477,6 +55477,7 @@ const UPGRADES = [
   { id: 'shoes', name: 'Runner sneakers', desc: 'Runners walk 20% faster per level.', cost: 60, growth: 1.6, max: 5, icon: '👟', cat: 'staff' },
   { id: 'cashier', name: 'Cashier training', desc: 'Orders are taken 15% faster per level.', cost: 80, growth: 1.6, max: 5, icon: '🧾', cat: 'staff' },
   { id: 'knife', name: "Chef's knife", desc: 'A proper knife on the pass. Prep is 20% faster per level.', cost: 90, growth: 1.7, max: 4, icon: '🔪', cat: 'kitchen' },
+  { id: 'chef2', name: 'Sous chef', desc: 'A second cook with their own prep board and burner. Doubles what the kitchen can turn out.', cost: 480, growth: 1, max: 1, icon: '👨‍🍳', cat: 'kitchen' },
   { id: 'stove', name: 'Extra stove', desc: 'One more dish cooks at the same time.', cost: 180, growth: 1.8, max: 3, icon: '🔥', start: 1, cat: 'kitchen' },
   { id: 'cabinet', name: 'Kitchen cabinet', desc: 'Wall storage. Each cabinet trims 12% off cook time.', cost: 110, growth: 1.7, max: 3, icon: '🗄️', cat: 'kitchen' },
   { id: 'tables', name: 'Dining table', desc: 'Four seats in the dining room. Seated guests eat in, tip, and rate you higher.', cost: 100, growth: 1.5, max: 4, icon: '🪑', cat: 'dining' },
@@ -55509,6 +55510,7 @@ const QUESTS = [
   { id: 'q_vip', text: 'Impress a food critic (the golden guest)', reward: 300, check: (st) => st.vipHappy >= 1 },
   { id: 'q_stars4', text: 'Reach 4 stars', reward: 400, check: (st, g) => g.stars() >= 4 },
   { id: 'q_register2', text: 'Open a second register', reward: 500, check: (st, g) => g.lvl('register2') >= 1 },
+  { id: 'q_chef2', text: 'Hire a sous chef', reward: 500, check: (st, g) => g.lvl('chef2') >= 1 },
   { id: 'q_serve100', text: 'Serve 100 guests', reward: 600, check: (st) => st.servedTotal >= 100 },
   { id: 'q_lamps', text: 'Light the dining room (Mood lighting ×3)', reward: 500, check: (st, g) => g.lvl('lamps') >= 3 },
   { id: 'q_special', text: "Serve the Chef's Special", reward: 800, check: (st) => st.specialsServed >= 1 },
@@ -55530,6 +55532,225 @@ const MILESTONES = [
 ];
 
 
+// ---- src/nav.js
+// Grid navigation for the diner: obstacles are painted onto a coarse grid,
+// paths come from A* and are then straightened, and people get a soft push
+// away from each other so they never overlap.
+
+
+
+const MASK = { CUSTOMER: 1, STAFF: 2, CHEF: 4, ALL: 7 };
+
+class NavGrid {
+  constructor({ minX = -12, maxX = 12, minZ = -8, maxZ = 11, cell = 0.25, radius = 0.22 } = {}) {
+    this.minX = minX; this.minZ = minZ; this.cell = cell; this.radius = radius;
+    this.cols = Math.ceil((maxX - minX) / cell);
+    this.rows = Math.ceil((maxZ - minZ) / cell);
+    this.blocked = new Uint8Array(this.cols * this.rows);
+    this.defs = [];       // obstacle definitions, replayed on rebuild()
+    this.version = 0;     // bumped whenever the grid changes so agents re-path
+  }
+
+  // ---- painting obstacles -----------------------------------------------
+  rect(x1, x2, z1, z2, mask = MASK.ALL, inflate = this.radius) {
+    this.defs.push({ kind: 'rect', x1, x2, z1, z2, mask, inflate });
+    this.paint(this.defs[this.defs.length - 1]);
+    this.version++;
+  }
+  circle(cx, cz, r, mask = MASK.ALL, inflate = this.radius) {
+    this.defs.push({ kind: 'circle', cx, cz, r, mask, inflate });
+    this.paint(this.defs[this.defs.length - 1]);
+    this.version++;
+  }
+  /** Block the floor footprint of every floor-standing mesh in an object. */
+  footprint(object, mask = MASK.ALL, { minY = 0.9, minHeight = 0.3, inflate = this.radius } = {}) {
+    object.updateMatrixWorld(true);
+    const box = new THREE.Box3();
+    object.traverse((o) => {
+      if (!o.isMesh) return;
+      box.setFromObject(o);
+      if (box.isEmpty() || box.min.y > minY || box.max.y - box.min.y < minHeight) return;
+      this.defs.push({ kind: 'rect', x1: box.min.x, x2: box.max.x, z1: box.min.z, z2: box.max.z, mask, inflate });
+      this.paint(this.defs[this.defs.length - 1]);
+    });
+    this.version++;
+  }
+  paint(d) {
+    const inf = d.inflate;
+    if (d.kind === 'rect') {
+      const i1 = this.col(d.x1 - inf), i2 = this.col(d.x2 + inf), j1 = this.row(d.z1 - inf), j2 = this.row(d.z2 + inf);
+      for (let j = Math.max(0, j1); j <= Math.min(this.rows - 1, j2); j++) for (let i = Math.max(0, i1); i <= Math.min(this.cols - 1, i2); i++) {
+        const cx = this.minX + (i + 0.5) * this.cell, cz = this.minZ + (j + 0.5) * this.cell;
+        if (cx >= d.x1 - inf && cx <= d.x2 + inf && cz >= d.z1 - inf && cz <= d.z2 + inf) this.blocked[j * this.cols + i] |= d.mask;
+      }
+    } else {
+      const r = d.r + inf;
+      const i1 = this.col(d.cx - r), i2 = this.col(d.cx + r), j1 = this.row(d.cz - r), j2 = this.row(d.cz + r);
+      for (let j = Math.max(0, j1); j <= Math.min(this.rows - 1, j2); j++) for (let i = Math.max(0, i1); i <= Math.min(this.cols - 1, i2); i++) {
+        const cx = this.minX + (i + 0.5) * this.cell, cz = this.minZ + (j + 0.5) * this.cell;
+        if ((cx - d.cx) ** 2 + (cz - d.cz) ** 2 <= r * r) this.blocked[j * this.cols + i] |= d.mask;
+      }
+    }
+  }
+  rebuild() {
+    this.blocked.fill(0);
+    for (const d of this.defs) this.paint(d);
+    this.version++;
+  }
+
+  // ---- queries ------------------------------------------------------------
+  col(x) { return Math.floor((x - this.minX) / this.cell); }
+  row(z) { return Math.floor((z - this.minZ) / this.cell); }
+  inBounds(i, j) { return i >= 0 && j >= 0 && i < this.cols && j < this.rows; }
+  cellFree(i, j, mask) { return this.inBounds(i, j) && (this.blocked[j * this.cols + i] & mask) === 0; }
+  walkable(x, z, mask) { return this.cellFree(this.col(x), this.row(z), mask); }
+  center(i, j) { return new THREE.Vector3(this.minX + (i + 0.5) * this.cell, 0, this.minZ + (j + 0.5) * this.cell); }
+
+  lineClear(a, b, mask) {
+    const dx = b.x - a.x, dz = b.z - a.z;
+    const len = Math.hypot(dx, dz);
+    const n = Math.max(1, Math.ceil(len / (this.cell * 0.5)));
+    for (let k = 0; k <= n; k++) {
+      const t = k / n;
+      if (!this.walkable(a.x + dx * t, a.z + dz * t, mask)) return false;
+    }
+    return true;
+  }
+
+  /** Nearest free cell to a point, searching outward in rings. */
+  nearestFree(x, z, mask, maxRings = 16) {
+    const ci = this.col(x), cj = this.row(z);
+    if (this.cellFree(ci, cj, mask)) return [ci, cj];
+    for (let r = 1; r <= maxRings; r++) {
+      let best = null, bestD = Infinity;
+      for (let dj = -r; dj <= r; dj++) for (let di = -r; di <= r; di++) {
+        if (Math.max(Math.abs(di), Math.abs(dj)) !== r) continue;
+        const i = ci + di, j = cj + dj;
+        if (!this.cellFree(i, j, mask)) continue;
+        const c = this.center(i, j);
+        const d = (c.x - x) ** 2 + (c.z - z) ** 2;
+        if (d < bestD) { bestD = d; best = [i, j]; }
+      }
+      if (best) return best;
+    }
+    return null;
+  }
+
+  /**
+   * A* over the grid (8 directions, no corner cutting), then straightened.
+   * Returns waypoints ending exactly at `to`. Falls back to [to] when no
+   * route exists so an agent never freezes.
+   */
+  findPath(from, to, mask) {
+    if (this.lineClear(from, to, mask)) return [to.clone()];
+    const s = this.nearestFree(from.x, from.z, mask);
+    const g = this.nearestFree(to.x, to.z, mask);
+    if (!s || !g) return [to.clone()];
+    const cols = this.cols, rows = this.rows;
+    const key = (i, j) => j * cols + i;
+    const gScore = new Float32Array(cols * rows).fill(Infinity);
+    const came = new Int32Array(cols * rows).fill(-1);
+    const closed = new Uint8Array(cols * rows);
+    const open = new MinHeap();
+    const h = (i, j) => { const dx = Math.abs(i - g[0]), dy = Math.abs(j - g[1]); return Math.max(dx, dy) + 0.4142 * Math.min(dx, dy); };
+    const sk = key(s[0], s[1]);
+    gScore[sk] = 0;
+    open.push(h(s[0], s[1]), sk);
+    const goalKey = key(g[0], g[1]);
+    let found = false, expanded = 0;
+    while (open.size) {
+      const cur = open.pop();
+      if (cur === goalKey) { found = true; break; }
+      if (closed[cur]) continue;
+      closed[cur] = 1;
+      if (++expanded > 30000) break;
+      const ci = cur % cols, cj = (cur - ci) / cols;
+      for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {
+        if (!di && !dj) continue;
+        const ni = ci + di, nj = cj + dj;
+        if (!this.cellFree(ni, nj, mask)) continue;
+        if (di && dj && (!this.cellFree(ci + di, cj, mask) || !this.cellFree(ci, cj + dj, mask))) continue; // no corner cutting
+        const nk = key(ni, nj);
+        if (closed[nk]) continue;
+        const cost = gScore[cur] + (di && dj ? 1.4142 : 1);
+        if (cost < gScore[nk]) { gScore[nk] = cost; came[nk] = cur; open.push(cost + h(ni, nj), nk); }
+      }
+    }
+    if (!found) return [to.clone()];
+    const cells = [];
+    for (let k = goalKey; k !== -1; k = came[k]) { const i = k % cols; cells.push(this.center(i, (k - i) / cols)); }
+    cells.reverse();
+    // straighten: greedily skip waypoints that are in clear line of sight
+    const pts = [];
+    let anchor = from.clone();
+    let idx = 0;
+    while (idx < cells.length) {
+      let far = idx;
+      for (let k = cells.length - 1; k > idx; k--) { if (this.lineClear(anchor, cells[k], mask)) { far = k; break; } }
+      pts.push(cells[far]);
+      anchor = cells[far];
+      idx = far + 1;
+    }
+    // the last leg goes to the exact target even if it sits against an obstacle
+    if (pts.length && this.lineClear(pts[pts.length - 1], to, mask)) pts.push(to.clone());
+    else pts.push(to.clone());
+    if (pts.length >= 2 && pts[pts.length - 2].distanceTo(to) < this.cell) pts.splice(pts.length - 2, 1);
+    return pts;
+  }
+}
+
+class MinHeap {
+  constructor() { this.k = []; this.v = []; }
+  get size() { return this.k.length; }
+  push(key, val) {
+    this.k.push(key); this.v.push(val);
+    let i = this.k.length - 1;
+    while (i > 0) { const p = (i - 1) >> 1; if (this.k[p] <= this.k[i]) break; this.swap(i, p); i = p; }
+  }
+  pop() {
+    const top = this.v[0];
+    const lk = this.k.pop(), lv = this.v.pop();
+    if (this.k.length) {
+      this.k[0] = lk; this.v[0] = lv;
+      let i = 0;
+      for (;;) { const l = 2 * i + 1, r = l + 1; let m = i; if (l < this.k.length && this.k[l] < this.k[m]) m = l; if (r < this.k.length && this.k[r] < this.k[m]) m = r; if (m === i) break; this.swap(i, m); i = m; }
+    }
+    return top;
+  }
+  swap(a, b) { [this.k[a], this.k[b]] = [this.k[b], this.k[a]]; [this.v[a], this.v[b]] = [this.v[b], this.v[a]]; }
+}
+
+/**
+ * Push overlapping people apart. Only agents that are walking get moved, so
+ * someone standing at their spot in line is never shoved around. Pushes that
+ * would land inside an obstacle are dropped.
+ */
+function separate(agents, nav, dt, radius = 0.5) {
+  const n = agents.length;
+  for (let a = 0; a < n; a++) {
+    const A = agents[a];
+    for (let b = a + 1; b < n; b++) {
+      const B = agents[b];
+      if (!A.moving && !B.moving) continue;
+      const dx = A.obj.position.x - B.obj.position.x, dz = A.obj.position.z - B.obj.position.z;
+      const d2 = dx * dx + dz * dz;
+      if (d2 > radius * radius || d2 < 1e-6) continue;
+      const d = Math.sqrt(d2);
+      const push = (radius - d) * Math.min(1, dt * 6);
+      const nx = dx / d, nz = dz / d;
+      const shareA = A.moving && B.moving ? 0.5 : A.moving ? 1 : 0;
+      const shareB = 1 - shareA;
+      if (shareA) tryMove(A, nx * push * shareA, nz * push * shareA, nav);
+      if (shareB) tryMove(B, -nx * push * shareB, -nz * push * shareB, nav);
+    }
+  }
+}
+function tryMove(agent, dx, dz, nav) {
+  const x = agent.obj.position.x + dx, z = agent.obj.position.z + dz;
+  if (nav.walkable(x, z, agent.mask)) { agent.obj.position.x = x; agent.obj.position.z = z; }
+}
+
+
 // ---- src/world.js
 // Static diner scene: floor, walls, counters, tables, decor, and primitive
 // builders for the things that have no model yet (customers, food, the chef).
@@ -55547,17 +55768,19 @@ const L = {
   pickupSlots: [new THREE.Vector3(-3.0, COUNTER_TOP, 1.2), new THREE.Vector3(-2.3, COUNTER_TOP, 1.2), new THREE.Vector3(-1.6, COUNTER_TOP, 1.2)],
   pickupStand: new THREE.Vector3(-2.3, 0, 0.35),
   waitSpots: [],
-  passSlots: [new THREE.Vector3(-1.0, COUNTER_TOP, -2.6), new THREE.Vector3(-0.3, COUNTER_TOP, -2.6), new THREE.Vector3(0.4, COUNTER_TOP, -2.6), new THREE.Vector3(1.1, COUNTER_TOP, -2.6)],
-  passStand: new THREE.Vector3(0.0, 0, -1.8),
-  runnerIdle: [new THREE.Vector3(-1.2, 0, -1.2), new THREE.Vector3(-0.2, 0, -0.9), new THREE.Vector3(0.8, 0, -1.2)],
+  passSlots: [new THREE.Vector3(-1.0, COUNTER_TOP, -1.85), new THREE.Vector3(-0.3, COUNTER_TOP, -1.85), new THREE.Vector3(0.4, COUNTER_TOP, -1.85), new THREE.Vector3(1.1, COUNTER_TOP, -1.85)],
+  passStand: new THREE.Vector3(0.0, 0, -1.1),
+  runnerIdle: [new THREE.Vector3(-1.4, 0, -0.45), new THREE.Vector3(-0.4, 0, -0.3), new THREE.Vector3(-2.4, 0, -0.45)],
   // kitchen: the sirkitree set is a corner unit open toward +z; the chef works inside it
   kitchen: new THREE.Vector3(1.7, 0, -4.55),
-  chef: new THREE.Vector3(1.7, 0, -3.9),
-  stove: new THREE.Vector3(1.7, 0, -4.0),       // stand here facing the back wall to cook
-  prep: new THREE.Vector3(1.9, 0, -3.3),        // behind the pass, facing the cutting board
-  passStandChef: -3.3,                          // z where the chef stands to set plates on the pass
+  chef: new THREE.Vector3(1.9, 0, -4.9),
+  stove: new THREE.Vector3(1.9, 0, -4.9),       // between the island and the back counter, facing the range
+  prep: new THREE.Vector3(1.9, 0, -2.62),       // in the corridor behind the pass, facing the cutting board
+  stove2: new THREE.Vector3(3.0, 0, -5.05),     // the sous chef's burner, at the right end of the range
+  prep2: new THREE.Vector3(0.4, 0, -2.62),      // the sous chef's board
+  passStandChef: -2.62,                         // z where the chef stands to set plates on the pass
   cabinets: [new THREE.Vector3(-1.3, 1.45, -5.7), new THREE.Vector3(-2.5, 1.45, -5.7), new THREE.Vector3(-3.7, 1.45, -5.7)],
-  knife: new THREE.Vector3(1.9, COUNTER_TOP + 0.02, -2.55),
+  knife: new THREE.Vector3(1.9, COUNTER_TOP + 0.02, -1.8),
   door: new THREE.Vector3(-7.0, 0, 6.2),
   register2: new THREE.Vector3(0.9, COUNTER_TOP, 1.2),
   cashier2: new THREE.Vector3(0.6, 0, 0.3),
@@ -55568,7 +55791,7 @@ const L = {
   corridor: new THREE.Vector3(-3.5, 0, 6.0),
   tables: [new THREE.Vector3(5.6, 0, 3.2), new THREE.Vector3(5.6, 0, 5.4), new THREE.Vector3(-5.6, 0, 3.2), new THREE.Vector3(-5.6, 0, 5.4)],
 };
-for (let i = 0; i < 9; i++) L.waitSpots.push(new THREE.Vector3(-3.4 + (i % 3) * 0.9, 0, 2.4 + Math.floor(i / 3) * 0.85));
+for (let i = 0; i < 16; i++) L.waitSpots.push(new THREE.Vector3(-3.6 + (i % 4) * 0.8, 0, 2.4 + Math.floor(i / 4) * 0.8));
 
 const mat = (color, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.75, metalness: 0.05, ...extra });
 
@@ -55607,8 +55830,9 @@ function buildWorld(scene) {
   const frame = shadowed(new THREE.Mesh(new THREE.BoxGeometry(1.6, 2.4, 0.15), mat(0xc73e3a))); frame.position.set(L.door.x, 1.2, 6.1); scene.add(frame);
   const doorGlass = new THREE.Mesh(new THREE.BoxGeometry(1.2, 2.0, 0.06), new THREE.MeshStandardMaterial({ color: 0xcfe9ff, transparent: true, opacity: 0.4 })); doorGlass.position.set(L.door.x, 1.1, 6.1); scene.add(doorGlass);
   // low front wall segments either side of the door so the room reads as a room
-  const fw1 = shadowed(new THREE.Mesh(new THREE.BoxGeometry(5.0, 1.0, 0.2), wallMat)); fw1.position.set(-4.5 + 1.15, 0.5, 6.1); fw1.position.x = -3.4; scene.add(fw1);
-  const fw2 = shadowed(new THREE.Mesh(new THREE.BoxGeometry(8.0, 1.0, 0.2), wallMat)); fw2.position.set(4.0, 0.5, 6.1); scene.add(fw2);
+  // low front wall from the door's right edge (-6.2) to the right side wall, plus a stub left of the door
+  const fw1 = shadowed(new THREE.Mesh(new THREE.BoxGeometry(14.2, 1.0, 0.2), wallMat)); fw1.position.set(0.9, 0.5, 6.1); scene.add(fw1);
+  const fw0 = shadowed(new THREE.Mesh(new THREE.BoxGeometry(0.3, 1.0, 0.2), wallMat)); fw0.position.set(-7.95, 0.5, 6.1); scene.add(fw0);
 
   // front counter (order + pickup) with chrome trim and red base
   const counterBase = shadowed(new THREE.Mesh(new THREE.BoxGeometry(7.4, COUNTER_TOP - 0.05, 0.9), mat(0xc73e3a, { roughness: 0.5 })));
@@ -55625,15 +55849,15 @@ function buildWorld(scene) {
 
   // kitchen pass counter
   const pass = shadowed(new THREE.Mesh(new THREE.BoxGeometry(4.4, COUNTER_TOP - 0.05, 0.8), mat(0xd9dde3, { metalness: 0.7, roughness: 0.35 })));
-  pass.position.set(0.3, (COUNTER_TOP - 0.05) / 2, -2.6); scene.add(pass);
+  pass.position.set(0.3, (COUNTER_TOP - 0.05) / 2, -1.85); scene.add(pass);
   const passTop = shadowed(new THREE.Mesh(new THREE.BoxGeometry(4.5, 0.06, 0.9), mat(0xe8ebef, { metalness: 0.8, roughness: 0.25 })));
-  passTop.position.set(0.3, COUNTER_TOP - 0.03, -2.6); scene.add(passTop);
+  passTop.position.set(0.3, COUNTER_TOP - 0.03, -1.85); scene.add(passTop);
   const heatLamp = new THREE.Mesh(new THREE.BoxGeometry(4.0, 0.08, 0.3), mat(0x3a3f47, { metalness: 0.6 }));
-  heatLamp.position.set(0.3, 2.1, -2.6); scene.add(heatLamp);
+  heatLamp.position.set(0.3, 2.1, -1.85); scene.add(heatLamp);
   for (let i = 0; i < 4; i++) {
     const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.06, 10, 8), new THREE.MeshStandardMaterial({ color: 0xffb36b, emissive: 0xff8a3d, emissiveIntensity: 2 }));
-    bulb.position.set(-1.0 + i * 0.85, 2.02, -2.6); scene.add(bulb);
-    const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.01, 0.01, 1.1), mat(0x3a3f47)); rod.position.set(-1.0 + i * 0.85, 2.65, -2.6); scene.add(rod);
+    bulb.position.set(-1.0 + i * 0.85, 2.02, -1.85); scene.add(bulb);
+    const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.01, 0.01, 1.1), mat(0x3a3f47)); rod.position.set(-1.0 + i * 0.85, 2.65, -1.85); scene.add(rod);
   }
   // cutting board where the knife goes
   const board = shadowed(new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.03, 0.35), mat(0xc8a06a, { roughness: 0.9 })));
@@ -55943,6 +56167,7 @@ function textTexture(text, fg, bg, fontPx = 52) {
 
 
 
+
 const $ = (id) => document.getElementById(id);
 const money = (n) => `$${Math.floor(n).toLocaleString()}`;
 const money2 = (n) => `$${n.toFixed(2)}`;
@@ -55950,10 +56175,10 @@ const rand = (a, b) => a + Math.random() * (b - a);
 const pick = (list) => list[Math.floor(Math.random() * list.length)];
 
 // ----------------------------------------------------------------- movement
-function stepToward(obj, target, speed, dt, faceMotion = true) {
+function stepToward(obj, target, speed, dt, faceMotion = true, arrive = 0.02) {
   const dx = target.x - obj.position.x, dz = target.z - obj.position.z;
   const dist = Math.hypot(dx, dz);
-  if (dist < 0.02) { obj.position.x = target.x; obj.position.z = target.z; return true; }
+  if (dist < arrive) { if (arrive <= 0.05) { obj.position.x = target.x; obj.position.z = target.z; } return true; }
   const step = Math.min(dist, speed * dt);
   obj.position.x += (dx / dist) * step;
   obj.position.z += (dz / dist) * step;
@@ -56138,6 +56363,7 @@ class Game {
     this.skyDay = new THREE.Color(0xf6e7d2); this.skyDusk = new THREE.Color(0xe8a87c); this.skyNight = new THREE.Color(0x2a3350);
 
     this.world = buildWorld(scene);
+    this.buildNav();
     this.chef = buildChefPlaceholder();
     this.chef.position.copy(L.chef);
     this.chef.rotation.y = Math.PI; // face the stove
@@ -56147,6 +56373,30 @@ class Game {
     this.pointer = new THREE.Vector2();
     this.onResize();
     addEventListener('resize', () => this.onResize());
+  }
+
+  /** Walkability grid: walls, counters, furniture. Models add their footprints once loaded. */
+  buildNav() {
+    const nav = new NavGrid();
+    const A = MASK.ALL;
+    // walls (the front wall has the door gap at x -7.8..-6.2)
+    nav.rect(-12, 12, -8, -6.0, A);
+    nav.rect(-8.3, -8.0, -6.2, 6.2, A);   // side walls only span the building; the pavement outside is open
+    nav.rect(8.0, 8.3, -6.2, 6.2, A);
+    nav.rect(-12, 12, 10.5, 11, A);      // far edge of the road
+    nav.rect(-8.0, -7.8, 6.0, 6.2, A);
+    nav.rect(-6.2, 8.0, 6.0, 6.2, A);
+    // counters
+    nav.rect(-3.8, 3.8, 0.75, 1.65, A);        // front counter
+    nav.rect(-1.95, 2.55, -2.25, -1.45, A);    // kitchen pass (a corridor runs behind it)
+    // planters by the door
+    nav.circle(-5.6, 5.6, 0.35, A); nav.circle(6.9, 5.6, 0.35, A);
+    // keep each kind of person on their own side of the counters
+    nav.rect(-8, 8, -6.0, 0.75, MASK.CUSTOMER, 0);   // guests never go behind the counter
+    nav.rect(-8, 8, 1.65, 11, MASK.STAFF | MASK.CHEF, 0); // staff stay behind it
+    nav.rect(-8, 8, -1.45, 0.75, MASK.CHEF, 0);      // the chef stays behind the pass
+    nav.rect(-8, -2.3, -6.0, -1.45, MASK.CHEF, 0);    // ...and out of the far-left corner
+    this.nav = nav;
   }
 
   onResize() {
@@ -56183,13 +56433,10 @@ class Game {
       this.chef = this.models.chef; this.chef.position.copy(L.chef); this.chef.rotation.y += Math.PI; this.scene.add(this.chef);
     } else if (this.models.cashier) {
       this.scene.remove(this.chef);
-      this.chefRig = new Character(cloneRig(this.models.cashier), this.scene, { tint: 0xf4f4f0, hat: buildToque() });
+      this.chefs = [];
+      this.addChef(0);
+      this.chefRig = this.chefs[0].rig;
       this.chef = this.chefRig.obj;
-      this.chef.position.copy(L.stove);
-      this.chef.rotation.y = Math.PI;
-      this.chefState = 'idle';
-      this.chefOrder = null;
-      this.chefTimer = 0;
     }
     $('credits').textContent = `Models: ${this.credits.join(' · ')}`;
     $('shop-credits').textContent = `Models: ${this.credits.join(' · ')}`;
@@ -56212,6 +56459,9 @@ class Game {
     this.stackParts.sort((a, b) => a.name.localeCompare(b.name));
     const kitchen = this.models.kitchen ?? placeholderBox(2.2, 2, 2, 0xbbbbbb);
     kitchen.position.copy(L.kitchen); this.scene.add(kitchen);
+    // guests and runners stay out of the kitchen; the chef walks around its actual furniture
+    this.nav.rect(0.1, 3.4, -6.0, -3.0, MASK.CUSTOMER | MASK.STAFF, 0);
+    this.nav.footprint(kitchen, MASK.ALL, { inflate: 0.12 }); // tight margins: the walkways inside are narrow
     this.knifeProto = this.models.knife;
     this.cabinetProto = this.models.cabinet;
     this.addRegister(0);
@@ -56225,6 +56475,25 @@ class Game {
     }
   }
 
+  /** Chef 0 comes with the diner; chef 1 is the Sous chef upgrade. Each has a board and a burner. */
+  addChef(index) {
+    if (this.chefs[index]) return;
+    const rig = new Character(cloneRig(this.models.cashier), this.scene, { tint: index === 0 ? 0xf4f4f0 : 0xe8f0e0, hat: buildToque() });
+    rig.mask = MASK.CHEF;
+    const stove = index === 0 ? L.stove : L.stove2;
+    const prep = index === 0 ? L.prep : L.prep2;
+    rig.obj.position.copy(stove);
+    rig.obj.rotation.y = Math.PI;
+    this.chefs[index] = { index, rig, stove, prep, state: 'idle', order: null, timer: 0 };
+  }
+
+  removeSousChef() {
+    const c = this.chefs?.[1];
+    if (!c) return;
+    this.scene.remove(c.rig.obj);
+    this.chefs.length = 1;
+  }
+
   /** Register 0 is the one from the manifest; register 1 comes with the upgrade. */
   addRegister(index) {
     if (this.registers[index]) return;
@@ -56236,6 +56505,7 @@ class Game {
     let cashier = null;
     if (this.models.cashier) {
       cashier = new Character(index === 0 ? this.models.cashier : cloneRig(this.models.cashier), this.scene, index === 0 ? {} : { tint: 0xdfe7ff });
+      cashier.mask = MASK.STAFF; cashier.moving = false;
       cashier.obj.position.copy(stand);
       cashier.obj.rotation.y = 0; // faces +z, toward the guests
     }
@@ -56317,7 +56587,10 @@ class Game {
     for (const r of this.registers) { r.busy = null; r.timer = 0; }
     if (this.lvl('register2') < 1) this.removeSecondRegister();
     this.autoTimer = 0;
-    if (this.chefRig) { this.chefRig.carry.clear(); this.chefState = 'idle'; this.chefOrder = null; this.chef.position.copy(L.stove); }
+    if (this.chefs) {
+      if (this.lvl('chef2') < 1) this.removeSousChef();
+      for (const c of this.chefs) { c.rig.carry.clear(); c.state = 'idle'; c.order = null; c.rig.obj.position.copy(c.stove); }
+    }
   }
 
   lvl(id) { return this.s.upgrades[id] ?? 0; }
@@ -56326,11 +56599,13 @@ class Game {
   applyUpgradesToWorld() {
     this.placeLamps();
     if (this.lvl('register2') >= 1) this.addRegister(1);
+    if (this.lvl('chef2') >= 1 && this.chefs) this.addChef(1);
     // runners
     while (this.runners.length < this.lvl('runner')) {
       const idx = this.runners.length;
       const model = this.models.runner ? cloneRig(this.models.runner) : placeholderPerson(0x2e7d32);
       const w = new Character(model, this.scene);
+      w.mask = MASK.STAFF;
       w.obj.position.copy(L.runnerIdle[idx % L.runnerIdle.length]);
       w.state = 'idle'; w.order = null; w.idleSpot = L.runnerIdle[idx % L.runnerIdle.length];
       this.runners.push(w);
@@ -56340,6 +56615,7 @@ class Game {
       const t = buildTable(L.tables[this.tables.length]);
       t.userData.taken = new Array(4).fill(null);
       this.scene.add(t); this.tables.push(t);
+      this.nav.circle(t.position.x, t.position.z, 0.78, MASK.ALL);
     }
     // cabinets on the back wall
     while (this.cabinets.length < this.lvl('cabinet')) {
@@ -56415,6 +56691,46 @@ class Game {
   stoves() { return this.lvl('stove'); }
   availableMenu() { const tier = this.lvl('menu'); return MENU.filter((m) => m.tier <= tier); }
 
+  // ---------------------------------------------------------- movement
+  /**
+   * Walk an agent ({ obj, nav?, mask }) toward `target` along a grid path.
+   * Re-plans when the target moves or the grid changes. Returns true on arrival.
+   */
+  walkTo(agent, target, speed, dt) {
+    const st = agent.nav ?? (agent.nav = { target: null, path: [], version: -1 });
+    if (!st.target || st.target.distanceToSquared(target) > 0.0025 || st.version !== this.nav.version) {
+      st.target = target.clone();
+      st.version = this.nav.version;
+      st.path = this.nav.findPath(agent.obj.position, target, agent.mask ?? MASK.ALL);
+    }
+    while (st.path.length) {
+      const wp = st.path[0];
+      const last = st.path.length === 1;
+      // Near an intermediate corner, turn early when the shortcut to the next
+      // corner is clear: nobody standing on a corner can block the route, and
+      // the check keeps the shortcut from clipping furniture.
+      if (!last && st.path[1]) {
+        const d = Math.hypot(wp.x - agent.obj.position.x, wp.z - agent.obj.position.z);
+        if (d < 0.45 && this.nav.lineClear(agent.obj.position, st.path[1], agent.mask ?? MASK.ALL)) { st.path.shift(); continue; }
+      }
+      if (!stepToward(agent.obj, wp, speed, dt)) { agent.moving = true; return false; }
+      st.path.shift();
+      if (last) { agent.moving = false; return true; }
+    }
+    agent.moving = false;
+    return true;
+  }
+
+  /** Everyone who can bump into someone this frame. */
+  collectAgents() {
+    const list = [];
+    for (const c of this.customers) if (!c.dead) list.push(c);
+    for (const r of this.runners) list.push(r);
+    for (const c of this.chefs ?? []) list.push(c.rig);
+    for (const r of this.registers) if (r.cashier) list.push(r.cashier);
+    return list;
+  }
+
   // ---------------------------------------------------------- customers
   spawnCustomer() {
     let obj, rig = null;
@@ -56434,7 +56750,7 @@ class Game {
     obj.add(bubble);
     // join the shortest line
     const register = this.registers.reduce((best, r) => (this.lineLength(r) < this.lineLength(best) ? r : best), this.registers[0]);
-    const c = { obj, rig, bubble, vip, register, cheered: false, patienceMax: QUEUE_PATIENCE * this.patienceMult() * (vip ? 0.85 : 1), state: 'enter', path: [L.corridor.clone(), null], patience: QUEUE_PATIENCE * this.patienceMult() * (vip ? 0.85 : 1), waitSpot: null, seat: null, order: null, timer: 0, speed: rand(1.6, 2.1), happy: true, bob: Math.random() * 6 };
+    const c = { obj, rig, bubble, vip, register, cheered: false, mask: MASK.CUSTOMER, moving: false, patienceMax: QUEUE_PATIENCE * this.patienceMult() * (vip ? 0.85 : 1), state: 'enter', path: [L.corridor.clone(), null], patience: QUEUE_PATIENCE * this.patienceMult() * (vip ? 0.85 : 1), waitSpot: null, seat: null, order: null, timer: 0, speed: rand(1.6, 2.1), happy: true, bob: Math.random() * 6 };
     this.customers.push(c);
     if (vip) { this.toast('👑 A food critic just walked in. Serve them fast!', 'warn', 4000); this.sfx.bell(); }
     return c;
@@ -56463,17 +56779,14 @@ class Game {
       const o = c.obj;
       switch (c.state) {
         case 'enter': {
-          const target = c.path[0] ?? c.queueTarget;
-          const moving = !stepToward(o, target, c.speed, dt);
+          // the grid routes them in through the door and around the furniture
+          const moving = !this.walkTo(c, c.queueTarget, c.speed, dt);
           this.bob(c, moving, dt);
-          if (!moving) {
-            if (c.path[0]) { c.path.shift(); c.path[0] = null; }
-            else { c.state = 'queue'; faceTo(o, c.register.pos); }
-          }
+          if (!moving) { c.state = 'queue'; faceTo(o, c.register.pos); }
           break;
         }
         case 'queue': {
-          const moving = !stepToward(o, c.queueTarget, c.speed, dt);
+          const moving = !this.walkTo(c, c.queueTarget, c.speed, dt);
           this.bob(c, moving, dt);
           if (!moving) faceTo(o, new THREE.Vector3(c.register.pos.x, 0, c.register.pos.z));
           c.patience -= dt;
@@ -56487,11 +56800,11 @@ class Game {
           break;
         }
         case 'ordering': {
-          this.bob(c, false, dt);
+          this.bob(c, false, dt); c.moving = false;
           break; // cashier timer drives it
         }
         case 'toWait': {
-          const moving = !stepToward(o, c.waitSpot, c.speed, dt);
+          const moving = !this.walkTo(c, c.waitSpot, c.speed, dt);
           this.bob(c, moving, dt);
           if (!moving) { c.state = 'waitFood'; faceTo(o, new THREE.Vector3(o.position.x, 0, 1.2)); }
           c.patience -= dt;
@@ -56499,13 +56812,13 @@ class Game {
           break;
         }
         case 'waitFood': {
-          this.bob(c, false, dt);
+          this.bob(c, false, dt); c.moving = false;
           c.patience -= dt;
           if (c.patience <= 0) this.abandon(c);
           break;
         }
         case 'toPickup': {
-          const moving = !stepToward(o, c.pickupTarget, c.speed, dt);
+          const moving = !this.walkTo(c, c.pickupTarget, c.speed, dt);
           this.bob(c, moving, dt);
           if (!moving) {
             // take the plate
@@ -56520,12 +56833,13 @@ class Game {
           break;
         }
         case 'toSeat': {
-          const moving = !stepToward(o, c.seat.pos, c.speed, dt);
+          const moving = !this.walkTo(c, c.seat.pos, c.speed, dt);
           this.bob(c, moving, dt);
           if (!moving) { c.state = 'eating'; c.timer = EAT_TIME; faceTo(o, c.seat.table.position); }
           break;
         }
         case 'eating': {
+          c.moving = false;
           c.timer -= dt;
           if (c.rig) this.bob(c, false, dt); else o.position.y = Math.abs(Math.sin(this.time * 6)) * 0.02;
           this.updateEating(c, dt);
@@ -56537,16 +56851,16 @@ class Game {
           break;
         }
         case 'leave': {
-          const target = c.path[0];
-          const moving = !stepToward(o, target, c.speed * 1.15, dt);
+          const moving = !this.walkTo(c, c.exit, c.speed * 1.15, dt);
           this.bob(c, moving, dt);
-          if (!moving) { c.path.shift(); if (!c.path.length) { this.scene.remove(o); c.dead = true; } }
+          if (!moving) { this.scene.remove(o); c.dead = true; }
           break;
         }
       }
     }
     for (const c of this.customers) this.updateBubble(c);
     this.customers = this.customers.filter((c) => !c.dead);
+    separate(this.collectAgents(), this.nav, dt);
   }
 
   updateBubble(c) {
@@ -56637,7 +56951,7 @@ class Game {
     if (c.waitSpot) { c.waitSpot.taken = false; c.waitSpot = null; }
     if (c.register && c.register.busy === c) c.register.busy = null;
     c.state = 'leave';
-    c.path = [L.corridor.clone().add(new THREE.Vector3(rand(-0.4, 0.4), 0, rand(-0.3, 0.3))), L.door.clone(), L.spawn.clone()];
+    c.exit = L.spawn.clone().add(new THREE.Vector3(rand(-0.6, 0.6), 0, rand(-0.6, 0.6)));
     if (happy) {
       this.s.reputation = Math.min(100, this.s.reputation + (why === 'ate in' ? 1.5 : 0.8) + (c.vip ? 6 : 0));
       this.s.stats.servedTotal += 1; this.s.stats.servedToday += 1;
@@ -56670,7 +56984,7 @@ class Game {
       if (o.plate && o.state === 'delivered') { this.scene.remove(o.plate); this.pickupPlates[o.pickupSlot] = null; }
       this.orders = this.orders.filter((x) => x !== o);
       if (o.state === 'carrying' && o.runner) { o.runner.carry.clear(); o.runner.order = null; o.runner.state = 'return'; }
-      if (this.chefOrder === o) { if (o.plate) this.chefRig?.carry.remove(o.plate); this.chefOrder = null; this.chefState = 'idle'; }
+      if (o.chef) { if (o.plate) o.chef.rig.carry.remove(o.plate); o.chef.order = null; o.chef.state = 'idle'; o.chef = null; }
     }
     this.leave(c, false, 'waited too long');
   }
@@ -56696,7 +57010,9 @@ class Game {
       this.float(r.pos.clone().add(new THREE.Vector3(0, 0.9, 0)), `+${money2(bill)}`, 'gold');
       this.fx.sparkle(r.pos.clone().add(new THREE.Vector3(0, 0.6, 0.2)), 4);
       this.spawnBills(2, r.pos);
-      const spot = L.waitSpots.find((w) => !w.taken) ?? L.waitSpots[L.waitSpots.length - 1];
+      // a free waiting spot, or (when the area is full) a jittered spot along the front wall so nobody stacks
+      let spot = L.waitSpots.find((w) => !w.taken);
+      if (!spot) { spot = new THREE.Vector3(rand(-6.5, -4.2), 0, rand(2.2, 5.0)); spot.overflow = true; }
       spot.taken = true; c.waitSpot = spot;
       c.state = 'toWait'; c.patience = FOOD_PATIENCE * this.patienceMult() * (c.vip ? 0.85 : 1); c.patienceMax = c.patience;
       if (!this.tutorial.paid) { this.tutorial.paid = true; this.toast('First sale! Cash piles up on the register. Click it or press Space to bank it.', 'info', 4500); }
@@ -56711,11 +57027,11 @@ class Game {
     for (const o of this.orders) {
       if (o.state !== 'cooking') continue;
       cookingNow++;
-      o.remaining -= dt * (this.chefRig?.boosted ? 1.5 : 1);
+      o.remaining -= dt * (this.chefs?.some((c) => c.rig.boosted) ? 1.5 : 1);
       if (o.remaining <= 0) { o.state = 'plated'; o.remaining = 0; }
     }
-    if (cookingNow) { this.steamTimer -= dt; if (this.steamTimer <= 0) { this.steamTimer = 0.3; this.fx.steam(L.stove.clone().add(new THREE.Vector3(0.2, 1.1, -0.5))); } }
-    if (this.chefRig) this.updateChef(dt);
+    if (cookingNow) { this.steamTimer -= dt; if (this.steamTimer <= 0) { this.steamTimer = 0.3; this.fx.steam(L.stove.clone().add(new THREE.Vector3(0.1, 1.1, -0.55))); } }
+    if (this.chefs?.length) for (const c of this.chefs) this.updateChef(c, dt);
     else this.updateChefless(dt);
   }
 
@@ -56750,24 +57066,23 @@ class Game {
   }
 
   /**
-   * The chef: preps the next order at the cutting board, starts it on a free
-   * stove, and carries finished plates from the stove to the pass.
+   * One cook: preps the next order at their board, starts it on a free stove,
+   * and carries finished plates from the burner to the pass.
    */
-  updateChef(dt) {
-    const chef = this.chefRig;
+  updateChef(c, dt) {
+    const chef = c.rig;
     chef.tickBoost(dt, this.time);
     const speed = 2.2 * (chef.boosted ? 1.6 : 1);
-    if (chef.boosted) dt *= 1; // walking handled by speed; prep below
-    switch (this.chefState) {
+    switch (c.state) {
       case 'idle': {
-        const plated = this.orders.find((o) => o.state === 'plated');
-        const cooking = this.orders.filter((o) => o.state === 'cooking' || o.state === 'prepping').length;
-        const next = this.orders.find((o) => o.state === 'queued');
-        if (plated) { this.chefOrder = plated; plated.state = 'carrying-chef'; this.chefState = 'toStoveForPlate'; }
-        else if (next && cooking < this.stoves()) { this.chefOrder = next; next.state = 'prepping'; this.chefState = 'toPrep'; }
+        const plated = this.orders.find((o) => o.state === 'plated' && !o.chef);
+        const busy = this.orders.filter((o) => o.state === 'cooking' || o.state === 'prepping').length;
+        const next = this.orders.find((o) => o.state === 'queued' && !o.chef);
+        if (plated) { plated.chef = c; c.order = plated; plated.state = 'carrying-chef'; c.state = 'toStoveForPlate'; }
+        else if (next && busy < this.stoves()) { next.chef = c; c.order = next; next.state = 'prepping'; c.state = 'toPrep'; }
         else {
-          // stand at the stove; stir while something cooks
-          const arrived = stepToward(chef.obj, L.stove, speed, dt);
+          const cooking = this.orders.some((o) => o.state === 'cooking');
+          const arrived = this.walkTo(chef, c.stove, speed, dt);
           if (arrived) { chef.obj.rotation.y = Math.PI; chef.play(cooking ? 'walk' : 'idle'); }
           else chef.play('walk');
         }
@@ -56775,51 +57090,53 @@ class Game {
       }
       case 'toPrep': {
         chef.play('walk');
-        if (stepToward(chef.obj, L.prep, speed, dt)) { this.chefState = 'prepping'; this.chefTimer = this.prepTime(); chef.obj.rotation.y = 0; /* face the board */ }
+        if (this.walkTo(chef, c.prep, speed, dt)) { c.state = 'prepping'; c.timer = this.prepTime(); chef.obj.rotation.y = 0; }
         break;
       }
       case 'prepping': {
+        chef.moving = false;
         chef.play('walk'); // chopping motion stand-in
         chef.obj.position.y = Math.abs(Math.sin(this.time * 10)) * 0.03;
-        this.chefTimer -= dt * (chef.boosted ? 2 : 1);
-        if (this.knife) this.knife.rotation.z = Math.PI / 2 + 0.3 + Math.sin(this.time * 10) * 0.2;
-        if (this.chefTimer <= 0) { chef.obj.position.y = 0; if (this.knife) this.knife.rotation.z = Math.PI / 2 + 0.3; this.chefState = 'toStove'; }
+        c.timer -= dt * (chef.boosted ? 2 : 1);
+        if (this.knife && c.index === 0) this.knife.rotation.z = Math.PI / 2 + 0.3 + Math.sin(this.time * 10) * 0.2;
+        if (c.timer <= 0) { chef.obj.position.y = 0; if (this.knife) this.knife.rotation.z = Math.PI / 2 + 0.3; c.state = 'toStove'; }
         break;
       }
       case 'toStove': {
         chef.play('walk');
-        if (stepToward(chef.obj, L.stove, speed, dt)) {
-          const o = this.chefOrder;
-          if (o && o.state === 'prepping') { o.state = 'cooking'; o.remaining = this.stoveTime(o.item); }
-          this.chefOrder = null; this.chefState = 'idle'; chef.obj.rotation.y = Math.PI;
+        if (this.walkTo(chef, c.stove, speed, dt)) {
+          const o = c.order;
+          if (o && o.state === 'prepping') { o.state = 'cooking'; o.remaining = this.stoveTime(o.item); o.chef = null; }
+          c.order = null; c.state = 'idle'; chef.obj.rotation.y = Math.PI;
         }
         break;
       }
       case 'toStoveForPlate': {
         chef.play('walk');
-        if (stepToward(chef.obj, L.stove, speed, dt)) {
-          const o = this.chefOrder;
-          if (!o) { this.chefState = 'idle'; break; }
+        if (this.walkTo(chef, c.stove, speed, dt)) {
+          const o = c.order;
+          if (!o) { c.state = 'idle'; break; }
           o.plate = buildFood(o.item, { kebab: this.models.kebab });
           o.plate.scale.setScalar(0.9);
           chef.carry.add(o.plate);
-          this.chefState = 'toPass';
+          c.state = 'toPass';
         }
         break;
       }
       case 'toPass': {
         chef.play('walk');
-        const o = this.chefOrder;
-        if (!o) { this.chefState = 'idle'; break; }
+        const o = c.order;
+        if (!o) { c.state = 'idle'; break; }
         let slot = this.passPlates.findIndex((p) => !p);
-        const target = new THREE.Vector3(slot >= 0 ? L.passSlots[slot].x : L.passSlots[1].x, 0, L.passStandChef);
-        if (stepToward(chef.obj, target, speed, dt)) {
+        const target = new THREE.Vector3(slot >= 0 ? L.passSlots[slot].x : L.passSlots[1].x + c.index * 0.5, 0, L.passStandChef);
+        if (this.walkTo(chef, target, speed, dt)) {
           chef.obj.rotation.y = 0;
           slot = this.passPlates.findIndex((p) => !p);
           if (slot < 0) { chef.play('idle'); break; } // pass full: wait here holding the plate
           chef.carry.remove(o.plate);
           this.plateToPass(o);
-          this.chefOrder = null; this.chefState = 'idle';
+          o.chef = null;
+          c.order = null; c.state = 'idle';
         }
         break;
       }
@@ -56837,13 +57154,13 @@ class Game {
         case 'idle': {
           const ready = this.orders.find((o) => o.state === 'ready' && !o.runner);
           if (ready) { ready.runner = r; r.order = ready; r.state = 'toPass'; r.play('walk'); }
-          else { const arrived = stepToward(r.obj, r.idleSpot, spd, dt); r.play(arrived ? 'idle' : 'walk'); if (arrived) faceTo(r.obj, L.passSlots[1]); }
+          else { const arrived = this.walkTo(r, r.idleSpot, spd, dt); r.play(arrived ? 'idle' : 'walk'); if (arrived) faceTo(r.obj, L.passSlots[1]); }
           break;
         }
         case 'toPass': {
           const o = r.order;
           const target = new THREE.Vector3(L.passSlots[o.passSlot].x, 0, L.passStand.z);
-          if (stepToward(r.obj, target, spd, dt)) {
+          if (this.walkTo(r, target, spd, dt)) {
             this.scene.remove(o.plate); this.passPlates[o.passSlot] = null;
             o.plate.position.set(0, 0, 0); o.plate.scale.setScalar(0.9); r.carry.add(o.plate);
             o.state = 'carrying';
@@ -56855,12 +57172,12 @@ class Game {
           const o = r.order;
           if (o.pickupSlot < 0) {
             const slot = this.pickupPlates.findIndex((p) => !p);
-            if (slot < 0) { const arrived = stepToward(r.obj, L.pickupStand, spd, dt); r.play(arrived ? 'idle' : 'walk'); break; }
+            if (slot < 0) { const arrived = this.walkTo(r, L.pickupStand, spd, dt); r.play(arrived ? 'idle' : 'walk'); break; }
             o.pickupSlot = slot; this.pickupPlates[slot] = o.plate;
           }
           r.play('walk');
           const target = new THREE.Vector3(L.pickupSlots[o.pickupSlot].x, 0, L.pickupStand.z);
-          if (stepToward(r.obj, target, spd, dt)) {
+          if (this.walkTo(r, target, spd, dt)) {
             r.carry.remove(o.plate); o.plate.scale.setScalar(1); o.plate.position.copy(L.pickupSlots[o.pickupSlot]); this.scene.add(o.plate);
             o.state = 'delivered';
             const c = o.customer;
@@ -56874,7 +57191,7 @@ class Game {
           break;
         }
         case 'return': {
-          const arrived = stepToward(r.obj, r.idleSpot, spd, dt);
+          const arrived = this.walkTo(r, r.idleSpot, spd, dt);
           r.play(arrived ? 'idle' : 'walk');
           if (arrived) { r.state = 'idle'; faceTo(r.obj, L.passSlots[1]); }
           break;
@@ -57189,7 +57506,7 @@ class Game {
       this.pointer.set(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1);
       this.raycaster.setFromCamera(this.pointer, this.camera);
       // staff first: a click on any worker makes them hustle
-      const staff = [...this.registers.map((r) => r.cashier).filter(Boolean), ...this.runners, this.chefRig].filter(Boolean);
+      const staff = [...this.registers.map((r) => r.cashier).filter(Boolean), ...this.runners, ...(this.chefs ?? []).map((c) => c.rig)];
       const staffHits = this.raycaster.intersectObjects(staff.map((w) => w.obj), true);
       if (staffHits.length) { this.hustle(staffHits[0].object); return; }
       const guestHits = this.raycaster.intersectObjects(this.customers.map((c) => c.obj), true);
@@ -57293,7 +57610,7 @@ class Game {
     } else {
       for (const r of this.registers) r.cashier?.update(real);
       for (const r of this.runners) r.update(real);
-      if (this.chefRig) this.chefRig.update(real);
+      for (const c of this.chefs ?? []) c.rig.update(real);
     }
     this.updateFloaters(real);
     this.renderer.render(this.scene, this.camera);
@@ -57306,7 +57623,7 @@ const LAMP_SPOTS = [
   new THREE.Vector3(2.6, LAMP_Y, 0.4), new THREE.Vector3(-2.3, LAMP_Y, 0.4),
   new THREE.Vector3(5.6, LAMP_Y, 3.2), new THREE.Vector3(-5.6, LAMP_Y, 3.2),
   new THREE.Vector3(5.6, LAMP_Y, 5.4), new THREE.Vector3(-5.6, LAMP_Y, 5.4),
-  new THREE.Vector3(0.3, LAMP_Y, -1.5), new THREE.Vector3(0.3, LAMP_Y, 4.2),
+  new THREE.Vector3(0.3, LAMP_Y, -0.7), new THREE.Vector3(0.3, LAMP_Y, 4.2),
 ];
 
 // speech bubble + patience bar drawn on a canvas sprite

@@ -51,6 +51,7 @@ const modules = [
   'src/audio.js',
   'src/fx.js',
   'src/config.js',
+  'src/nav.js',
   'src/world.js',
   'src/game.js',
 ];

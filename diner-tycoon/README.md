@@ -47,6 +47,7 @@ on the title screen.
 | Runner sneakers | Runners walk 20% faster per level |
 | Cashier training | Orders taken 15% faster per level |
 | Chef's knife | Places the knife model on the pass; prep 20% faster per level |
+| Sous chef | A second cook with their own board and burner; roughly doubles kitchen output |
 | Extra stove | One more dish cooks at once |
 | Kitchen cabinet | Places a cabinet on the back wall; cook time −12% each |
 | Dining table | Four seats; seated guests tip and rate you higher |
@@ -73,13 +74,23 @@ on the title screen.
   grows with the room. Toggle with the Music button; Mute silences everything.
 - Your star rating lights up on the roof sign outside.
 
+## Nobody walks through anything
+
+Movement runs on a walkability grid (`src/nav.js`): walls, counters, the
+kitchen's actual furniture footprints and every table you buy are painted
+onto it, A* finds routes around them, and the routes are straightened so
+people walk naturally. Guests enter and leave through the door, staff stay
+behind the counters, the chef stays in the kitchen, and a soft separation
+step keeps people from overlapping while they walk.
+
 ## The kitchen
 
 Orders go through the chef's hands. He preps each order at the cutting
 board on the pass (faster with a better knife), starts it on a free stove
 (more stoves cook more at once, cabinets shorten cook time), and when it is
 done he carries the plate from the stove to the pass, where a runner picks
-it up. One chef, so the prep step is the bottleneck a bigger kitchen relieves.
+it up. Prep is the bottleneck: a sharper knife speeds it up and a sous chef
+doubles it, which you will need once a second register brings in more guests.
 
 ## A day in the diner
 
@@ -120,7 +131,9 @@ page.html           markup + styles for the game page (source of truth)
 index.html          generated dev page
 src/game.js         simulation: guests, cashier, kitchen, runners, shop, save/load
 src/world.js        diner scene builders and primitive placeholders
-src/config.js       menu, upgrade costs, milestones, timing
+src/config.js       menu, upgrade costs, quests, milestones, timing
+src/nav.js          walkability grid, A* pathfinding, crowd separation
+src/fx.js           sprite particles (steam, sparkles, hearts, confetti)
 src/glb-loader.js   glTF/GLB loader with skins and animations for Three.js
 src/audio.js        synthesized sound effects
 tools/build.mjs     bundler

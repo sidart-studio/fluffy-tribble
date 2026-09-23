@@ -7,6 +7,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { loadModelFitted, parseGLTF, fitModel, applyClipPose } from './glb-loader.js';
 import { Sfx, Music, Ambience } from './audio.js';
 import { Fx } from './fx.js';
+import { NavGrid, MASK, separate } from './nav.js';
 import { L, COUNTER_TOP, buildWorld, buildTable, buildCustomer, buildChefPlaceholder, buildFood, buildCoin, buildBill, buildToque, buildCrown, buildHustleRing } from './world.js';
 import { DAY_LENGTH, START_CASH, START_REPUTATION, QUEUE_PATIENCE, FOOD_PATIENCE, EAT_TIME, SAVE_KEY, MENU, UPGRADES, MILESTONES, QUESTS, CATEGORIES, upgradeCost } from './config.js';
 
@@ -17,10 +18,10 @@ const rand = (a, b) => a + Math.random() * (b - a);
 const pick = (list) => list[Math.floor(Math.random() * list.length)];
 
 // ----------------------------------------------------------------- movement
-function stepToward(obj, target, speed, dt, faceMotion = true) {
+function stepToward(obj, target, speed, dt, faceMotion = true, arrive = 0.02) {
   const dx = target.x - obj.position.x, dz = target.z - obj.position.z;
   const dist = Math.hypot(dx, dz);
-  if (dist < 0.02) { obj.position.x = target.x; obj.position.z = target.z; return true; }
+  if (dist < arrive) { if (arrive <= 0.05) { obj.position.x = target.x; obj.position.z = target.z; } return true; }
   const step = Math.min(dist, speed * dt);
   obj.position.x += (dx / dist) * step;
   obj.position.z += (dz / dist) * step;
@@ -205,6 +206,7 @@ export class Game {
     this.skyDay = new THREE.Color(0xf6e7d2); this.skyDusk = new THREE.Color(0xe8a87c); this.skyNight = new THREE.Color(0x2a3350);
 
     this.world = buildWorld(scene);
+    this.buildNav();
     this.chef = buildChefPlaceholder();
     this.chef.position.copy(L.chef);
     this.chef.rotation.y = Math.PI; // face the stove
@@ -214,6 +216,30 @@ export class Game {
     this.pointer = new THREE.Vector2();
     this.onResize();
     addEventListener('resize', () => this.onResize());
+  }
+
+  /** Walkability grid: walls, counters, furniture. Models add their footprints once loaded. */
+  buildNav() {
+    const nav = new NavGrid();
+    const A = MASK.ALL;
+    // walls (the front wall has the door gap at x -7.8..-6.2)
+    nav.rect(-12, 12, -8, -6.0, A);
+    nav.rect(-8.3, -8.0, -6.2, 6.2, A);   // side walls only span the building; the pavement outside is open
+    nav.rect(8.0, 8.3, -6.2, 6.2, A);
+    nav.rect(-12, 12, 10.5, 11, A);      // far edge of the road
+    nav.rect(-8.0, -7.8, 6.0, 6.2, A);
+    nav.rect(-6.2, 8.0, 6.0, 6.2, A);
+    // counters
+    nav.rect(-3.8, 3.8, 0.75, 1.65, A);        // front counter
+    nav.rect(-1.95, 2.55, -2.25, -1.45, A);    // kitchen pass (a corridor runs behind it)
+    // planters by the door
+    nav.circle(-5.6, 5.6, 0.35, A); nav.circle(6.9, 5.6, 0.35, A);
+    // keep each kind of person on their own side of the counters
+    nav.rect(-8, 8, -6.0, 0.75, MASK.CUSTOMER, 0);   // guests never go behind the counter
+    nav.rect(-8, 8, 1.65, 11, MASK.STAFF | MASK.CHEF, 0); // staff stay behind it
+    nav.rect(-8, 8, -1.45, 0.75, MASK.CHEF, 0);      // the chef stays behind the pass
+    nav.rect(-8, -2.3, -6.0, -1.45, MASK.CHEF, 0);    // ...and out of the far-left corner
+    this.nav = nav;
   }
 
   onResize() {
@@ -250,13 +276,10 @@ export class Game {
       this.chef = this.models.chef; this.chef.position.copy(L.chef); this.chef.rotation.y += Math.PI; this.scene.add(this.chef);
     } else if (this.models.cashier) {
       this.scene.remove(this.chef);
-      this.chefRig = new Character(cloneRig(this.models.cashier), this.scene, { tint: 0xf4f4f0, hat: buildToque() });
+      this.chefs = [];
+      this.addChef(0);
+      this.chefRig = this.chefs[0].rig;
       this.chef = this.chefRig.obj;
-      this.chef.position.copy(L.stove);
-      this.chef.rotation.y = Math.PI;
-      this.chefState = 'idle';
-      this.chefOrder = null;
-      this.chefTimer = 0;
     }
     $('credits').textContent = `Models: ${this.credits.join(' · ')}`;
     $('shop-credits').textContent = `Models: ${this.credits.join(' · ')}`;
@@ -279,6 +302,9 @@ export class Game {
     this.stackParts.sort((a, b) => a.name.localeCompare(b.name));
     const kitchen = this.models.kitchen ?? placeholderBox(2.2, 2, 2, 0xbbbbbb);
     kitchen.position.copy(L.kitchen); this.scene.add(kitchen);
+    // guests and runners stay out of the kitchen; the chef walks around its actual furniture
+    this.nav.rect(0.1, 3.4, -6.0, -3.0, MASK.CUSTOMER | MASK.STAFF, 0);
+    this.nav.footprint(kitchen, MASK.ALL, { inflate: 0.12 }); // tight margins: the walkways inside are narrow
     this.knifeProto = this.models.knife;
     this.cabinetProto = this.models.cabinet;
     this.addRegister(0);
@@ -292,6 +318,25 @@ export class Game {
     }
   }
 
+  /** Chef 0 comes with the diner; chef 1 is the Sous chef upgrade. Each has a board and a burner. */
+  addChef(index) {
+    if (this.chefs[index]) return;
+    const rig = new Character(cloneRig(this.models.cashier), this.scene, { tint: index === 0 ? 0xf4f4f0 : 0xe8f0e0, hat: buildToque() });
+    rig.mask = MASK.CHEF;
+    const stove = index === 0 ? L.stove : L.stove2;
+    const prep = index === 0 ? L.prep : L.prep2;
+    rig.obj.position.copy(stove);
+    rig.obj.rotation.y = Math.PI;
+    this.chefs[index] = { index, rig, stove, prep, state: 'idle', order: null, timer: 0 };
+  }
+
+  removeSousChef() {
+    const c = this.chefs?.[1];
+    if (!c) return;
+    this.scene.remove(c.rig.obj);
+    this.chefs.length = 1;
+  }
+
   /** Register 0 is the one from the manifest; register 1 comes with the upgrade. */
   addRegister(index) {
     if (this.registers[index]) return;
@@ -303,6 +348,7 @@ export class Game {
     let cashier = null;
     if (this.models.cashier) {
       cashier = new Character(index === 0 ? this.models.cashier : cloneRig(this.models.cashier), this.scene, index === 0 ? {} : { tint: 0xdfe7ff });
+      cashier.mask = MASK.STAFF; cashier.moving = false;
       cashier.obj.position.copy(stand);
       cashier.obj.rotation.y = 0; // faces +z, toward the guests
     }
@@ -384,7 +430,10 @@ export class Game {
     for (const r of this.registers) { r.busy = null; r.timer = 0; }
     if (this.lvl('register2') < 1) this.removeSecondRegister();
     this.autoTimer = 0;
-    if (this.chefRig) { this.chefRig.carry.clear(); this.chefState = 'idle'; this.chefOrder = null; this.chef.position.copy(L.stove); }
+    if (this.chefs) {
+      if (this.lvl('chef2') < 1) this.removeSousChef();
+      for (const c of this.chefs) { c.rig.carry.clear(); c.state = 'idle'; c.order = null; c.rig.obj.position.copy(c.stove); }
+    }
   }
 
   lvl(id) { return this.s.upgrades[id] ?? 0; }
@@ -393,11 +442,13 @@ export class Game {
   applyUpgradesToWorld() {
     this.placeLamps();
     if (this.lvl('register2') >= 1) this.addRegister(1);
+    if (this.lvl('chef2') >= 1 && this.chefs) this.addChef(1);
     // runners
     while (this.runners.length < this.lvl('runner')) {
       const idx = this.runners.length;
       const model = this.models.runner ? cloneRig(this.models.runner) : placeholderPerson(0x2e7d32);
       const w = new Character(model, this.scene);
+      w.mask = MASK.STAFF;
       w.obj.position.copy(L.runnerIdle[idx % L.runnerIdle.length]);
       w.state = 'idle'; w.order = null; w.idleSpot = L.runnerIdle[idx % L.runnerIdle.length];
       this.runners.push(w);
@@ -407,6 +458,7 @@ export class Game {
       const t = buildTable(L.tables[this.tables.length]);
       t.userData.taken = new Array(4).fill(null);
       this.scene.add(t); this.tables.push(t);
+      this.nav.circle(t.position.x, t.position.z, 0.78, MASK.ALL);
     }
     // cabinets on the back wall
     while (this.cabinets.length < this.lvl('cabinet')) {
@@ -482,6 +534,46 @@ export class Game {
   stoves() { return this.lvl('stove'); }
   availableMenu() { const tier = this.lvl('menu'); return MENU.filter((m) => m.tier <= tier); }
 
+  // ---------------------------------------------------------- movement
+  /**
+   * Walk an agent ({ obj, nav?, mask }) toward `target` along a grid path.
+   * Re-plans when the target moves or the grid changes. Returns true on arrival.
+   */
+  walkTo(agent, target, speed, dt) {
+    const st = agent.nav ?? (agent.nav = { target: null, path: [], version: -1 });
+    if (!st.target || st.target.distanceToSquared(target) > 0.0025 || st.version !== this.nav.version) {
+      st.target = target.clone();
+      st.version = this.nav.version;
+      st.path = this.nav.findPath(agent.obj.position, target, agent.mask ?? MASK.ALL);
+    }
+    while (st.path.length) {
+      const wp = st.path[0];
+      const last = st.path.length === 1;
+      // Near an intermediate corner, turn early when the shortcut to the next
+      // corner is clear: nobody standing on a corner can block the route, and
+      // the check keeps the shortcut from clipping furniture.
+      if (!last && st.path[1]) {
+        const d = Math.hypot(wp.x - agent.obj.position.x, wp.z - agent.obj.position.z);
+        if (d < 0.45 && this.nav.lineClear(agent.obj.position, st.path[1], agent.mask ?? MASK.ALL)) { st.path.shift(); continue; }
+      }
+      if (!stepToward(agent.obj, wp, speed, dt)) { agent.moving = true; return false; }
+      st.path.shift();
+      if (last) { agent.moving = false; return true; }
+    }
+    agent.moving = false;
+    return true;
+  }
+
+  /** Everyone who can bump into someone this frame. */
+  collectAgents() {
+    const list = [];
+    for (const c of this.customers) if (!c.dead) list.push(c);
+    for (const r of this.runners) list.push(r);
+    for (const c of this.chefs ?? []) list.push(c.rig);
+    for (const r of this.registers) if (r.cashier) list.push(r.cashier);
+    return list;
+  }
+
   // ---------------------------------------------------------- customers
   spawnCustomer() {
     let obj, rig = null;
@@ -501,7 +593,7 @@ export class Game {
     obj.add(bubble);
     // join the shortest line
     const register = this.registers.reduce((best, r) => (this.lineLength(r) < this.lineLength(best) ? r : best), this.registers[0]);
-    const c = { obj, rig, bubble, vip, register, cheered: false, patienceMax: QUEUE_PATIENCE * this.patienceMult() * (vip ? 0.85 : 1), state: 'enter', path: [L.corridor.clone(), null], patience: QUEUE_PATIENCE * this.patienceMult() * (vip ? 0.85 : 1), waitSpot: null, seat: null, order: null, timer: 0, speed: rand(1.6, 2.1), happy: true, bob: Math.random() * 6 };
+    const c = { obj, rig, bubble, vip, register, cheered: false, mask: MASK.CUSTOMER, moving: false, patienceMax: QUEUE_PATIENCE * this.patienceMult() * (vip ? 0.85 : 1), state: 'enter', path: [L.corridor.clone(), null], patience: QUEUE_PATIENCE * this.patienceMult() * (vip ? 0.85 : 1), waitSpot: null, seat: null, order: null, timer: 0, speed: rand(1.6, 2.1), happy: true, bob: Math.random() * 6 };
     this.customers.push(c);
     if (vip) { this.toast('👑 A food critic just walked in. Serve them fast!', 'warn', 4000); this.sfx.bell(); }
     return c;
@@ -530,17 +622,14 @@ export class Game {
       const o = c.obj;
       switch (c.state) {
         case 'enter': {
-          const target = c.path[0] ?? c.queueTarget;
-          const moving = !stepToward(o, target, c.speed, dt);
+          // the grid routes them in through the door and around the furniture
+          const moving = !this.walkTo(c, c.queueTarget, c.speed, dt);
           this.bob(c, moving, dt);
-          if (!moving) {
-            if (c.path[0]) { c.path.shift(); c.path[0] = null; }
-            else { c.state = 'queue'; faceTo(o, c.register.pos); }
-          }
+          if (!moving) { c.state = 'queue'; faceTo(o, c.register.pos); }
           break;
         }
         case 'queue': {
-          const moving = !stepToward(o, c.queueTarget, c.speed, dt);
+          const moving = !this.walkTo(c, c.queueTarget, c.speed, dt);
           this.bob(c, moving, dt);
           if (!moving) faceTo(o, new THREE.Vector3(c.register.pos.x, 0, c.register.pos.z));
           c.patience -= dt;
@@ -554,11 +643,11 @@ export class Game {
           break;
         }
         case 'ordering': {
-          this.bob(c, false, dt);
+          this.bob(c, false, dt); c.moving = false;
           break; // cashier timer drives it
         }
         case 'toWait': {
-          const moving = !stepToward(o, c.waitSpot, c.speed, dt);
+          const moving = !this.walkTo(c, c.waitSpot, c.speed, dt);
           this.bob(c, moving, dt);
           if (!moving) { c.state = 'waitFood'; faceTo(o, new THREE.Vector3(o.position.x, 0, 1.2)); }
           c.patience -= dt;
@@ -566,13 +655,13 @@ export class Game {
           break;
         }
         case 'waitFood': {
-          this.bob(c, false, dt);
+          this.bob(c, false, dt); c.moving = false;
           c.patience -= dt;
           if (c.patience <= 0) this.abandon(c);
           break;
         }
         case 'toPickup': {
-          const moving = !stepToward(o, c.pickupTarget, c.speed, dt);
+          const moving = !this.walkTo(c, c.pickupTarget, c.speed, dt);
           this.bob(c, moving, dt);
           if (!moving) {
             // take the plate
@@ -587,12 +676,13 @@ export class Game {
           break;
         }
         case 'toSeat': {
-          const moving = !stepToward(o, c.seat.pos, c.speed, dt);
+          const moving = !this.walkTo(c, c.seat.pos, c.speed, dt);
           this.bob(c, moving, dt);
           if (!moving) { c.state = 'eating'; c.timer = EAT_TIME; faceTo(o, c.seat.table.position); }
           break;
         }
         case 'eating': {
+          c.moving = false;
           c.timer -= dt;
           if (c.rig) this.bob(c, false, dt); else o.position.y = Math.abs(Math.sin(this.time * 6)) * 0.02;
           this.updateEating(c, dt);
@@ -604,16 +694,16 @@ export class Game {
           break;
         }
         case 'leave': {
-          const target = c.path[0];
-          const moving = !stepToward(o, target, c.speed * 1.15, dt);
+          const moving = !this.walkTo(c, c.exit, c.speed * 1.15, dt);
           this.bob(c, moving, dt);
-          if (!moving) { c.path.shift(); if (!c.path.length) { this.scene.remove(o); c.dead = true; } }
+          if (!moving) { this.scene.remove(o); c.dead = true; }
           break;
         }
       }
     }
     for (const c of this.customers) this.updateBubble(c);
     this.customers = this.customers.filter((c) => !c.dead);
+    separate(this.collectAgents(), this.nav, dt);
   }
 
   updateBubble(c) {
@@ -704,7 +794,7 @@ export class Game {
     if (c.waitSpot) { c.waitSpot.taken = false; c.waitSpot = null; }
     if (c.register && c.register.busy === c) c.register.busy = null;
     c.state = 'leave';
-    c.path = [L.corridor.clone().add(new THREE.Vector3(rand(-0.4, 0.4), 0, rand(-0.3, 0.3))), L.door.clone(), L.spawn.clone()];
+    c.exit = L.spawn.clone().add(new THREE.Vector3(rand(-0.6, 0.6), 0, rand(-0.6, 0.6)));
     if (happy) {
       this.s.reputation = Math.min(100, this.s.reputation + (why === 'ate in' ? 1.5 : 0.8) + (c.vip ? 6 : 0));
       this.s.stats.servedTotal += 1; this.s.stats.servedToday += 1;
@@ -737,7 +827,7 @@ export class Game {
       if (o.plate && o.state === 'delivered') { this.scene.remove(o.plate); this.pickupPlates[o.pickupSlot] = null; }
       this.orders = this.orders.filter((x) => x !== o);
       if (o.state === 'carrying' && o.runner) { o.runner.carry.clear(); o.runner.order = null; o.runner.state = 'return'; }
-      if (this.chefOrder === o) { if (o.plate) this.chefRig?.carry.remove(o.plate); this.chefOrder = null; this.chefState = 'idle'; }
+      if (o.chef) { if (o.plate) o.chef.rig.carry.remove(o.plate); o.chef.order = null; o.chef.state = 'idle'; o.chef = null; }
     }
     this.leave(c, false, 'waited too long');
   }
@@ -763,7 +853,9 @@ export class Game {
       this.float(r.pos.clone().add(new THREE.Vector3(0, 0.9, 0)), `+${money2(bill)}`, 'gold');
       this.fx.sparkle(r.pos.clone().add(new THREE.Vector3(0, 0.6, 0.2)), 4);
       this.spawnBills(2, r.pos);
-      const spot = L.waitSpots.find((w) => !w.taken) ?? L.waitSpots[L.waitSpots.length - 1];
+      // a free waiting spot, or (when the area is full) a jittered spot along the front wall so nobody stacks
+      let spot = L.waitSpots.find((w) => !w.taken);
+      if (!spot) { spot = new THREE.Vector3(rand(-6.5, -4.2), 0, rand(2.2, 5.0)); spot.overflow = true; }
       spot.taken = true; c.waitSpot = spot;
       c.state = 'toWait'; c.patience = FOOD_PATIENCE * this.patienceMult() * (c.vip ? 0.85 : 1); c.patienceMax = c.patience;
       if (!this.tutorial.paid) { this.tutorial.paid = true; this.toast('First sale! Cash piles up on the register. Click it or press Space to bank it.', 'info', 4500); }
@@ -778,11 +870,11 @@ export class Game {
     for (const o of this.orders) {
       if (o.state !== 'cooking') continue;
       cookingNow++;
-      o.remaining -= dt * (this.chefRig?.boosted ? 1.5 : 1);
+      o.remaining -= dt * (this.chefs?.some((c) => c.rig.boosted) ? 1.5 : 1);
       if (o.remaining <= 0) { o.state = 'plated'; o.remaining = 0; }
     }
-    if (cookingNow) { this.steamTimer -= dt; if (this.steamTimer <= 0) { this.steamTimer = 0.3; this.fx.steam(L.stove.clone().add(new THREE.Vector3(0.2, 1.1, -0.5))); } }
-    if (this.chefRig) this.updateChef(dt);
+    if (cookingNow) { this.steamTimer -= dt; if (this.steamTimer <= 0) { this.steamTimer = 0.3; this.fx.steam(L.stove.clone().add(new THREE.Vector3(0.1, 1.1, -0.55))); } }
+    if (this.chefs?.length) for (const c of this.chefs) this.updateChef(c, dt);
     else this.updateChefless(dt);
   }
 
@@ -817,24 +909,23 @@ export class Game {
   }
 
   /**
-   * The chef: preps the next order at the cutting board, starts it on a free
-   * stove, and carries finished plates from the stove to the pass.
+   * One cook: preps the next order at their board, starts it on a free stove,
+   * and carries finished plates from the burner to the pass.
    */
-  updateChef(dt) {
-    const chef = this.chefRig;
+  updateChef(c, dt) {
+    const chef = c.rig;
     chef.tickBoost(dt, this.time);
     const speed = 2.2 * (chef.boosted ? 1.6 : 1);
-    if (chef.boosted) dt *= 1; // walking handled by speed; prep below
-    switch (this.chefState) {
+    switch (c.state) {
       case 'idle': {
-        const plated = this.orders.find((o) => o.state === 'plated');
-        const cooking = this.orders.filter((o) => o.state === 'cooking' || o.state === 'prepping').length;
-        const next = this.orders.find((o) => o.state === 'queued');
-        if (plated) { this.chefOrder = plated; plated.state = 'carrying-chef'; this.chefState = 'toStoveForPlate'; }
-        else if (next && cooking < this.stoves()) { this.chefOrder = next; next.state = 'prepping'; this.chefState = 'toPrep'; }
+        const plated = this.orders.find((o) => o.state === 'plated' && !o.chef);
+        const busy = this.orders.filter((o) => o.state === 'cooking' || o.state === 'prepping').length;
+        const next = this.orders.find((o) => o.state === 'queued' && !o.chef);
+        if (plated) { plated.chef = c; c.order = plated; plated.state = 'carrying-chef'; c.state = 'toStoveForPlate'; }
+        else if (next && busy < this.stoves()) { next.chef = c; c.order = next; next.state = 'prepping'; c.state = 'toPrep'; }
         else {
-          // stand at the stove; stir while something cooks
-          const arrived = stepToward(chef.obj, L.stove, speed, dt);
+          const cooking = this.orders.some((o) => o.state === 'cooking');
+          const arrived = this.walkTo(chef, c.stove, speed, dt);
           if (arrived) { chef.obj.rotation.y = Math.PI; chef.play(cooking ? 'walk' : 'idle'); }
           else chef.play('walk');
         }
@@ -842,51 +933,53 @@ export class Game {
       }
       case 'toPrep': {
         chef.play('walk');
-        if (stepToward(chef.obj, L.prep, speed, dt)) { this.chefState = 'prepping'; this.chefTimer = this.prepTime(); chef.obj.rotation.y = 0; /* face the board */ }
+        if (this.walkTo(chef, c.prep, speed, dt)) { c.state = 'prepping'; c.timer = this.prepTime(); chef.obj.rotation.y = 0; }
         break;
       }
       case 'prepping': {
+        chef.moving = false;
         chef.play('walk'); // chopping motion stand-in
         chef.obj.position.y = Math.abs(Math.sin(this.time * 10)) * 0.03;
-        this.chefTimer -= dt * (chef.boosted ? 2 : 1);
-        if (this.knife) this.knife.rotation.z = Math.PI / 2 + 0.3 + Math.sin(this.time * 10) * 0.2;
-        if (this.chefTimer <= 0) { chef.obj.position.y = 0; if (this.knife) this.knife.rotation.z = Math.PI / 2 + 0.3; this.chefState = 'toStove'; }
+        c.timer -= dt * (chef.boosted ? 2 : 1);
+        if (this.knife && c.index === 0) this.knife.rotation.z = Math.PI / 2 + 0.3 + Math.sin(this.time * 10) * 0.2;
+        if (c.timer <= 0) { chef.obj.position.y = 0; if (this.knife) this.knife.rotation.z = Math.PI / 2 + 0.3; c.state = 'toStove'; }
         break;
       }
       case 'toStove': {
         chef.play('walk');
-        if (stepToward(chef.obj, L.stove, speed, dt)) {
-          const o = this.chefOrder;
-          if (o && o.state === 'prepping') { o.state = 'cooking'; o.remaining = this.stoveTime(o.item); }
-          this.chefOrder = null; this.chefState = 'idle'; chef.obj.rotation.y = Math.PI;
+        if (this.walkTo(chef, c.stove, speed, dt)) {
+          const o = c.order;
+          if (o && o.state === 'prepping') { o.state = 'cooking'; o.remaining = this.stoveTime(o.item); o.chef = null; }
+          c.order = null; c.state = 'idle'; chef.obj.rotation.y = Math.PI;
         }
         break;
       }
       case 'toStoveForPlate': {
         chef.play('walk');
-        if (stepToward(chef.obj, L.stove, speed, dt)) {
-          const o = this.chefOrder;
-          if (!o) { this.chefState = 'idle'; break; }
+        if (this.walkTo(chef, c.stove, speed, dt)) {
+          const o = c.order;
+          if (!o) { c.state = 'idle'; break; }
           o.plate = buildFood(o.item, { kebab: this.models.kebab });
           o.plate.scale.setScalar(0.9);
           chef.carry.add(o.plate);
-          this.chefState = 'toPass';
+          c.state = 'toPass';
         }
         break;
       }
       case 'toPass': {
         chef.play('walk');
-        const o = this.chefOrder;
-        if (!o) { this.chefState = 'idle'; break; }
+        const o = c.order;
+        if (!o) { c.state = 'idle'; break; }
         let slot = this.passPlates.findIndex((p) => !p);
-        const target = new THREE.Vector3(slot >= 0 ? L.passSlots[slot].x : L.passSlots[1].x, 0, L.passStandChef);
-        if (stepToward(chef.obj, target, speed, dt)) {
+        const target = new THREE.Vector3(slot >= 0 ? L.passSlots[slot].x : L.passSlots[1].x + c.index * 0.5, 0, L.passStandChef);
+        if (this.walkTo(chef, target, speed, dt)) {
           chef.obj.rotation.y = 0;
           slot = this.passPlates.findIndex((p) => !p);
           if (slot < 0) { chef.play('idle'); break; } // pass full: wait here holding the plate
           chef.carry.remove(o.plate);
           this.plateToPass(o);
-          this.chefOrder = null; this.chefState = 'idle';
+          o.chef = null;
+          c.order = null; c.state = 'idle';
         }
         break;
       }
@@ -904,13 +997,13 @@ export class Game {
         case 'idle': {
           const ready = this.orders.find((o) => o.state === 'ready' && !o.runner);
           if (ready) { ready.runner = r; r.order = ready; r.state = 'toPass'; r.play('walk'); }
-          else { const arrived = stepToward(r.obj, r.idleSpot, spd, dt); r.play(arrived ? 'idle' : 'walk'); if (arrived) faceTo(r.obj, L.passSlots[1]); }
+          else { const arrived = this.walkTo(r, r.idleSpot, spd, dt); r.play(arrived ? 'idle' : 'walk'); if (arrived) faceTo(r.obj, L.passSlots[1]); }
           break;
         }
         case 'toPass': {
           const o = r.order;
           const target = new THREE.Vector3(L.passSlots[o.passSlot].x, 0, L.passStand.z);
-          if (stepToward(r.obj, target, spd, dt)) {
+          if (this.walkTo(r, target, spd, dt)) {
             this.scene.remove(o.plate); this.passPlates[o.passSlot] = null;
             o.plate.position.set(0, 0, 0); o.plate.scale.setScalar(0.9); r.carry.add(o.plate);
             o.state = 'carrying';
@@ -922,12 +1015,12 @@ export class Game {
           const o = r.order;
           if (o.pickupSlot < 0) {
             const slot = this.pickupPlates.findIndex((p) => !p);
-            if (slot < 0) { const arrived = stepToward(r.obj, L.pickupStand, spd, dt); r.play(arrived ? 'idle' : 'walk'); break; }
+            if (slot < 0) { const arrived = this.walkTo(r, L.pickupStand, spd, dt); r.play(arrived ? 'idle' : 'walk'); break; }
             o.pickupSlot = slot; this.pickupPlates[slot] = o.plate;
           }
           r.play('walk');
           const target = new THREE.Vector3(L.pickupSlots[o.pickupSlot].x, 0, L.pickupStand.z);
-          if (stepToward(r.obj, target, spd, dt)) {
+          if (this.walkTo(r, target, spd, dt)) {
             r.carry.remove(o.plate); o.plate.scale.setScalar(1); o.plate.position.copy(L.pickupSlots[o.pickupSlot]); this.scene.add(o.plate);
             o.state = 'delivered';
             const c = o.customer;
@@ -941,7 +1034,7 @@ export class Game {
           break;
         }
         case 'return': {
-          const arrived = stepToward(r.obj, r.idleSpot, spd, dt);
+          const arrived = this.walkTo(r, r.idleSpot, spd, dt);
           r.play(arrived ? 'idle' : 'walk');
           if (arrived) { r.state = 'idle'; faceTo(r.obj, L.passSlots[1]); }
           break;
@@ -1256,7 +1349,7 @@ export class Game {
       this.pointer.set(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1);
       this.raycaster.setFromCamera(this.pointer, this.camera);
       // staff first: a click on any worker makes them hustle
-      const staff = [...this.registers.map((r) => r.cashier).filter(Boolean), ...this.runners, this.chefRig].filter(Boolean);
+      const staff = [...this.registers.map((r) => r.cashier).filter(Boolean), ...this.runners, ...(this.chefs ?? []).map((c) => c.rig)];
       const staffHits = this.raycaster.intersectObjects(staff.map((w) => w.obj), true);
       if (staffHits.length) { this.hustle(staffHits[0].object); return; }
       const guestHits = this.raycaster.intersectObjects(this.customers.map((c) => c.obj), true);
@@ -1360,7 +1453,7 @@ export class Game {
     } else {
       for (const r of this.registers) r.cashier?.update(real);
       for (const r of this.runners) r.update(real);
-      if (this.chefRig) this.chefRig.update(real);
+      for (const c of this.chefs ?? []) c.rig.update(real);
     }
     this.updateFloaters(real);
     this.renderer.render(this.scene, this.camera);
@@ -1373,7 +1466,7 @@ const LAMP_SPOTS = [
   new THREE.Vector3(2.6, LAMP_Y, 0.4), new THREE.Vector3(-2.3, LAMP_Y, 0.4),
   new THREE.Vector3(5.6, LAMP_Y, 3.2), new THREE.Vector3(-5.6, LAMP_Y, 3.2),
   new THREE.Vector3(5.6, LAMP_Y, 5.4), new THREE.Vector3(-5.6, LAMP_Y, 5.4),
-  new THREE.Vector3(0.3, LAMP_Y, -1.5), new THREE.Vector3(0.3, LAMP_Y, 4.2),
+  new THREE.Vector3(0.3, LAMP_Y, -0.7), new THREE.Vector3(0.3, LAMP_Y, 4.2),
 ];
 
 // speech bubble + patience bar drawn on a canvas sprite
