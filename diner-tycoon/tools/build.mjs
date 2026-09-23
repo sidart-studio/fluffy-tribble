@@ -6,7 +6,7 @@
 // Outputs:
 //   index.html                  dev page: separate modules, vendored three, fetches models/
 //   dist/short-order-tycoon.html   single file for double-clicking (three inlined, models embedded)
-//   dist/artifact.html          single file fragment for claude.ai artifacts (three from jsdelivr)
+//   dist/artifact.html          same page as a fragment for claude.ai artifacts (no doctype/html wrapper)
 
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import path from 'node:path';
@@ -86,25 +86,30 @@ window.__tycoon = game;
 game.load();
 `;
 
-function singleFile({ threeSpecifier, wrapDocument }) {
-  const importMap = `<script type="importmap">{ "imports": { "three": ${JSON.stringify(threeSpecifier)} } }</script>`;
-  const script = `<script type="module">\nimport * as THREE from 'three';\n${bundled}\n${boot}\n</script>`;
-  const inner = `${styleAndTitle.trim()}\n${body.trim()}\n${importMap}\n${script}\n`;
+// Three.js inlined as one namespace object: the module's trailing
+// `export { ... }` becomes `return { ... }` inside an IIFE, so nothing is
+// fetched at runtime and three's internal names cannot collide with ours.
+const threeSrc = read('vendor/three/three.module.js');
+const exportMatch = threeSrc.match(/export\s*\{([\s\S]*?)\};?\s*$/);
+if (!exportMatch) throw new Error('could not find the export list in three.module.js');
+const exportNames = exportMatch[1].split(',').map((x) => x.trim()).filter(Boolean).map((x) => {
+  const m = x.match(/^(\S+)\s+as\s+(\S+)$/);
+  return m ? `${m[2]}: ${m[1]}` : x;
+});
+const threeInline = `const THREE = (() => {\n${threeSrc.slice(0, exportMatch.index)}\nreturn { ${exportNames.join(', ')} };\n})();`;
+
+function singleFile({ wrapDocument }) {
+  const script = `<script type="module">\n${threeInline}\n${bundled}\n${boot}\n</script>`;
+  const inner = `${styleAndTitle.trim()}\n${body.trim()}\n${script}\n`;
   if (!wrapDocument) return inner;
   return `<!DOCTYPE html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">\n</head>\n<body>\n${inner}</body>\n</html>\n`;
 }
 
 mkdirSync(path.join(root, 'dist'), { recursive: true });
-// standalone: three.js inlined as a data: URL module so it works from file://
-const threeSrc = read('vendor/three/three.module.js');
-const threeData = `data:text/javascript;base64,${Buffer.from(threeSrc, 'utf8').toString('base64')}`;
-const standalone = singleFile({ threeSpecifier: threeData, wrapDocument: true });
-writeFileSync(path.join(root, 'dist/short-order-tycoon.html'), standalone);
-// artifact: three from jsdelivr (allowed by the artifact CSP), no document wrapper
-const artifact = singleFile({ threeSpecifier: 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js', wrapDocument: false });
-writeFileSync(path.join(root, 'dist/artifact.html'), artifact);
-// artifact-local: same as artifact but three vendored, for testing the fragment locally
-writeFileSync(path.join(root, 'dist/artifact-local-test.html'), singleFile({ threeSpecifier: '../vendor/three/three.module.js', wrapDocument: true }));
+// standalone: a complete document, works from file://
+writeFileSync(path.join(root, 'dist/short-order-tycoon.html'), singleFile({ wrapDocument: true }));
+// artifact: the same page without the document wrapper (claude.ai adds its own)
+writeFileSync(path.join(root, 'dist/artifact.html'), singleFile({ wrapDocument: false }));
 
 const kb = (p) => `${(readFileSync(path.join(root, p)).length / 1024).toFixed(0)} KB`;
 console.log(`index.html (dev)                 ${kb('index.html')}`);
