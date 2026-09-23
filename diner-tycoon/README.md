@@ -60,7 +60,8 @@ on the title screen.
 Each day lasts two minutes. Daylight fades into a warm evening in the last
 third and the lamps take over. Just after midday a rush hour doubles walk-ins
 for a while. Guests show a speech bubble with what they ordered and a
-patience bar; when the bar runs out they leave and cost you a star. At
+patience bar; when the bar runs out they leave and cost you a star. Seated
+guests lift the skewer to their mouth and eat it bite by bite. At
 closing time a summary card shows sales, tips, guests, walkouts and rating.
 
 ## Building

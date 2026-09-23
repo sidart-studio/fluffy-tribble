@@ -184,35 +184,50 @@ export function buildToque() {
 
 export function buildFood(item, protos = {}) {
   const g = new THREE.Group();
-  const plate = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.18, 0.03, 20), mat(0xf7f7f2, { roughness: 0.3 })));
-  plate.position.y = 0.015; g.add(plate);
+  // a small saucer: the skewer should overhang it like a real kebab plate
+  const plateR = item.shape === 'platter' || item.shape === 'special' ? 0.17 : 0.13;
+  const plate = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(plateR, plateR * 0.8, 0.025, 20), mat(0xf7f7f2, { roughness: 0.3 })));
+  plate.position.y = 0.0125; g.add(plate);
   const c = item.color;
+  // Bites are a clipping plane shared by every edible mesh on the plate; the
+  // game moves it along the skewer while a guest eats (see Game.updateEating).
+  const bitePlane = new THREE.Plane(new THREE.Vector3(0, -1, 0), 1e6);
+  g.userData.bitePlane = bitePlane;
+  g.userData.skewers = [];
+  g.userData.skewerLength = protos.kebab ? protos.kebab.userData.size.y : 0.4;
   const skewer = (tint, dx = 0, dz = 0, yaw = 0) => {
-    if (!protos.kebab) { const k = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.06, 0.06), mat(tint ?? c)); k.position.set(dx, 0.06, dz); k.rotation.y = yaw; return k; }
+    if (!protos.kebab) {
+      const k = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.4, 0.06), mat(tint ?? c));
+      k.material.clippingPlanes = [bitePlane];
+      k.position.set(dx, 0.06, dz); k.rotation.set(0, yaw, Math.PI / 2); g.userData.skewers.push(k); return k;
+    }
     const k = protos.kebab.clone(true);
     k.traverse((o) => {
       if (o.isMesh) {
         o.material = o.material.clone();
         if (tint && /lambert3SG/.test(o.material.name)) o.material.color.setHex(tint);
+        // everything but the metal stick gets eaten
+        if (!/lambert2SG/.test(o.material.name)) { o.material.clippingPlanes = [bitePlane]; o.material.clipShadows = true; }
         o.castShadow = true;
       }
     });
-    // the model is an upright skewer: lay it across the plate
+    // the model is an upright skewer (local +y = tip): lay it across the plate
     const size = protos.kebab.userData.size;
     k.rotation.set(0, yaw, Math.PI / 2);
-    k.position.set(dx - size.y / 2 * Math.cos(yaw) * 0, 0.03 + size.x / 2, dz);
+    k.position.set(dx + size.y / 2 * Math.cos(yaw), 0.025 + size.x / 2, dz - size.y / 2 * Math.sin(yaw));
+    g.userData.skewers.push(k);
     return k;
   };
   switch (item.shape) {
     case 'kebab': {
       g.add(skewer(item.meat));
-      const lemon = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.02, 12), mat(0xfff176)); lemon.position.set(0.14, 0.04, 0.12); g.add(lemon);
+      const lemon = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.02, 12), mat(0xfff176)); lemon.position.set(0.08, 0.035, 0.09); g.add(lemon);
       break;
     }
     case 'platter': {
-      g.add(skewer(0xf0c987, 0, -0.07, 0.1));
+      g.add(skewer(0xf0c987, 0, -0.08, 0));
       g.add(skewer(0x6b3a26, 0, 0.0, 0));
-      g.add(skewer(0x8d4a3a, 0, 0.07, -0.1));
+      g.add(skewer(0x8d4a3a, 0, 0.08, 0));
       break;
     }
     case 'burger': {
@@ -228,9 +243,9 @@ export function buildFood(item, protos = {}) {
       break;
     }
     case 'cup': {
-      const cup = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.065, 0.24, 16), mat(0xf7f7f2)); cup.position.y = 0.15; g.add(cup);
-      const lid = new THREE.Mesh(new THREE.CylinderGeometry(0.085, 0.085, 0.02, 16), mat(c)); lid.position.y = 0.28; g.add(lid);
-      const straw = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.2, 6), mat(0xc73e3a)); straw.position.set(0.03, 0.38, 0); straw.rotation.z = 0.2; g.add(straw);
+      const cup = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.05, 0.2, 16), mat(0xf7f7f2)); cup.position.y = 0.12; g.add(cup);
+      const lid = new THREE.Mesh(new THREE.CylinderGeometry(0.065, 0.065, 0.02, 16), mat(c)); lid.position.y = 0.23; g.add(lid);
+      const straw = new THREE.Mesh(new THREE.CylinderGeometry(0.007, 0.007, 0.18, 6), mat(0xc73e3a)); straw.position.set(0.025, 0.31, 0); straw.rotation.z = 0.2; g.add(straw);
       break;
     }
     case 'slice': {
@@ -251,9 +266,9 @@ export function buildFood(item, protos = {}) {
       break;
     }
     case 'special': {
-      g.add(skewer(0xc63d5c, 0, -0.05, 0.15));
-      g.add(skewer(0xf0c987, 0, 0.06, -0.15));
-      const flame = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.14, 8), new THREE.MeshStandardMaterial({ color: 0xffb74d, emissive: 0xff7043, emissiveIntensity: 2 })); flame.position.set(-0.18, 0.12, 0); g.add(flame);
+      g.add(skewer(0xc63d5c, 0, -0.05, 0));
+      g.add(skewer(0xf0c987, 0, 0.06, 0));
+      const flame = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.14, 8), new THREE.MeshStandardMaterial({ color: 0xffb74d, emissive: 0xff7043, emissiveIntensity: 2 })); flame.position.set(0.12, 0.1, 0); g.add(flame);
       const glow = new THREE.PointLight(c, 1.5, 1.2); glow.position.y = 0.3; g.add(glow);
       break;
     }

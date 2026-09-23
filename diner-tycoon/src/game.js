@@ -120,6 +120,7 @@ export class Game {
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.0;
+    renderer.localClippingEnabled = true; // bites out of kebabs
     this.renderer = renderer;
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0xf6e7d2);
@@ -478,7 +479,7 @@ export class Game {
             // take the plate
             const slot = c.order.pickupSlot;
             const plate = this.pickupPlates[slot];
-            if (plate) { this.pickupPlates[slot] = null; this.scene.remove(plate); const hand = o.getObjectByName('hand'); plate.position.set(0, 0, 0); plate.scale.setScalar(0.85); hand.add(plate); c.plate = plate; }
+            if (plate) { this.pickupPlates[slot] = null; this.scene.remove(plate); const hand = o.getObjectByName('hand'); plate.position.set(0, 0, 0); plate.scale.setScalar(1); hand.add(plate); c.plate = plate; }
             this.sfx.pop();
             const seat = this.findSeat();
             if (seat) { c.seat = seat; seat.table.userData.taken[seat.index] = c; c.state = 'toSeat'; }
@@ -495,8 +496,9 @@ export class Game {
         case 'eating': {
           c.timer -= dt;
           if (c.rig) this.bob(c, false, dt); else o.position.y = Math.abs(Math.sin(this.time * 6)) * 0.02;
+          this.updateEating(c, dt);
           if (c.timer <= 0) {
-            if (c.plate) { o.getObjectByName('hand').remove(c.plate); c.plate = null; }
+            if (c.plate) { const hand = o.getObjectByName('hand'); hand.remove(c.plate); if (c.eat) { hand.position.copy(c.eat.rest); hand.rotation.set(0, c.eat.restRot, 0); } c.plate = null; }
             c.seat.table.userData.taken[c.seat.index] = null;
             this.finishCustomer(c, true);
           }
@@ -530,6 +532,50 @@ export class Game {
     if (c.rig) { c.rig.play(moving ? 'walk' : 'idle'); c.rig.update(dt); c.obj.position.y = 0; return; }
     if (moving) { c.bob += dt * 11; c.obj.position.y = Math.abs(Math.sin(c.bob)) * 0.06; }
     else c.obj.position.y = 0;
+  }
+
+  /**
+   * Lift the plate to the mouth, bite, lower it. Each bite moves the plate's
+   * clipping plane further down the skewer so the kebab visibly shrinks.
+   */
+  updateEating(c, dt) {
+    const hand = c.obj.getObjectByName('hand');
+    const plate = c.plate;
+    if (!hand || !plate) return;
+    const e = c.eat ?? (c.eat = { t: 0, bites: 0, total: Math.max(3, Math.round(EAT_TIME / 1.5)), rest: hand.position.clone(), restRot: hand.rotation.y });
+    e.t += dt;
+    const period = EAT_TIME / e.total;
+    const phase = (e.t % period) / period; // 0..1 within one bite
+    // mouth position in the guest's local space (chibi head is big and forward)
+    const mouth = c.rig ? new THREE.Vector3(0.0, 1.1, 0.8) : new THREE.Vector3(0.0, 1.42, 0.3);
+    let k; // 0 = plate at rest, 1 = at the mouth
+    if (phase < 0.35) k = phase / 0.35;
+    else if (phase < 0.55) k = 1;
+    else k = 1 - (phase - 0.55) / 0.45;
+    k = k * k * (3 - 2 * k);
+    hand.position.lerpVectors(e.rest, mouth, k);
+    // turn the plate so the skewer tip points at the face
+    hand.rotation.y = e.restRot + k * (-Math.PI / 2);
+    hand.rotation.x = k * 0.35;
+    const biteIndex = Math.floor(e.t / period);
+    if (biteIndex > e.bites && biteIndex <= e.total) {
+      e.bites = biteIndex;
+      this.sfx.pop();
+      if (c.rig) c.obj.position.y = 0.03; // little chomp hop
+    }
+    // eaten fraction grows in steps; the drink/cup has no skewer so nothing to clip
+    const eaten = Math.min(0.9, e.bites / e.total);
+    const skewers = plate.userData.skewers ?? [];
+    if (skewers.length && plate.userData.bitePlane) {
+      const sk = skewers[Math.min(skewers.length - 1, 1)];
+      sk.updateMatrixWorld(true);
+      const L = plate.userData.skewerLength;
+      const axis = new THREE.Vector3(0, 1, 0).transformDirection(sk.matrixWorld).normalize();
+      const tip = sk.localToWorld(new THREE.Vector3(0, L, 0));
+      const cut = tip.addScaledVector(axis, -eaten * L);
+      plate.userData.bitePlane.normal.copy(axis).negate();
+      plate.userData.bitePlane.constant = axis.dot(cut);
+    }
   }
 
   findSeat() {
