@@ -225,8 +225,11 @@ export class Game {
       this.scene.remove(this.chef);
       this.chefRig = new Character(cloneRig(this.models.cashier), this.scene, { tint: 0xf4f4f0, hat: buildToque() });
       this.chef = this.chefRig.obj;
-      this.chef.position.copy(L.chef);
+      this.chef.position.copy(L.stove);
       this.chef.rotation.y = Math.PI;
+      this.chefState = 'idle';
+      this.chefOrder = null;
+      this.chefTimer = 0;
     }
     $('credits').textContent = `Models: ${this.credits.join(' · ')}`;
     $('shop-credits').textContent = `Models: ${this.credits.join(' · ')}`;
@@ -317,6 +320,7 @@ export class Game {
     this.cashierBusy = null;
     this.cashierTimer = 0;
     this.autoTimer = 0;
+    if (this.chefRig) { this.chefRig.carry.clear(); this.chefState = 'idle'; this.chefOrder = null; this.chef.position.copy(L.stove); }
   }
 
   lvl(id) { return this.s.upgrades[id] ?? 0; }
@@ -652,6 +656,7 @@ export class Game {
       if (o.plate && o.state === 'delivered') { this.scene.remove(o.plate); this.pickupPlates[o.pickupSlot] = null; }
       this.orders = this.orders.filter((x) => x !== o);
       if (o.state === 'carrying' && o.runner) { o.runner.carry.clear(); o.runner.order = null; o.runner.state = 'return'; }
+      if (this.chefOrder === o) { if (o.plate) this.chefRig?.carry.remove(o.plate); this.chefOrder = null; this.chefState = 'idle'; }
     }
     this.leave(c, false, 'waited too long');
   }
@@ -667,7 +672,7 @@ export class Game {
     const bill = c.item.price;
     this.s.till += bill;
     this.s.stats.earnedTotal += bill; this.s.stats.earnedToday += bill;
-    const order = { customer: c, item: c.item, state: 'queued', remaining: this.cookTime(c.item), plate: null, passSlot: -1, pickupSlot: -1, runner: null };
+    const order = { customer: c, item: c.item, state: 'queued', remaining: 0, plate: null, passSlot: -1, pickupSlot: -1, runner: null };
     c.order = order;
     this.orders.push(order);
     this.cashierBusy = null;
@@ -685,30 +690,120 @@ export class Game {
 
   // ---------------------------------------------------------- kitchen
   updateKitchen(dt) {
-    const cooking = this.orders.filter((o) => o.state === 'cooking');
-    let free = this.stoves() - cooking.length;
+    // stoves cook on their own once the chef has prepped the order
+    for (const o of this.orders) {
+      if (o.state !== 'cooking') continue;
+      o.remaining -= dt;
+      if (o.remaining <= 0) { o.state = 'plated'; o.remaining = 0; }
+    }
+    if (this.chefRig) this.updateChef(dt);
+    else this.updateChefless(dt);
+  }
+
+  /** Fallback when no character rig loaded: orders progress without a walking chef. */
+  updateChefless(dt) {
+    const cooking = this.orders.filter((o) => o.state === 'cooking').length;
+    let free = this.stoves() - cooking;
     for (const o of this.orders) {
       if (free <= 0) break;
-      if (o.state === 'queued') { o.state = 'cooking'; free--; cooking.push(o); }
+      if (o.state === 'queued') { o.state = 'cooking'; o.remaining = this.cookTime(o.item); free--; }
     }
-    for (const o of cooking) {
-      o.remaining -= dt;
-      if (o.remaining <= 0) {
-        const slot = this.passPlates.findIndex((p) => !p);
-        if (slot < 0) { o.remaining = 0; continue; } // pass is full, hold it
-        const plate = buildFood(o.item, { kebab: this.models.kebab });
-        plate.position.copy(L.passSlots[slot]);
-        this.scene.add(plate);
-        o.plate = plate; o.passSlot = slot; o.state = 'ready';
-        this.passPlates[slot] = plate;
-        this.sfx.bell();
+    for (const o of this.orders) if (o.state === 'plated') this.plateToPass(o);
+    const busy = cooking > 0;
+    this.chef.position.y = busy ? Math.abs(Math.sin(this.time * 8)) * 0.05 : 0;
+  }
+
+  prepTime() { return 1.6 * Math.pow(0.8, this.lvl('knife')); }
+  stoveTime(item) { return item.cook * Math.pow(0.88, this.lvl('cabinet')); }
+
+  /** Put a finished order on a free pass slot; returns false if the pass is full. */
+  plateToPass(o) {
+    const slot = this.passPlates.findIndex((p) => !p);
+    if (slot < 0) return false;
+    const plate = o.plate ?? buildFood(o.item, { kebab: this.models.kebab });
+    plate.scale.setScalar(1);
+    plate.position.copy(L.passSlots[slot]);
+    this.scene.add(plate);
+    o.plate = plate; o.passSlot = slot; o.state = 'ready';
+    this.passPlates[slot] = plate;
+    this.sfx.bell();
+    return true;
+  }
+
+  /**
+   * The chef: preps the next order at the cutting board, starts it on a free
+   * stove, and carries finished plates from the stove to the pass.
+   */
+  updateChef(dt) {
+    const chef = this.chefRig;
+    const speed = 2.2;
+    switch (this.chefState) {
+      case 'idle': {
+        const plated = this.orders.find((o) => o.state === 'plated');
+        const cooking = this.orders.filter((o) => o.state === 'cooking' || o.state === 'prepping').length;
+        const next = this.orders.find((o) => o.state === 'queued');
+        if (plated) { this.chefOrder = plated; plated.state = 'carrying-chef'; this.chefState = 'toStoveForPlate'; }
+        else if (next && cooking < this.stoves()) { this.chefOrder = next; next.state = 'prepping'; this.chefState = 'toPrep'; }
+        else {
+          // stand at the stove; stir while something cooks
+          const arrived = stepToward(chef.obj, L.stove, speed, dt);
+          if (arrived) { chef.obj.rotation.y = Math.PI; chef.play(cooking ? 'walk' : 'idle'); }
+          else chef.play('walk');
+        }
+        break;
+      }
+      case 'toPrep': {
+        chef.play('walk');
+        if (stepToward(chef.obj, L.prep, speed, dt)) { this.chefState = 'prepping'; this.chefTimer = this.prepTime(); chef.obj.rotation.y = 0; /* face the board */ }
+        break;
+      }
+      case 'prepping': {
+        chef.play('walk'); // chopping motion stand-in
+        chef.obj.position.y = Math.abs(Math.sin(this.time * 10)) * 0.03;
+        this.chefTimer -= dt;
+        if (this.knife) this.knife.rotation.z = Math.PI / 2 + 0.3 + Math.sin(this.time * 10) * 0.2;
+        if (this.chefTimer <= 0) { chef.obj.position.y = 0; if (this.knife) this.knife.rotation.z = Math.PI / 2 + 0.3; this.chefState = 'toStove'; }
+        break;
+      }
+      case 'toStove': {
+        chef.play('walk');
+        if (stepToward(chef.obj, L.stove, speed, dt)) {
+          const o = this.chefOrder;
+          if (o && o.state === 'prepping') { o.state = 'cooking'; o.remaining = this.stoveTime(o.item); }
+          this.chefOrder = null; this.chefState = 'idle'; chef.obj.rotation.y = Math.PI;
+        }
+        break;
+      }
+      case 'toStoveForPlate': {
+        chef.play('walk');
+        if (stepToward(chef.obj, L.stove, speed, dt)) {
+          const o = this.chefOrder;
+          if (!o) { this.chefState = 'idle'; break; }
+          o.plate = buildFood(o.item, { kebab: this.models.kebab });
+          o.plate.scale.setScalar(0.9);
+          chef.carry.add(o.plate);
+          this.chefState = 'toPass';
+        }
+        break;
+      }
+      case 'toPass': {
+        chef.play('walk');
+        const o = this.chefOrder;
+        if (!o) { this.chefState = 'idle'; break; }
+        let slot = this.passPlates.findIndex((p) => !p);
+        const target = new THREE.Vector3(slot >= 0 ? L.passSlots[slot].x : L.passSlots[1].x, 0, L.passStandChef);
+        if (stepToward(chef.obj, target, speed, dt)) {
+          chef.obj.rotation.y = 0;
+          slot = this.passPlates.findIndex((p) => !p);
+          if (slot < 0) { chef.play('idle'); break; } // pass full: wait here holding the plate
+          chef.carry.remove(o.plate);
+          this.plateToPass(o);
+          this.chefOrder = null; this.chefState = 'idle';
+        }
+        break;
       }
     }
-    // chef animation: bob while cooking
-    const busy = cooking.length > 0;
-    if (this.chefRig) { this.chefRig.play(busy ? 'walk' : 'idle'); this.chefRig.update(dt); }
-    else this.chef.position.y = busy ? Math.abs(Math.sin(this.time * 8)) * 0.05 : 0;
-    this.chef.rotation.y = Math.PI + (busy ? Math.sin(this.time * 3) * 0.25 : 0);
+    chef.update(dt);
   }
 
   // ---------------------------------------------------------- runners
@@ -774,7 +869,7 @@ export class Game {
     this.sfx.chaChing();
     this.spawnCoins(Math.min(18, 4 + Math.floor(amount / 8)));
     this.float(L.cashStack.clone().add(new THREE.Vector3(0, 0.8, 0)), `+${money2(amount)} banked`, 'gold');
-    if (fromClick && !this.tutorial.collected) { this.tutorial.collected = true; this.toast('Banked. Open the Shop to spend it on staff, kitchen gear, and tables.', 'info', 4500); }
+    if (fromClick && !this.tutorial.collected) { this.tutorial.collected = true; this.toast('Banked. Press B or the Shop button: a Dining table is $100, runners and stoves are there too.', 'info', 5500); }
     this.updateHud();
     this.renderShop();
   }
@@ -979,10 +1074,10 @@ export class Game {
     $('hud-clock').style.width = `${(this.s.dayTime / DAY_LENGTH) * 100}%`;
     $('hud-served').textContent = this.s.stats.servedToday;
     $('hud-queue').textContent = this.customers.filter((c) => c.state === 'queue' || c.state === 'enter').length;
-    $('hud-kitchen').textContent = `${this.orders.filter((o) => o.state === 'cooking').length}/${this.stoves()}`;
+    $('hud-kitchen').textContent = `${this.orders.filter((o) => o.state === 'cooking' || o.state === 'prepping').length}/${this.stoves()}`;
     $('hud-waiting').textContent = this.orders.length;
     $('btn-speed').textContent = `${this.speed}×`;
-    if (!this.tutorial.shop && this.s.cash >= 90) { this.tutorial.shop = true; this.toast('You can afford your first upgrade. Open the Shop →', 'info', 4000); }
+    if (!this.tutorial.shop && this.s.cash >= 100) { this.tutorial.shop = true; this.toast('You can afford a Dining table. Open the Shop (B) → Dining table.', 'info', 5000); }
   }
 
   bindUI() {

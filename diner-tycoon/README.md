@@ -52,8 +52,16 @@ on the title screen.
 | Dining table | Four seats; seated guests tip and rate you higher |
 | Mood lighting | Two more Ali12 lamps over the dining room; guests wait 12% longer and tip 10% more per level |
 | Neon sign | 25% more walk-ins per level |
-| Expand the menu | Unlocks veggie skewers and shakes, then lamb and the mixed platter, then the Chef's Special |
+| Expand the menu | Unlocks veggie skewers, shakes and smoothies, then lamb and the mixed platter, then the Chef's Special |
 | Cash drawer | The cashier banks the register automatically |
+
+## The kitchen
+
+Orders go through the chef's hands. He preps each order at the cutting
+board on the pass (faster with a better knife), starts it on a free stove
+(more stoves cook more at once, cabinets shorten cook time), and when it is
+done he carries the plate from the stove to the pass, where a runner picks
+it up. One chef, so the prep step is the bottleneck a bigger kitchen relieves.
 
 ## A day in the diner
 

@@ -17,8 +17,12 @@ export const L = {
   passSlots: [new THREE.Vector3(-1.0, COUNTER_TOP, -2.6), new THREE.Vector3(-0.3, COUNTER_TOP, -2.6), new THREE.Vector3(0.4, COUNTER_TOP, -2.6), new THREE.Vector3(1.1, COUNTER_TOP, -2.6)],
   passStand: new THREE.Vector3(0.0, 0, -1.8),
   runnerIdle: [new THREE.Vector3(-1.2, 0, -1.2), new THREE.Vector3(-0.2, 0, -0.9), new THREE.Vector3(0.8, 0, -1.2)],
-  chef: new THREE.Vector3(1.4, 0, -3.5),
-  kitchen: new THREE.Vector3(2.0, 0, -4.7),
+  // kitchen: the sirkitree set is a corner unit open toward +z; the chef works inside it
+  kitchen: new THREE.Vector3(1.7, 0, -4.55),
+  chef: new THREE.Vector3(1.7, 0, -3.9),
+  stove: new THREE.Vector3(1.7, 0, -4.0),       // stand here facing the back wall to cook
+  prep: new THREE.Vector3(1.9, 0, -3.3),        // behind the pass, facing the cutting board
+  passStandChef: -3.3,                          // z where the chef stands to set plates on the pass
   cabinets: [new THREE.Vector3(-1.3, 1.45, -5.7), new THREE.Vector3(-2.5, 1.45, -5.7), new THREE.Vector3(-3.7, 1.45, -5.7)],
   knife: new THREE.Vector3(1.9, COUNTER_TOP + 0.02, -2.55),
   door: new THREE.Vector3(-7.0, 0, 6.2),

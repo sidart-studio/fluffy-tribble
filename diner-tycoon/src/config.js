@@ -15,6 +15,7 @@ export const MENU = [
   { id: 'beef', name: 'Beef Kebab', price: 10, cook: 7, tier: 0, color: 0xb5651d, shape: 'kebab', meat: 0x6b3a26 },
   { id: 'veggie', name: 'Veggie Kebab', price: 7.5, cook: 4.5, tier: 1, color: 0x6abf4b, shape: 'kebab', meat: 0x7cb342 },
   { id: 'shake', name: 'Malt Shake', price: 7, cook: 3, tier: 1, color: 0xf7b6c2, shape: 'cup' },
+  { id: 'smoothie', name: 'Berry Smoothie', price: 6.5, cook: 2.5, tier: 1, color: 0x8e44ad, shape: 'cup' },
   { id: 'lamb', name: 'Lamb Kebab', price: 14, cook: 9, tier: 2, color: 0x8d4a3a, shape: 'kebab', meat: 0x8d4a3a },
   { id: 'platter', name: 'Mixed Platter', price: 21, cook: 12, tier: 2, color: 0xe8a33d, shape: 'platter' },
   { id: 'special', name: "Chef's Special", price: 34, cook: 14, tier: 3, color: 0xc63d5c, shape: 'special' },
@@ -28,10 +29,10 @@ export const UPGRADES = [
   { id: 'knife', name: "Chef's knife", desc: 'A proper knife on the pass. Prep is 20% faster per level.', cost: 90, growth: 1.7, max: 4, icon: '🔪' },
   { id: 'stove', name: 'Extra stove', desc: 'One more dish cooks at the same time.', cost: 180, growth: 1.8, max: 3, icon: '🔥', start: 1 },
   { id: 'cabinet', name: 'Kitchen cabinet', desc: 'Wall storage. Each cabinet trims 12% off cook time.', cost: 110, growth: 1.7, max: 3, icon: '🗄️' },
-  { id: 'tables', name: 'Dining table', desc: 'Four seats. Seated guests eat in and tip.', cost: 100, growth: 1.5, max: 4, icon: '🪑' },
+  { id: 'tables', name: 'Dining table', desc: 'Four seats in the dining room. Seated guests eat in, tip, and rate you higher.', cost: 100, growth: 1.5, max: 4, icon: '🪑' },
   { id: 'lamps', name: 'Mood lighting', desc: 'Two more hanging lamps over the dining room. Guests wait 12% longer and tip 10% more per level.', cost: 95, growth: 1.6, max: 3, icon: '💡' },
   { id: 'sign', name: 'Neon sign', desc: 'Word gets around. 25% more walk-ins per level.', cost: 90, growth: 1.7, max: 5, icon: '✨' },
-  { id: 'menu', name: 'Expand the menu', desc: 'Unlock pricier dishes: veggie skewers & shakes, then lamb & the mixed platter, then the special.', cost: 220, growth: 2.2, max: 3, icon: '📖' },
+  { id: 'menu', name: 'Expand the menu', desc: 'Unlock more dishes: veggie skewers, shakes & smoothies, then lamb & the mixed platter, then the special.', cost: 220, growth: 2.2, max: 3, icon: '📖' },
   { id: 'auto', name: 'Cash drawer', desc: 'The cashier banks the register every 6 seconds. No more clicking.', cost: 300, growth: 1, max: 1, icon: '💵' },
 ];
 
