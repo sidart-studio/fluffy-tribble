@@ -160,6 +160,7 @@
     .store-buy.on { background: linear-gradient(180deg,#FFCA28,#FF9800); color: #3e2200; border-color: #FF9800; }
     .store-buy:active { transform: scale(.97); }
     #store-note { font-size: 10px; color: #999; margin: 12px 2px 10px; line-height: 1.5; }
+    #reset-link { font-size: 11px; color: #c66; margin-bottom: 10px; cursor: pointer; font-weight: 700; }
     #store-close {
       display: inline-block; border-radius: 10px; padding: 8px 22px; font-size: 13px;
       font-weight: 800; background: #f0f0f0; border: 2px solid #ddd; cursor: pointer;
@@ -234,6 +235,7 @@
         <div id="shop-buy" class="store-buy">⬆ Upgrade to Level 2</div>
       </div>
       <div id="store-note">Demo store — no real money changes hands in this preview. Selling Fast Mode for real needs a payment provider (like Stripe) hooked up to a published game.</div>
+      <div id="reset-link">Start a new island</div>
       <div id="store-close">Close</div>
     </div>
   </div>
@@ -1431,21 +1433,25 @@
       if (Math.hypot(x - player.position.x, z - player.position.z) < 3) continue;
       if (harvestables.some(h => Math.hypot(h.x - x, h.z - z) < 2)) continue;
       if (villagers.some(v => Math.hypot(v.home.x - x, v.home.z - z) < 3.5)) continue;
-      const house = makeHouse();
-      house.position.set(x, LAND_Y, z);
-      house.rotation.y = Math.random() * Math.PI * 2;
-      scene.add(house);
-      const g = makeVillager();
-      g.position.set(x, LAND_Y, z);
-      g.visible = false; // starts indoors
-      scene.add(g);
-      villagers.push({
-        group: g, home: { x, z }, state: 'rest', t0: performance.now(),
-        target: null, carried: {}, stops: 0,
-      });
+      placeHouseAt(x, z);
       return true;
     }
     return false;
+  }
+
+  function placeHouseAt(x, z) { // used for new purchases and for rebuilding a saved game
+    const house = makeHouse();
+    house.position.set(x, LAND_Y, z);
+    house.rotation.y = Math.random() * Math.PI * 2;
+    scene.add(house);
+    const g = makeVillager();
+    g.position.set(x, LAND_Y, z);
+    g.visible = false; // starts indoors
+    scene.add(g);
+    villagers.push({
+      group: g, home: { x, z }, state: 'rest', t0: performance.now(),
+      target: null, carried: {}, stops: 0,
+    });
   }
 
   function villagerFindTarget(v) {
@@ -1514,6 +1520,15 @@
     }
   }
 
+  const placedBarns = []; // { x, z } — remembered so a saved game can rebuild them
+  function placeBarnAt(x, z) {
+    const barn = makeBarn();
+    barn.position.set(x, LAND_Y, z);
+    barn.rotation.y = Math.random() * Math.PI * 2;
+    scene.add(barn);
+    placedBarns.push({ x, z });
+  }
+
   // Each purchased patch is themed: it grows several of ONE kind of thing.
   // The first patches follow a set progression — sequenced so that whatever a
   // later land cost asks for, an earlier patch already produces — and after
@@ -1564,12 +1579,7 @@
     }
     if (ANIMAL_DEFS[theme]) { // every animal patch gets its barn
       const spot = takeSpot();
-      if (spot) {
-        const barn = makeBarn();
-        barn.position.set(spot.x, LAND_Y, spot.z);
-        barn.rotation.y = Math.random() * Math.PI * 2;
-        scene.add(barn);
-      }
+      if (spot) placeBarnAt(spot.x, spot.z);
     }
     setTimeout(() => toast(`${THEME_NAMES[theme]} grew on your new land!`, true), 2400);
   }
@@ -1951,6 +1961,22 @@
   // little squash-and-stretch when something gets hit
   const punches = []; // { group, t0 }
   function punch(group) { punches.push({ group, t0: performance.now() }); }
+  function burst(x, y, z, color) { // a little spray of colored chips
+    const mat = new THREE.MeshBasicMaterial({ color });
+    for (let i = 0; i < 6; i++) {
+      const m = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.06, 0.06), mat);
+      m.position.set(x + (Math.random() - 0.5) * 0.3, y, z + (Math.random() - 0.5) * 0.3);
+      m.rotation.set(Math.random() * 3, Math.random() * 3, 0);
+      scene.add(m);
+      fallingDrops.push({
+        mesh: m,
+        vel: new THREE.Vector3((Math.random() - 0.5) * 3, 1 + Math.random() * 2, (Math.random() - 0.5) * 3),
+        bounces: 1,
+        settleAt: 0,
+      });
+    }
+  }
+
   function updatePunches() {
     const now = performance.now();
     for (let i = punches.length - 1; i >= 0; i--) {
@@ -2242,6 +2268,7 @@
       refreshInventory();
       sfx('pickup');
       punch(h.group);
+      burst(h.x, LAND_Y + 1.1, h.z, DROP_MATS.honey.color);
       if (hammerHeld) hammerSwingT0 = performance.now();
       return;
     }
@@ -2254,6 +2281,7 @@
     if (hammerHeld) hammerSwingT0 = performance.now();
     sfx('hit');
     punch(h.group);
+    burst(h.x, LAND_Y + 0.8, h.z, DROP_MATS[resource].color);
 
     h.ready = false;
     h.regrowAt = performance.now() + growMs(def.regrowMs);
@@ -2524,10 +2552,16 @@
       shadowBlob.visible = true;
 
       harvestEnabled = true;
-      glowPad.visible = true;
-      markerGroup.visible = true;
+      if (!treeIntroduced) { // tutorial markers only for a brand-new island
+        glowPad.visible = true;
+        markerGroup.visible = true;
+      }
 
       phase = 'fps';
+      if (resumeSpot) { // a saved game continues where CUBEY last stood
+        player.position.set(resumeSpot.x, LAND_Y, resumeSpot.z);
+        resumeSpot = null;
+      }
       inventoryEl.classList.add('show');
       hammerBtnEl.classList.add('show');
       homeBtnEl.classList.add('show');
@@ -2780,6 +2814,113 @@
     renderer.render(scene, activeCamera);
   }
   loop();
+
+  // ═══════════════════════════════════════════════
+  //  SAVE / LOAD — the island auto-saves in this browser, so a reload
+  //  continues the same game. Wrapped in try/catch: storage can be
+  //  unavailable in some embeds, and the game must still run without it.
+  // ═══════════════════════════════════════════════
+  const SAVE_KEY = 'cubeworld_save_v1';
+  let resumeSpot = null;
+  let skipSave = false;
+
+  function saveGame() {
+    if (phase !== 'fps' || skipSave) return;
+    try {
+      localStorage.setItem(SAVE_KEY, JSON.stringify({
+        v: 1,
+        coins: cubeCoins, inv, shopLevel, fastMode, workersPaused, treeIntroduced,
+        totalLandPurchases, patchCounter, extents, expansions,
+        land: [...landSet],
+        harv: harvestables.map(h => ({ k: h.kind, x: +h.x.toFixed(2), z: +h.z.toFixed(2) })),
+        hives: beeHives.map(hv => hv.honeyPct),
+        animals: animals.map(a => ({ t: a.type, x: +a.group.position.x.toFixed(2), z: +a.group.position.z.toFixed(2) })),
+        homes: villagers.map(v => ({ x: +v.home.x.toFixed(2), z: +v.home.z.toFixed(2) })),
+        barns: placedBarns.map(b => ({ x: +b.x.toFixed(2), z: +b.z.toFixed(2) })),
+        player: { x: +player.position.x.toFixed(2), z: +player.position.z.toFixed(2) },
+      }));
+    } catch (e) { /* no storage here — play on without saving */ }
+  }
+
+  function loadGame() {
+    let d = null;
+    try { d = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null'); } catch (e) {}
+    if (!d || d.v !== 1) return false;
+    try {
+      cubeCoins = d.coins;
+      Object.keys(inv).forEach(k => { inv[k] = d.inv[k] || 0; });
+      shopLevel = d.shopLevel;
+      fastMode = d.fastMode;
+      workersPaused = d.workersPaused;
+      treeIntroduced = d.treeIntroduced;
+      totalLandPurchases = d.totalLandPurchases;
+      patchCounter = d.patchCounter;
+      Object.assign(extents, d.extents);
+      Object.assign(expansions, d.expansions);
+
+      landSet.clear();
+      d.land.forEach(k => landSet.add(k));
+      rebuildIslandMeshes();
+      fitSunToIsland(Math.max(extents.px, extents.nx, extents.pz, extents.nz) + PATCH_DEPTH);
+
+      // replace the starter tree with the saved world
+      for (const h of harvestables) scene.remove(h.group);
+      harvestables.length = 0;
+      for (const hv of beeHives) scene.remove(hv.bee);
+      beeHives.length = 0;
+      d.harv.forEach(h => addHarvestable(h.k, h.x, h.z));
+      d.hives.forEach((pct, i) => {
+        if (beeHives[i]) { beeHives[i].honeyPct = pct; updateHiveSprite(beeHives[i]); }
+      });
+      d.animals.forEach(a => addAnimal(a.t, a.x, a.z));
+      d.homes.forEach(hm => placeHouseAt(hm.x, hm.z));
+      d.barns.forEach(b => placeBarnAt(b.x, b.z));
+      resumeSpot = d.player;
+
+      // returning players skip the tutorial markers and get their buttons back
+      if (treeIntroduced) {
+        glowPad.visible = false;
+        markerGroup.visible = false;
+        shopMarkerGroup.visible = false;
+        shopGlowPad.visible = false;
+        for (const dir of Object.keys(DIR_DEFS)) {
+          if (expansions[dir] >= MAX_EXPANSIONS_PER_DIR) removeBuyButton(dir);
+          else placeBuyButton(dir);
+        }
+        refreshButtonSprites();
+        Object.values(buyButtons).forEach(b => (b.group.visible = true));
+      }
+      updateShopStars();
+      refreshShopUpgradeUI();
+      refreshFastUI();
+      refreshInventory();
+      startPromptEl.textContent = 'Welcome back! Click to continue your island';
+      return true;
+    } catch (e) {
+      return false; // a broken save never blocks a fresh start
+    }
+  }
+  loadGame();
+  setInterval(saveGame, 4000);
+  window.addEventListener('beforeunload', saveGame);
+
+  // "Start a new island" — press twice to erase the save and restart
+  {
+    const resetEl = document.getElementById('reset-link');
+    let armed = false;
+    resetEl.addEventListener('pointerdown', e => {
+      e.preventDefault();
+      if (!armed) {
+        armed = true;
+        resetEl.textContent = '⚠️ Press again to erase EVERYTHING';
+        setTimeout(() => { armed = false; resetEl.textContent = 'Start a new island'; }, 3000);
+      } else {
+        skipSave = true;
+        try { localStorage.removeItem(SAVE_KEY); } catch (e2) {}
+        location.reload();
+      }
+    });
+  }
   </script>
 </body>
 </html>
