@@ -26,6 +26,11 @@ export const L = {
   cabinets: [new THREE.Vector3(-1.3, 1.45, -5.7), new THREE.Vector3(-2.5, 1.45, -5.7), new THREE.Vector3(-3.7, 1.45, -5.7)],
   knife: new THREE.Vector3(1.9, COUNTER_TOP + 0.02, -2.55),
   door: new THREE.Vector3(-7.0, 0, 6.2),
+  register2: new THREE.Vector3(0.9, COUNTER_TOP, 1.2),
+  cashier2: new THREE.Vector3(0.6, 0, 0.3),
+  queueHead2: new THREE.Vector3(0.9, 0, 2.3),
+  streetLamps: [new THREE.Vector3(-6.6, 3.3, 8.4), new THREE.Vector3(6.6, 3.3, 8.4)],
+  signPos: new THREE.Vector3(-5.2, 3.35, 6.35), // over the entrance, out of the way of the dining room view
   spawn: new THREE.Vector3(-9.5, 0, 7.5),
   corridor: new THREE.Vector3(-3.5, 0, 6.0),
   tables: [new THREE.Vector3(5.6, 0, 3.2), new THREE.Vector3(5.6, 0, 5.4), new THREE.Vector3(-5.6, 0, 3.2), new THREE.Vector3(-5.6, 0, 5.4)],
@@ -41,6 +46,7 @@ function shadowed(m) {
 }
 
 export function buildWorld(scene) {
+  // returns handles for things the game animates (sign stars, night sky)
   // floor: black & white diner checker
   const checker = canvasTexture(256, (ctx) => {
     const n = 8, s = 256 / n;
@@ -110,6 +116,70 @@ export function buildWorld(scene) {
 
   // plants by the door
   for (const x of [-5.6, 6.9]) scene.add(plant(x, 5.6));
+
+  let handles;
+  {
+  // ---- outside: kerb, road, lamp posts, roof sign, night sky
+  const kerb = new THREE.Mesh(new THREE.BoxGeometry(26, 0.12, 0.3), mat(0x8a9096)); kerb.position.set(0, 0.06, 11.0); kerb.receiveShadow = true; scene.add(kerb);
+  const road = new THREE.Mesh(new THREE.PlaneGeometry(26, 7), mat(0x3a3f47, { roughness: 1 })); road.rotation.x = -Math.PI / 2; road.position.set(0, -0.003, 14.6); road.receiveShadow = true; scene.add(road);
+  for (let i = -5; i <= 5; i++) { const dash = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 0.14), mat(0xf5f1e8)); dash.rotation.x = -Math.PI / 2; dash.position.set(i * 2.4, 0.002, 14.6); scene.add(dash); }
+  for (const p of L.streetLamps) {
+    const pole = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.07, p.y, 10), mat(0x2b2f38, { metalness: 0.6, roughness: 0.4 })));
+    pole.position.set(p.x, p.y / 2, p.z); scene.add(pole);
+    const arm = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 0.6), mat(0x2b2f38, { metalness: 0.6 })); arm.position.set(p.x, p.y, p.z - 0.3); scene.add(arm);
+  }
+  // roof sign
+  const sign = new THREE.Group();
+  const signBoard = shadowed(new THREE.Mesh(new THREE.BoxGeometry(4.6, 1.1, 0.16), mat(0x2b2f38, { roughness: 0.4 })));
+  sign.add(signBoard);
+  const frame = new THREE.Mesh(new THREE.BoxGeometry(4.75, 1.25, 0.1), mat(0xd9dde3, { metalness: 0.9, roughness: 0.25 })); frame.position.z = -0.02; sign.add(frame);
+  const neon = new THREE.Mesh(new THREE.PlaneGeometry(4.3, 0.6), new THREE.MeshStandardMaterial({ map: textTexture('SHORT ORDER', '#ff6b6b', 'rgba(0,0,0,0)', 72), transparent: true, emissive: 0xff4d4d, emissiveMap: textTexture('SHORT ORDER', '#ffffff', 'rgba(0,0,0,0)', 72), emissiveIntensity: 1.6 }));
+  neon.position.set(0, 0.2, 0.09); sign.add(neon);
+  const stars = [];
+  for (let i = 0; i < 5; i++) {
+    const st = new THREE.Sprite(new THREE.SpriteMaterial({ map: starTexture(), transparent: true, color: 0xffd54f, depthWrite: false }));
+    st.scale.set(0.34, 0.34, 1); st.position.set(-0.9 + i * 0.45, -0.3, 0.12); sign.add(st); stars.push(st);
+  }
+  for (const side of [-1, 1]) { const strut = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.7, 0.08), mat(0x2b2f38)); strut.position.set(side * 1.8, -0.85, -0.05); sign.add(strut); }
+  sign.position.copy(L.signPos);
+  sign.scale.setScalar(0.72);
+  scene.add(sign);
+  // night sky
+  const starCount = 260; const pos = new Float32Array(starCount * 3);
+  for (let i = 0; i < starCount; i++) { const a = Math.random() * Math.PI * 2, e = 0.15 + Math.random() * 1.3; const r = 38; pos[i * 3] = Math.cos(a) * Math.cos(e) * r; pos[i * 3 + 1] = Math.sin(e) * r; pos[i * 3 + 2] = Math.sin(a) * Math.cos(e) * r; }
+  const skyGeo = new THREE.BufferGeometry(); skyGeo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  const sky = new THREE.Points(skyGeo, new THREE.PointsMaterial({ color: 0xfff6d5, size: 0.28, transparent: true, opacity: 0, sizeAttenuation: true, fog: false }));
+  scene.add(sky);
+  handles = { signStars: stars, neon: neon.material, nightSky: sky.material };
+  }
+  return handles;
+
+}
+
+export function starTexture() {
+  const c = document.createElement('canvas'); c.width = c.height = 64;
+  const ctx = c.getContext('2d'); ctx.fillStyle = '#fff'; ctx.beginPath();
+  for (let i = 0; i < 10; i++) { const r = i % 2 ? 12 : 30; const a = -Math.PI / 2 + (i * Math.PI) / 5; ctx.lineTo(32 + Math.cos(a) * r, 32 + Math.sin(a) * r); }
+  ctx.closePath(); ctx.fill();
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+}
+
+/** A little gold crown for VIP food critics. */
+export function buildCrown() {
+  const g = new THREE.Group();
+  const gold = mat(0xffc107, { metalness: 0.9, roughness: 0.25 });
+  const band = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.17, 0.1, 12), gold); band.position.y = 0.05; g.add(band);
+  for (let i = 0; i < 6; i++) { const a = (i / 6) * Math.PI * 2; const spike = new THREE.Mesh(new THREE.ConeGeometry(0.045, 0.14, 6), gold); spike.position.set(Math.cos(a) * 0.16, 0.16, Math.sin(a) * 0.16); g.add(spike); }
+  const gem = new THREE.Mesh(new THREE.SphereGeometry(0.035, 10, 8), mat(0xe53935, { emissive: 0xb71c1c, emissiveIntensity: 0.6 })); gem.position.set(0, 0.07, 0.17); g.add(gem);
+  g.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+  return g;
+}
+
+/** A glowing ring under a hustling worker. */
+export function buildHustleRing() {
+  const ring = new THREE.Mesh(new THREE.RingGeometry(0.32, 0.46, 32), new THREE.MeshBasicMaterial({ color: 0xffd54f, transparent: true, opacity: 0.8, side: THREE.DoubleSide, depthWrite: false }));
+  ring.rotation.x = -Math.PI / 2; ring.position.y = 0.02; ring.visible = false;
+  return ring;
 }
 
 export function buildTable(pos) {

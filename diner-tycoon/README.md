@@ -51,9 +51,27 @@ on the title screen.
 | Kitchen cabinet | Places a cabinet on the back wall; cook time −12% each |
 | Dining table | Four seats; seated guests tip and rate you higher |
 | Mood lighting | Two more Ali12 lamps over the dining room; guests wait 12% longer and tip 10% more per level |
+| Second register | A second cash register and cashier; guests split into two lines |
 | Neon sign | 25% more walk-ins per level |
 | Expand the menu | Unlocks veggie skewers, shakes and smoothies, then lamb and the mixed platter, then the Chef's Special |
 | Cash drawer | The cashier banks the register automatically |
+
+## Playing, not just watching
+
+- **Hustle:** click any staff member (cashiers, runners, the chef) for six
+  seconds of double speed. They need a breather before the next one.
+- **Calm a guest:** click a waiting guest once to top up their patience.
+- **Quests:** the panel under your cash shows the current goal and its cash
+  reward. Eighteen quests take you from "serve five guests" to five stars.
+- **Streak:** every happy guest in a row raises the tip multiplier, up to
+  double at twenty. A walkout resets it.
+- **Food critics:** a golden guest with a crown appears now and then. Serve
+  them fast for a big reputation jump and triple tip; lose them and it hurts.
+- **Second register:** an upgrade adds another cash register and cashier, and
+  guests split into two lines.
+- **Music and ambience:** a procedural diner tune and a crowd murmur that
+  grows with the room. Toggle with the Music button; Mute silences everything.
+- Your star rating lights up on the roof sign outside.
 
 ## The kitchen
 

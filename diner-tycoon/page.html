@@ -54,6 +54,17 @@
   .kpis { display: flex; gap: 12px; }
   .kpis .stat { min-width: 44px; } .kpis .stat b { font-size: 18px; }
 
+  #quest { position: absolute; left: 14px; top: calc(84px + env(safe-area-inset-top, 0px)); width: 250px; background: var(--panel); border-radius: 14px; box-shadow: var(--shadow); padding: 10px 14px; border-left: 6px solid var(--gold); }
+  #quest small { font-size: 10px; letter-spacing: .8px; text-transform: uppercase; color: var(--ink-soft); font-weight: 800; }
+  #quest-text { font-weight: 800; margin: 2px 0; line-height: 1.3; }
+  #quest-reward { font-size: 12px; color: var(--good); font-weight: 800; }
+  #quest.done { animation: questpop .6s ease; }
+  @keyframes questpop { 0% { transform: scale(1); } 40% { transform: scale(1.06); background: #fff3c4; } 100% { transform: scale(1); } }
+  .shop-cat { display: flex; align-items: center; gap: 8px; margin: 8px 4px 2px; font-size: 11px; letter-spacing: .8px; text-transform: uppercase; color: var(--ink-soft); font-weight: 800; }
+  .shop-cat::after { content: ""; flex: 1; height: 1px; background: var(--chrome); }
+  .u-bar { height: 4px; background: var(--chrome); border-radius: 2px; overflow: hidden; margin-top: 5px; }
+  .u-bar i { display: block; height: 100%; background: var(--good); }
+  #hud-streak.hot { color: var(--cherry); }
   #shop { position: absolute; top: calc(80px + env(safe-area-inset-top, 0px)); right: 14px; bottom: calc(80px + env(safe-area-inset-bottom, 0px)); width: 330px; background: var(--panel); border-radius: 16px; box-shadow: var(--shadow); display: none; flex-direction: column; overflow: hidden; }
   #shop.open { display: flex; }
   #shop header { display: flex; justify-content: space-between; align-items: center; padding: 12px 14px 8px; }
@@ -108,6 +119,8 @@
     .clock { width: 80px; }
     #shop { left: 10px; right: 10px; width: auto; top: auto; bottom: calc(76px + env(safe-area-inset-bottom, 0px)); max-height: 60vh; }
     .views { top: calc(112px + env(safe-area-inset-top, 0px)); }
+    #quest { width: auto; left: 10px; right: 10px; top: calc(150px + env(safe-area-inset-top, 0px)); padding: 6px 10px; }
+    #quest-text { font-size: 13px; }
     #log { display: none; }
     .views { position: absolute; right: 14px; top: calc(64px + env(safe-area-inset-top, 0px)); display: flex; gap: 6px; }
   .btn.small { padding: 6px 10px; font-size: 12px; box-shadow: none; border: 1px solid var(--chrome); }
@@ -133,10 +146,16 @@
     </div>
     <div class="controls">
       <button id="btn-shop" class="btn cherry">Shop (B)</button>
+      <button id="btn-music" class="btn" title="Music on/off">♪ Music</button>
       <button id="btn-speed" class="btn" title="Game speed (1/2/3)">1×</button>
       <button id="btn-pause" class="btn">Pause</button>
       <button id="btn-mute" class="btn">Mute</button>
     </div>
+  </div>
+  <div id="quest">
+    <small>Quest <span id="quest-n">1</span>/<span id="quest-total">18</span></small>
+    <div id="quest-text">Serve 5 guests</div>
+    <div id="quest-reward">Reward $60</div>
   </div>
   <div class="views">
     <button class="btn small" data-view="overview" title="V cycles views">Overview</button>
@@ -154,6 +173,7 @@
     <div class="stat"><b id="hud-till">$0.00</b><small>On the register</small></div>
     <button id="btn-collect" class="btn gold" disabled>Collect (Space)</button>
     <div class="kpis">
+      <div class="stat"><b id="hud-streak">0</b><small>Streak</small></div>
       <div class="stat"><b id="hud-served">0</b><small>Served today</small></div>
       <div class="stat"><b id="hud-queue">0</b><small>In line</small></div>
       <div class="stat"><b id="hud-kitchen">0/1</b><small>Cooking</small></div>
@@ -183,8 +203,9 @@
       <li><b>Guests</b> queue at the register. Your cashier takes the order and the money.</li>
       <li><b>The kitchen</b> cooks it. A runner carries the plate to the pickup counter.</li>
       <li><b>Cash</b> piles up on the register. Click it (or press Space) to bank it.</li>
-      <li><b>Spend</b> in the Shop: runners, stoves, tables, a sharper knife, a bigger menu.</li>
-      <li>Slow service costs stars. Stars decide how many guests walk in.</li>
+      <li><b>Spend</b> in the Shop: runners, stoves, tables, lamps, a second register, a bigger menu.</li>
+      <li><b>Hustle:</b> click any staff member for a burst of speed. Click a waiting guest to calm them down.</li>
+      <li>Follow the <b>quests</b> for cash rewards. Serve guests in a row to build a tip streak. Watch for the golden food critic.</li>
     </ul>
     <div class="row">
       <button id="btn-continue" class="btn" hidden>Continue</button>

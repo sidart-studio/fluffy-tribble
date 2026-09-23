@@ -49,6 +49,7 @@ const modules = [
   'vendor/three/addons/controls/OrbitControls.js',
   'src/glb-loader.js',
   'src/audio.js',
+  'src/fx.js',
   'src/config.js',
   'src/world.js',
   'src/game.js',

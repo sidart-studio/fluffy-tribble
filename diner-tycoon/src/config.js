@@ -1,7 +1,7 @@
 // Balance sheet for Short Order Tycoon. Everything tunable lives here.
 
 export const DAY_LENGTH = 120;          // game seconds per business day
-export const START_CASH = 120;
+export const START_CASH = 150;
 export const START_REPUTATION = 50;     // 0..100 -> 0..5 stars
 export const QUEUE_PATIENCE = 32;       // seconds a customer waits in line
 export const FOOD_PATIENCE = 60;        // seconds a customer waits for food after ordering
@@ -23,17 +23,47 @@ export const MENU = [
 
 // Upgrades: cost grows by `growth` per level. `max` null = unlimited.
 export const UPGRADES = [
-  { id: 'runner', name: 'Hire a runner', desc: 'Another Retail Worker carries plates from the kitchen pass.', cost: 120, growth: 1.9, max: 3, icon: '🏃', start: 1 },
-  { id: 'shoes', name: 'Runner sneakers', desc: 'Runners walk 20% faster per level.', cost: 60, growth: 1.6, max: 5, icon: '👟' },
-  { id: 'cashier', name: 'Cashier training', desc: 'Orders are taken 15% faster per level.', cost: 80, growth: 1.6, max: 5, icon: '🧾' },
-  { id: 'knife', name: "Chef's knife", desc: 'A proper knife on the pass. Prep is 20% faster per level.', cost: 90, growth: 1.7, max: 4, icon: '🔪' },
-  { id: 'stove', name: 'Extra stove', desc: 'One more dish cooks at the same time.', cost: 180, growth: 1.8, max: 3, icon: '🔥', start: 1 },
-  { id: 'cabinet', name: 'Kitchen cabinet', desc: 'Wall storage. Each cabinet trims 12% off cook time.', cost: 110, growth: 1.7, max: 3, icon: '🗄️' },
-  { id: 'tables', name: 'Dining table', desc: 'Four seats in the dining room. Seated guests eat in, tip, and rate you higher.', cost: 100, growth: 1.5, max: 4, icon: '🪑' },
-  { id: 'lamps', name: 'Mood lighting', desc: 'Two more hanging lamps over the dining room. Guests wait 12% longer and tip 10% more per level.', cost: 95, growth: 1.6, max: 3, icon: '💡' },
-  { id: 'sign', name: 'Neon sign', desc: 'Word gets around. 25% more walk-ins per level.', cost: 90, growth: 1.7, max: 5, icon: '✨' },
-  { id: 'menu', name: 'Expand the menu', desc: 'Unlock more dishes: veggie skewers, shakes & smoothies, then lamb & the mixed platter, then the special.', cost: 220, growth: 2.2, max: 3, icon: '📖' },
-  { id: 'auto', name: 'Cash drawer', desc: 'The cashier banks the register every 6 seconds. No more clicking.', cost: 300, growth: 1, max: 1, icon: '💵' },
+  { id: 'runner', name: 'Hire a runner', desc: 'Another Retail Worker carries plates from the kitchen pass.', cost: 120, growth: 1.9, max: 3, icon: '🏃', start: 1, cat: 'staff' },
+  { id: 'shoes', name: 'Runner sneakers', desc: 'Runners walk 20% faster per level.', cost: 60, growth: 1.6, max: 5, icon: '👟', cat: 'staff' },
+  { id: 'cashier', name: 'Cashier training', desc: 'Orders are taken 15% faster per level.', cost: 80, growth: 1.6, max: 5, icon: '🧾', cat: 'staff' },
+  { id: 'knife', name: "Chef's knife", desc: 'A proper knife on the pass. Prep is 20% faster per level.', cost: 90, growth: 1.7, max: 4, icon: '🔪', cat: 'kitchen' },
+  { id: 'stove', name: 'Extra stove', desc: 'One more dish cooks at the same time.', cost: 180, growth: 1.8, max: 3, icon: '🔥', start: 1, cat: 'kitchen' },
+  { id: 'cabinet', name: 'Kitchen cabinet', desc: 'Wall storage. Each cabinet trims 12% off cook time.', cost: 110, growth: 1.7, max: 3, icon: '🗄️', cat: 'kitchen' },
+  { id: 'tables', name: 'Dining table', desc: 'Four seats in the dining room. Seated guests eat in, tip, and rate you higher.', cost: 100, growth: 1.5, max: 4, icon: '🪑', cat: 'dining' },
+  { id: 'lamps', name: 'Mood lighting', desc: 'Two more hanging lamps over the dining room. Guests wait 12% longer and tip 10% more per level.', cost: 95, growth: 1.6, max: 3, icon: '💡', cat: 'dining' },
+  { id: 'sign', name: 'Neon sign', desc: 'Word gets around. 25% more walk-ins per level.', cost: 90, growth: 1.7, max: 5, icon: '✨', cat: 'marketing' },
+  { id: 'menu', name: 'Expand the menu', desc: 'Unlock more dishes: veggie skewers, shakes & smoothies, then lamb & the mixed platter, then the special.', cost: 220, growth: 2.2, max: 3, icon: '📖', cat: 'kitchen' },
+  { id: 'register2', name: 'Second register', desc: 'A second cash register and cashier. Guests split into two lines.', cost: 450, growth: 1, max: 1, icon: '🧮', cat: 'staff' },
+  { id: 'auto', name: 'Cash drawer', desc: 'The cashier banks the register every 6 seconds. No more clicking.', cost: 300, growth: 1, max: 1, icon: '💵', cat: 'staff' },
+];
+
+export const CATEGORIES = [
+  { id: 'staff', name: 'Staff', icon: '👥' },
+  { id: 'kitchen', name: 'Kitchen', icon: '🍳' },
+  { id: 'dining', name: 'Dining room', icon: '🪑' },
+  { id: 'marketing', name: 'Marketing', icon: '📣' },
+];
+
+// Quests: one at a time, in order. `check` gets (stats, game).
+export const QUESTS = [
+  { id: 'q_serve5', text: 'Serve 5 guests', reward: 60, check: (st) => st.servedTotal >= 5 },
+  { id: 'q_collect3', text: 'Bank the register 3 times (click it or press Space)', reward: 60, check: (st) => st.collects >= 3 },
+  { id: 'q_table', text: 'Buy a Dining table in the Shop (B)', reward: 90, check: (st, g) => g.lvl('tables') >= 1 },
+  { id: 'q_hustle', text: 'Click a staff member to make them hustle', reward: 60, check: (st) => st.hustles >= 1 },
+  { id: 'q_runner', text: 'Hire a second runner', reward: 120, check: (st, g) => g.lvl('runner') >= 2 },
+  { id: 'q_stars3', text: 'Reach a 3-star rating', reward: 120, check: (st, g) => g.stars() >= 3 },
+  { id: 'q_serve25', text: 'Serve 25 guests', reward: 150, check: (st) => st.servedTotal >= 25 },
+  { id: 'q_knife', text: "Buy the chef a knife", reward: 120, check: (st, g) => g.lvl('knife') >= 1 },
+  { id: 'q_menu', text: 'Expand the menu', reward: 200, check: (st, g) => g.lvl('menu') >= 1 },
+  { id: 'q_streak10', text: 'Serve 10 guests in a row with no walkouts', reward: 250, check: (st) => st.streakBest >= 10 },
+  { id: 'q_vip', text: 'Impress a food critic (the golden guest)', reward: 300, check: (st) => st.vipHappy >= 1 },
+  { id: 'q_stars4', text: 'Reach 4 stars', reward: 400, check: (st, g) => g.stars() >= 4 },
+  { id: 'q_register2', text: 'Open a second register', reward: 500, check: (st, g) => g.lvl('register2') >= 1 },
+  { id: 'q_serve100', text: 'Serve 100 guests', reward: 600, check: (st) => st.servedTotal >= 100 },
+  { id: 'q_lamps', text: 'Light the dining room (Mood lighting ×3)', reward: 500, check: (st, g) => g.lvl('lamps') >= 3 },
+  { id: 'q_special', text: "Serve the Chef's Special", reward: 800, check: (st) => st.specialsServed >= 1 },
+  { id: 'q_cash10k', text: 'Earn $10,000 in total', reward: 1000, check: (st) => st.earnedTotal >= 10000 },
+  { id: 'q_stars5', text: 'Five stars. The best diner in the world.', reward: 2500, check: (st, g) => g.stars() >= 5 },
 ];
 
 export function upgradeCost(def, level) {

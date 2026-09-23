@@ -5,9 +5,10 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { loadModelFitted, parseGLTF, fitModel, applyClipPose } from './glb-loader.js';
-import { Sfx } from './audio.js';
-import { L, COUNTER_TOP, buildWorld, buildTable, buildCustomer, buildChefPlaceholder, buildFood, buildCoin, buildBill, buildToque } from './world.js';
-import { DAY_LENGTH, START_CASH, START_REPUTATION, QUEUE_PATIENCE, FOOD_PATIENCE, EAT_TIME, SAVE_KEY, MENU, UPGRADES, MILESTONES, upgradeCost } from './config.js';
+import { Sfx, Music, Ambience } from './audio.js';
+import { Fx } from './fx.js';
+import { L, COUNTER_TOP, buildWorld, buildTable, buildCustomer, buildChefPlaceholder, buildFood, buildCoin, buildBill, buildToque, buildCrown, buildHustleRing } from './world.js';
+import { DAY_LENGTH, START_CASH, START_REPUTATION, QUEUE_PATIENCE, FOOD_PATIENCE, EAT_TIME, SAVE_KEY, MENU, UPGRADES, MILESTONES, QUESTS, CATEGORIES, upgradeCost } from './config.js';
 
 const $ = (id) => document.getElementById(id);
 const money = (n) => `$${Math.floor(n).toLocaleString()}`;
@@ -82,6 +83,25 @@ class Character {
     this.carryYaw = 0;
     this.carryTilt = 0;
     this.updateCarry();
+    // hustle: a timed speed boost with a cooldown, shown as a glowing ring
+    this.boost = 0;
+    this.cooldown = 0;
+    this.ring = buildHustleRing();
+    model.add(this.ring);
+    CHARACTER_OF.set(model, this); // not in userData: that gets JSON-cloned with the model
+  }
+  get boosted() { return this.boost > 0; }
+  hustle() {
+    if (this.cooldown > 0) return false;
+    this.boost = 6; this.cooldown = 16;
+    return true;
+  }
+  tickBoost(dt, time) {
+    if (this.boost > 0) this.boost -= dt;
+    if (this.cooldown > 0) this.cooldown -= dt;
+    this.ring.visible = this.boost > 0;
+    if (this.ring.visible) { const k = 1 + Math.sin(time * 10) * 0.12; this.ring.scale.set(k, k, 1); this.ring.material.opacity = 0.5 + 0.3 * Math.sin(time * 10); }
+    if (this.mixer) this.mixer.timeScale = this.boost > 0 ? 1.6 : 1;
   }
   updateCarry() {
     if (!this.handL || !this.handR) return;
@@ -104,6 +124,7 @@ class Character {
   update(dt) { this.mixer.update(dt); this.updateCarry(); }
 }
 const _v1 = new THREE.Vector3(), _v2 = new THREE.Vector3();
+const CHARACTER_OF = new WeakMap();
 
 // ----------------------------------------------------------------- game
 export class Game {
@@ -129,7 +150,13 @@ export class Game {
     this.saveTimer = 0;
     this.time = 0;
     this.tutorial = { paid: false, shop: false, collected: false };
+    this.registers = [];
     this.setupScene();
+    this.fx = new Fx(this.scene);
+    this.music = new Music(this.sfx);
+    this.ambience = new Ambience(this.sfx);
+    this.displayCash = 0;
+    this.steamTimer = 0;
     this.bindUI();
     this.clock = new THREE.Clock();
     this.renderer.setAnimationLoop(() => this.frame());
@@ -150,9 +177,9 @@ export class Game {
     scene.fog = new THREE.Fog(0xf6e7d2, 28, 48);
     this.scene = scene;
     this.camera = new THREE.PerspectiveCamera(38, 1, 0.1, 120);
-    this.camera.position.set(7, 9.5, 12.5);
+    this.camera.position.set(6.5, 8.6, 11.8);
     const controls = new OrbitControls(this.camera, this.canvas);
-    controls.target.set(0.3, 0.6, 0.8);
+    controls.target.set(0.3, 0.6, 0.9);
     controls.enableDamping = true;
     controls.dampingFactor = 0.08;
     controls.minDistance = 5;
@@ -177,7 +204,7 @@ export class Game {
     this.lamps = []; // { obj, light, bulbMats } filled by placeLamps()
     this.skyDay = new THREE.Color(0xf6e7d2); this.skyDusk = new THREE.Color(0xe8a87c); this.skyNight = new THREE.Color(0x2a3350);
 
-    buildWorld(scene);
+    this.world = buildWorld(scene);
     this.chef = buildChefPlaceholder();
     this.chef.position.copy(L.chef);
     this.chef.rotation.y = Math.PI; // face the stove
@@ -243,6 +270,7 @@ export class Game {
   placeStatic() {
     const reg = this.models.register ?? placeholderBox(0.9, 0.9, 0.8, 0x3b3f46);
     reg.position.copy(L.register); this.scene.add(reg); this.register = reg;
+    // register 0 is created in addRegister below
     const stack = this.models.cashStack ?? placeholderBox(0.2, 0.1, 0.2, 0x4caf50);
     stack.position.copy(L.cashStack); this.scene.add(stack); this.cashStack = stack;
     this.stackParts = [];
@@ -253,11 +281,40 @@ export class Game {
     kitchen.position.copy(L.kitchen); this.scene.add(kitchen);
     this.knifeProto = this.models.knife;
     this.cabinetProto = this.models.cabinet;
-    if (this.models.cashier) {
-      this.cashier = new Character(this.models.cashier, this.scene);
-      this.cashier.obj.position.copy(L.cashier);
-      this.cashier.obj.rotation.y = 0; // faces +z, toward the guests
+    this.addRegister(0);
+    // street lamps use the Ali12 light too, lit at night
+    for (const p of L.streetLamps) {
+      const lamp = this.buildLamp();
+      lamp.obj.position.copy(p); lamp.obj.position.y = p.y - 0.05;
+      lamp.outdoor = true;
+      this.scene.add(lamp.obj);
+      this.lamps.push(lamp);
     }
+  }
+
+  /** Register 0 is the one from the manifest; register 1 comes with the upgrade. */
+  addRegister(index) {
+    if (this.registers[index]) return;
+    const pos = index === 0 ? L.register : L.register2;
+    const stand = index === 0 ? L.cashier : L.cashier2;
+    const queueHead = index === 0 ? L.queueHead : L.queueHead2;
+    const model = index === 0 ? this.register : (this.models.register ? this.models.register.clone(true) : placeholderBox(0.9, 0.9, 0.8, 0x3b3f46));
+    if (index !== 0) { model.position.copy(pos); this.scene.add(model); }
+    let cashier = null;
+    if (this.models.cashier) {
+      cashier = new Character(index === 0 ? this.models.cashier : cloneRig(this.models.cashier), this.scene, index === 0 ? {} : { tint: 0xdfe7ff });
+      cashier.obj.position.copy(stand);
+      cashier.obj.rotation.y = 0; // faces +z, toward the guests
+    }
+    this.registers[index] = { index, pos, stand, queueHead, model, cashier, busy: null, timer: 0 };
+  }
+
+  removeSecondRegister() {
+    const r = this.registers[1];
+    if (!r) return;
+    this.scene.remove(r.model);
+    if (r.cashier) this.scene.remove(r.cashier.obj);
+    this.registers.length = 1;
   }
 
   // ---------------------------------------------------------- state
@@ -265,8 +322,10 @@ export class Game {
     return {
       v: 1, cash: START_CASH, till: 0, reputation: START_REPUTATION, day: 1, dayTime: 0,
       upgrades: Object.fromEntries(UPGRADES.map((u) => [u.id, u.start ?? 0])),
-      stats: { servedTotal: 0, earnedTotal: 0, specialsServed: 0, angryTotal: 0, servedToday: 0, earnedToday: 0, angryToday: 0 },
+      stats: { servedTotal: 0, earnedTotal: 0, specialsServed: 0, angryTotal: 0, servedToday: 0, earnedToday: 0, angryToday: 0, tipsToday: 0, collects: 0, hustles: 0, streakBest: 0, vipHappy: 0 },
       milestones: [],
+      streak: 0,
+      questIndex: 0,
     };
   }
   hasSave() { try { return Boolean(localStorage.getItem(SAVE_KEY)); } catch { return false; } }
@@ -290,9 +349,14 @@ export class Game {
   }
   begin() {
     this.sfx.ensure();
+    this.music.start();
+    this.ambience.start();
+    $('btn-music').classList.toggle('cherry', this.music.playing);
     this.resetEntities();
     this.applyUpgradesToWorld();
     this.running = true;
+    this.displayCash = this.s.cash;
+    this.renderQuest();
     this.paused = false;
     this.spawnTimer = 1.5;
     $('overlay-title').classList.remove('show');
@@ -314,11 +378,11 @@ export class Game {
     this.tables = [];
     for (const c of this.cabinets) this.scene.remove(c);
     this.cabinets = [];
-    for (const l of this.lamps) this.scene.remove(l.obj);
-    this.lamps = [];
+    for (const l of this.lamps) if (!l.outdoor) this.scene.remove(l.obj);
+    this.lamps = this.lamps.filter((l) => l.outdoor);
     if (this.knife) { this.scene.remove(this.knife); this.knife = null; }
-    this.cashierBusy = null;
-    this.cashierTimer = 0;
+    for (const r of this.registers) { r.busy = null; r.timer = 0; }
+    if (this.lvl('register2') < 1) this.removeSecondRegister();
     this.autoTimer = 0;
     if (this.chefRig) { this.chefRig.carry.clear(); this.chefState = 'idle'; this.chefOrder = null; this.chef.position.copy(L.stove); }
   }
@@ -328,6 +392,7 @@ export class Game {
 
   applyUpgradesToWorld() {
     this.placeLamps();
+    if (this.lvl('register2') >= 1) this.addRegister(1);
     // runners
     while (this.runners.length < this.lvl('runner')) {
       const idx = this.runners.length;
@@ -362,8 +427,9 @@ export class Game {
 
   placeLamps() {
     const wanted = LAMP_SPOTS.slice(0, 2 + this.lvl('lamps') * 2);
-    while (this.lamps.length < wanted.length) {
-      const spot = wanted[this.lamps.length];
+    let indoor = this.lamps.filter((l) => !l.outdoor).length;
+    while (indoor < wanted.length) {
+      const spot = wanted[indoor++];
       const lamp = this.buildLamp();
       lamp.obj.position.copy(spot);
       this.scene.add(lamp.obj);
@@ -406,9 +472,10 @@ export class Game {
   }
 
   // ---------------------------------------------------------- economy helpers
-  arrivalsPerMinute() { return (3.0 + this.stars() * 1.6) * (1 + 0.25 * this.lvl('sign')) * (this.rush > 0 ? 1.9 : 1); }
+  arrivalsPerMinute() { return (3.6 + this.stars() * 1.8) * (1 + 0.25 * this.lvl('sign')) * (this.rush > 0 ? 1.9 : 1) * (this.registers.length > 1 ? 1.25 : 1); }
   /** Cosy lighting keeps guests patient: +12% per lamp level. */
   patienceMult() { return 1 + 0.12 * this.lvl('lamps'); }
+  tipMult() { return 1 + Math.min(this.s.streak ?? 0, 20) / 20; }
   orderTime() { return 4.2 * Math.pow(0.85, this.lvl('cashier')); }
   cookTime(item) { return 1.6 * Math.pow(0.8, this.lvl('knife')) + item.cook * Math.pow(0.88, this.lvl('cabinet')); }
   runnerSpeed() { return 2.1 * (1 + 0.2 * this.lvl('shoes')); }
@@ -418,10 +485,11 @@ export class Game {
   // ---------------------------------------------------------- customers
   spawnCustomer() {
     let obj, rig = null;
+    const vip = this.s.day >= 1 && this.stars() >= 2 && Math.random() < 0.07 && !this.customers.some((c) => c.vip);
     const protos = [this.models.runner, this.models.cashier].filter(Boolean);
     if (protos.length) {
-      const tint = new THREE.Color().setHSL(Math.random(), 0.5, 0.78);
-      rig = new Character(cloneRig(pick(protos)), this.scene, { tint });
+      const tint = vip ? new THREE.Color(0xffe082) : new THREE.Color().setHSL(Math.random(), 0.5, 0.78);
+      rig = new Character(cloneRig(pick(protos)), this.scene, { tint, hat: vip ? buildCrown() : null });
       obj = rig.obj; // rig.carry is named 'hand' and follows the hand bones
     } else {
       obj = buildCustomer();
@@ -431,10 +499,15 @@ export class Game {
     const bubble = makeBubble();
     bubble.position.y = 2.25;
     obj.add(bubble);
-    const c = { obj, rig, bubble, patienceMax: QUEUE_PATIENCE * this.patienceMult(), state: 'enter', path: [L.corridor.clone(), null], patience: QUEUE_PATIENCE * this.patienceMult(), waitSpot: null, seat: null, order: null, timer: 0, speed: rand(1.6, 2.1), happy: true, bob: Math.random() * 6 };
+    // join the shortest line
+    const register = this.registers.reduce((best, r) => (this.lineLength(r) < this.lineLength(best) ? r : best), this.registers[0]);
+    const c = { obj, rig, bubble, vip, register, cheered: false, patienceMax: QUEUE_PATIENCE * this.patienceMult() * (vip ? 0.85 : 1), state: 'enter', path: [L.corridor.clone(), null], patience: QUEUE_PATIENCE * this.patienceMult() * (vip ? 0.85 : 1), waitSpot: null, seat: null, order: null, timer: 0, speed: rand(1.6, 2.1), happy: true, bob: Math.random() * 6 };
     this.customers.push(c);
+    if (vip) { this.toast('👑 A food critic just walked in. Serve them fast!', 'warn', 4000); this.sfx.bell(); }
     return c;
   }
+
+  lineLength(r) { return this.customers.filter((c) => c.register === r && (c.state === 'enter' || c.state === 'queue')).length; }
 
   queueTargets() {
     const inQueue = this.customers.filter((c) => c.state === 'queue' || c.state === 'enter');
@@ -444,15 +517,15 @@ export class Game {
 
   updateCustomers(dt) {
     // assign queue indices in arrival order
-    const queued = this.customers.filter((c) => c.state === 'queue' || (c.state === 'enter' && c.path[1] !== null));
-    let idx = 0;
-    for (const c of this.customers) {
-      if (c.state === 'queue' || c.state === 'enter') {
-        c.queueIndex = idx++;
-        c.queueTarget = new THREE.Vector3(L.queueHead.x + (idx > L.queueMax ? 0.6 : 0), 0, L.queueHead.z + (idx - 1) * L.queueStep);
+    for (const r of this.registers) {
+      let idx = 0;
+      for (const c of this.customers) {
+        if (c.register === r && (c.state === 'queue' || c.state === 'enter')) {
+          c.queueIndex = idx++;
+          c.queueTarget = new THREE.Vector3(r.queueHead.x + (idx > L.queueMax ? 0.6 : 0), 0, r.queueHead.z + (idx - 1) * L.queueStep);
+        }
       }
     }
-    const stackVisible = queued.length;
     for (const c of this.customers) {
       const o = c.obj;
       switch (c.state) {
@@ -462,19 +535,19 @@ export class Game {
           this.bob(c, moving, dt);
           if (!moving) {
             if (c.path[0]) { c.path.shift(); c.path[0] = null; }
-            else { c.state = 'queue'; faceTo(o, L.register); }
+            else { c.state = 'queue'; faceTo(o, c.register.pos); }
           }
           break;
         }
         case 'queue': {
           const moving = !stepToward(o, c.queueTarget, c.speed, dt);
           this.bob(c, moving, dt);
-          if (!moving) faceTo(o, new THREE.Vector3(L.register.x, 0, L.register.z));
+          if (!moving) faceTo(o, new THREE.Vector3(c.register.pos.x, 0, c.register.pos.z));
           c.patience -= dt;
-          if (c.queueIndex === 0 && !this.cashierBusy) {
-            this.cashierBusy = c; c.state = 'ordering'; this.cashierTimer = this.orderTime();
+          if (c.queueIndex === 0 && !c.register.busy) {
+            c.register.busy = c; c.state = 'ordering'; c.register.timer = this.orderTime();
             c.item = pick(this.availableMenu());
-            if (this.cashier) this.cashier.play('jump', 0.15);
+            if (c.register.cashier) c.register.cashier.play('jump', 0.15);
           } else if (c.patience <= 0) {
             this.leave(c, false, 'left the line');
           }
@@ -619,7 +692,7 @@ export class Game {
   finishCustomer(c, seated) {
     let tip = 0;
     if (seated) {
-      tip = Math.round(c.item.price * rand(0.15, 0.35) * (1 + 0.1 * this.lvl('lamps')) * 100) / 100;
+      tip = Math.round(c.item.price * rand(0.15, 0.35) * (1 + 0.1 * this.lvl('lamps')) * this.tipMult() * (c.vip ? 3 : 1) * 100) / 100;
       this.s.till += tip;
       this.s.stats.earnedTotal += tip; this.s.stats.earnedToday += tip; this.s.stats.tipsToday = (this.s.stats.tipsToday ?? 0) + tip;
       this.float(c.obj.position, `tip ${money2(tip)}`, 'gold');
@@ -629,20 +702,28 @@ export class Game {
 
   leave(c, happy, why) {
     if (c.waitSpot) { c.waitSpot.taken = false; c.waitSpot = null; }
-    if (this.cashierBusy === c) this.cashierBusy = null;
+    if (c.register && c.register.busy === c) c.register.busy = null;
     c.state = 'leave';
     c.path = [L.corridor.clone().add(new THREE.Vector3(rand(-0.4, 0.4), 0, rand(-0.3, 0.3))), L.door.clone(), L.spawn.clone()];
     if (happy) {
-      this.s.reputation = Math.min(100, this.s.reputation + (why === 'ate in' ? 1.5 : 0.8));
+      this.s.reputation = Math.min(100, this.s.reputation + (why === 'ate in' ? 1.5 : 0.8) + (c.vip ? 6 : 0));
       this.s.stats.servedTotal += 1; this.s.stats.servedToday += 1;
+      this.s.streak = (this.s.streak ?? 0) + 1;
+      this.s.stats.streakBest = Math.max(this.s.stats.streakBest ?? 0, this.s.streak);
       if (c.item?.id === 'special') this.s.stats.specialsServed += 1;
       this.float(c.obj.position, why === 'ate in' ? '★ ate in' : '★ to go', 'good');
+      this.fx.hearts(c.obj.position, c.vip ? 6 : 2);
+      if (c.vip) { this.s.stats.vipHappy = (this.s.stats.vipHappy ?? 0) + 1; this.fx.stars(c.obj.position, 10); this.toast('👑 The critic loved it! +6 reputation.', 'good', 3500); this.sfx.levelUp(); }
+      if (this.s.streak > 0 && this.s.streak % 10 === 0) { this.toast(`🔥 ${this.s.streak} guests in a row! Tips ×${this.tipMult().toFixed(1)}`, 'good', 3000); }
     } else {
-      this.s.reputation = Math.max(0, this.s.reputation - 4);
+      this.s.reputation = Math.max(0, this.s.reputation - (c.vip ? 10 : 4));
       this.s.stats.angryTotal += 1; this.s.stats.angryToday += 1;
+      if ((this.s.streak ?? 0) >= 5) this.toast(`Streak of ${this.s.streak} lost.`, 'bad');
+      this.s.streak = 0;
       this.sfx.buzz();
+      this.fx.grumble(c.obj.position);
       this.float(c.obj.position, `✗ ${why}`, 'bad');
-      this.log(`A guest ${why} unhappy. Reputation −4.`);
+      this.log(`${c.vip ? 'The food critic' : 'A guest'} ${why} unhappy. Reputation −${c.vip ? 10 : 4}.`);
     }
     this.updateHud();
   }
@@ -663,39 +744,44 @@ export class Game {
 
   // ---------------------------------------------------------- cashier
   updateCashier(dt) {
-    if (this.cashier) this.cashier.update(dt);
-    if (!this.cashierBusy) return;
-    const c = this.cashierBusy;
-    this.cashierTimer -= dt;
-    if (this.cashierTimer > 0) return;
-    // paid
-    const bill = c.item.price;
-    this.s.till += bill;
-    this.s.stats.earnedTotal += bill; this.s.stats.earnedToday += bill;
-    const order = { customer: c, item: c.item, state: 'queued', remaining: 0, plate: null, passSlot: -1, pickupSlot: -1, runner: null };
-    c.order = order;
-    this.orders.push(order);
-    this.cashierBusy = null;
-    if (this.cashier) this.cashier.play('idle');
-    this.sfx.chaChing();
-    this.float(L.register.clone().add(new THREE.Vector3(0, 0.9, 0)), `+${money2(bill)}`, 'gold');
-    this.spawnBills(2);
-    // find a waiting spot
-    const spot = L.waitSpots.find((w) => !w.taken) ?? L.waitSpots[L.waitSpots.length - 1];
-    spot.taken = true; c.waitSpot = spot;
-    c.state = 'toWait'; c.patience = FOOD_PATIENCE * this.patienceMult(); c.patienceMax = c.patience;
-    if (!this.tutorial.paid) { this.tutorial.paid = true; this.toast('First sale! Cash piles up on the register. Click the register (or Collect) to bank it.', 'info', 5000); }
-    this.updateHud();
+    for (const r of this.registers) {
+      if (r.cashier) { r.cashier.tickBoost(dt, this.time); r.cashier.update(dt); }
+      if (!r.busy) continue;
+      const c = r.busy;
+      r.timer -= dt * (r.cashier?.boosted ? 2.2 : 1);
+      if (r.timer > 0) continue;
+      // paid
+      const bill = c.item.price;
+      this.s.till += bill;
+      this.s.stats.earnedTotal += bill; this.s.stats.earnedToday += bill;
+      const order = { customer: c, item: c.item, state: 'queued', remaining: 0, plate: null, passSlot: -1, pickupSlot: -1, runner: null };
+      c.order = order;
+      this.orders.push(order);
+      r.busy = null;
+      if (r.cashier) r.cashier.play('idle');
+      this.sfx.chaChing();
+      this.float(r.pos.clone().add(new THREE.Vector3(0, 0.9, 0)), `+${money2(bill)}`, 'gold');
+      this.fx.sparkle(r.pos.clone().add(new THREE.Vector3(0, 0.6, 0.2)), 4);
+      this.spawnBills(2, r.pos);
+      const spot = L.waitSpots.find((w) => !w.taken) ?? L.waitSpots[L.waitSpots.length - 1];
+      spot.taken = true; c.waitSpot = spot;
+      c.state = 'toWait'; c.patience = FOOD_PATIENCE * this.patienceMult() * (c.vip ? 0.85 : 1); c.patienceMax = c.patience;
+      if (!this.tutorial.paid) { this.tutorial.paid = true; this.toast('First sale! Cash piles up on the register. Click it or press Space to bank it.', 'info', 4500); }
+      this.updateHud();
+    }
   }
 
   // ---------------------------------------------------------- kitchen
   updateKitchen(dt) {
     // stoves cook on their own once the chef has prepped the order
+    let cookingNow = 0;
     for (const o of this.orders) {
       if (o.state !== 'cooking') continue;
-      o.remaining -= dt;
+      cookingNow++;
+      o.remaining -= dt * (this.chefRig?.boosted ? 1.5 : 1);
       if (o.remaining <= 0) { o.state = 'plated'; o.remaining = 0; }
     }
+    if (cookingNow) { this.steamTimer -= dt; if (this.steamTimer <= 0) { this.steamTimer = 0.3; this.fx.steam(L.stove.clone().add(new THREE.Vector3(0.2, 1.1, -0.5))); } }
     if (this.chefRig) this.updateChef(dt);
     else this.updateChefless(dt);
   }
@@ -736,7 +822,9 @@ export class Game {
    */
   updateChef(dt) {
     const chef = this.chefRig;
-    const speed = 2.2;
+    chef.tickBoost(dt, this.time);
+    const speed = 2.2 * (chef.boosted ? 1.6 : 1);
+    if (chef.boosted) dt *= 1; // walking handled by speed; prep below
     switch (this.chefState) {
       case 'idle': {
         const plated = this.orders.find((o) => o.state === 'plated');
@@ -760,7 +848,7 @@ export class Game {
       case 'prepping': {
         chef.play('walk'); // chopping motion stand-in
         chef.obj.position.y = Math.abs(Math.sin(this.time * 10)) * 0.03;
-        this.chefTimer -= dt;
+        this.chefTimer -= dt * (chef.boosted ? 2 : 1);
         if (this.knife) this.knife.rotation.z = Math.PI / 2 + 0.3 + Math.sin(this.time * 10) * 0.2;
         if (this.chefTimer <= 0) { chef.obj.position.y = 0; if (this.knife) this.knife.rotation.z = Math.PI / 2 + 0.3; this.chefState = 'toStove'; }
         break;
@@ -809,18 +897,20 @@ export class Game {
   // ---------------------------------------------------------- runners
   updateRunners(dt) {
     for (const r of this.runners) {
+      r.tickBoost(dt, this.time);
       r.update(dt);
+      const spd = this.runnerSpeed() * (r.boosted ? 1.8 : 1);
       switch (r.state) {
         case 'idle': {
           const ready = this.orders.find((o) => o.state === 'ready' && !o.runner);
           if (ready) { ready.runner = r; r.order = ready; r.state = 'toPass'; r.play('walk'); }
-          else { const arrived = stepToward(r.obj, r.idleSpot, this.runnerSpeed(), dt); r.play(arrived ? 'idle' : 'walk'); if (arrived) faceTo(r.obj, L.passSlots[1]); }
+          else { const arrived = stepToward(r.obj, r.idleSpot, spd, dt); r.play(arrived ? 'idle' : 'walk'); if (arrived) faceTo(r.obj, L.passSlots[1]); }
           break;
         }
         case 'toPass': {
           const o = r.order;
           const target = new THREE.Vector3(L.passSlots[o.passSlot].x, 0, L.passStand.z);
-          if (stepToward(r.obj, target, this.runnerSpeed(), dt)) {
+          if (stepToward(r.obj, target, spd, dt)) {
             this.scene.remove(o.plate); this.passPlates[o.passSlot] = null;
             o.plate.position.set(0, 0, 0); o.plate.scale.setScalar(0.9); r.carry.add(o.plate);
             o.state = 'carrying';
@@ -832,12 +922,12 @@ export class Game {
           const o = r.order;
           if (o.pickupSlot < 0) {
             const slot = this.pickupPlates.findIndex((p) => !p);
-            if (slot < 0) { const arrived = stepToward(r.obj, L.pickupStand, this.runnerSpeed(), dt); r.play(arrived ? 'idle' : 'walk'); break; }
+            if (slot < 0) { const arrived = stepToward(r.obj, L.pickupStand, spd, dt); r.play(arrived ? 'idle' : 'walk'); break; }
             o.pickupSlot = slot; this.pickupPlates[slot] = o.plate;
           }
           r.play('walk');
           const target = new THREE.Vector3(L.pickupSlots[o.pickupSlot].x, 0, L.pickupStand.z);
-          if (stepToward(r.obj, target, this.runnerSpeed(), dt)) {
+          if (stepToward(r.obj, target, spd, dt)) {
             r.carry.remove(o.plate); o.plate.scale.setScalar(1); o.plate.position.copy(L.pickupSlots[o.pickupSlot]); this.scene.add(o.plate);
             o.state = 'delivered';
             const c = o.customer;
@@ -851,7 +941,7 @@ export class Game {
           break;
         }
         case 'return': {
-          const arrived = stepToward(r.obj, r.idleSpot, this.runnerSpeed(), dt);
+          const arrived = stepToward(r.obj, r.idleSpot, spd, dt);
           r.play(arrived ? 'idle' : 'walk');
           if (arrived) { r.state = 'idle'; faceTo(r.obj, L.passSlots[1]); }
           break;
@@ -866,8 +956,10 @@ export class Game {
     const amount = this.s.till;
     this.s.cash += amount;
     this.s.till = 0;
+    this.s.stats.collects = (this.s.stats.collects ?? 0) + 1;
     this.sfx.chaChing();
     this.spawnCoins(Math.min(18, 4 + Math.floor(amount / 8)));
+    this.fx.sparkle(L.cashStack.clone().add(new THREE.Vector3(0, 0.3, 0)), 10);
     this.float(L.cashStack.clone().add(new THREE.Vector3(0, 0.8, 0)), `+${money2(amount)} banked`, 'gold');
     if (fromClick && !this.tutorial.collected) { this.tutorial.collected = true; this.toast('Banked. Press B or the Shop button: a Dining table is $100, runners and stoves are there too.', 'info', 5500); }
     this.updateHud();
@@ -903,18 +995,52 @@ export class Game {
 
   renderShop() {
     const el = $('shop-list');
-    el.innerHTML = UPGRADES.map((u) => {
-      const level = this.lvl(u.id);
-      const maxed = u.max != null && level >= u.max;
-      const cost = maxed ? null : upgradeCost(u, level - (u.start ?? 0));
-      const can = cost != null && this.s.cash >= cost;
-      const shown = u.id === 'runner' || u.id === 'stove' ? level : level;
-      return `<div class="upgrade ${maxed ? 'maxed' : can ? 'can' : ''}">
-        <div class="u-icon">${u.icon}</div>
-        <div class="u-body"><div class="u-name">${u.name} <span class="u-lvl">${u.max ? `${shown}/${u.max}` : `lv ${shown}`}</span></div><div class="u-desc">${u.desc}</div></div>
-        <button class="u-buy" data-id="${u.id}" ${maxed || !can ? 'disabled' : ''}>${maxed ? 'Max' : money(cost)}</button>
-      </div>`;
-    }).join('');
+    let html = '';
+    for (const cat of CATEGORIES) {
+      const items = UPGRADES.filter((u) => (u.cat ?? 'staff') === cat.id);
+      if (!items.length) continue;
+      html += `<div class="shop-cat">${cat.icon} ${cat.name}</div>`;
+      for (const u of items) {
+        const level = this.lvl(u.id);
+        const maxed = u.max != null && level >= u.max;
+        const cost = maxed ? null : upgradeCost(u, level - (u.start ?? 0));
+        const can = cost != null && this.s.cash >= cost;
+        const pct = u.max ? Math.round((level / u.max) * 100) : Math.min(100, level * 20);
+        html += `<div class="upgrade ${maxed ? 'maxed' : can ? 'can' : ''}">
+          <div class="u-icon">${u.icon}</div>
+          <div class="u-body"><div class="u-name">${u.name} <span class="u-lvl">${u.max ? `${level}/${u.max}` : `lv ${level}`}</span></div><div class="u-desc">${u.desc}</div><div class="u-bar"><i style="width:${pct}%"></i></div></div>
+          <button class="u-buy" data-id="${u.id}" ${maxed || !can ? 'disabled' : ''}>${maxed ? 'Max' : money(cost)}</button>
+        </div>`;
+      }
+    }
+    el.innerHTML = html;
+  }
+
+  checkQuests() {
+    const q = QUESTS[this.s.questIndex ?? 0];
+    if (!q) return;
+    if (q.check(this.s.stats, this)) {
+      this.s.cash += q.reward;
+      this.s.questIndex += 1;
+      this.sfx.levelUp();
+      this.toast(`✅ Quest complete: ${q.text}  +${money(q.reward)}`, 'good', 4500);
+      this.log(`Quest complete: ${q.text} (+${money(q.reward)})`);
+      this.fx.confetti(L.cashStack.clone().add(new THREE.Vector3(0, 1.2, 0)), 40);
+      $('quest').classList.remove('done'); void $('quest').offsetWidth; $('quest').classList.add('done');
+      this.renderQuest();
+      this.renderShop();
+      this.save();
+    }
+  }
+
+  renderQuest() {
+    const idx = this.s.questIndex ?? 0;
+    const q = QUESTS[idx];
+    $('quest-total').textContent = QUESTS.length;
+    if (!q) { $('quest-n').textContent = QUESTS.length; $('quest-text').textContent = 'All quests complete. Best diner in the world.'; $('quest-reward').textContent = ''; return; }
+    $('quest-n').textContent = idx + 1;
+    $('quest-text').textContent = q.text;
+    $('quest-reward').textContent = `Reward ${money(q.reward)}`;
   }
 
   checkMilestones() {
@@ -923,6 +1049,7 @@ export class Game {
       if (m.check({ ...this.s.stats, reputation: this.s.reputation })) {
         this.s.milestones.push(m.id);
         this.sfx.levelUp();
+        this.fx.confetti(L.register.clone().add(new THREE.Vector3(0, 1.5, 0)), 60);
         this.toast(`🏆 Milestone: ${m.label}`, 'good', 4000);
         this.log(`Milestone reached: ${m.label}`);
       }
@@ -950,10 +1077,16 @@ export class Game {
     this.scene.fog.color.copy(sky);
     const glow = 0.25 + 0.75 * evening;
     for (const lamp of this.lamps) {
-      lamp.light.intensity = lamp.baseIntensity * (0.35 + 0.9 * evening);
+      lamp.light.intensity = lamp.baseIntensity * (lamp.outdoor ? evening * 1.4 : 0.35 + 0.9 * evening);
       for (const m of lamp.bulbMats) m.emissiveIntensity = 0.6 + 2.4 * glow;
     }
     this.renderer.toneMappingExposure = 1.0 + 0.15 * evening;
+    if (this.world) {
+      this.world.nightSky.opacity = Math.max(0, (f - 0.78) / 0.22) * 0.9;
+      this.world.neon.emissiveIntensity = 0.8 + 2.2 * evening + Math.sin(this.time * 7) * 0.15 * evening;
+      const lit = this.s ? this.stars() : 0;
+      this.world.signStars.forEach((st, i) => { const on = lit >= i + 0.5; st.material.color.setHex(on ? 0xffd54f : 0x4a4f58); st.material.opacity = on ? 1 : 0.6; });
+    }
   }
 
   updateDay(dt) {
@@ -968,6 +1101,7 @@ export class Game {
       this.log(`Day ${this.s.day} closed: ${money(st.earnedToday)} earned, ${st.servedToday} served, ${st.angryToday} walked out.`);
       this.toast(`Day ${this.s.day} closed · ${money(st.earnedToday)} · ${st.servedToday} guests`, 'info', 4500);
       this.showDaySummary(st);
+      this.fx.confetti(new THREE.Vector3(0, 2.5, 2), 50);
       this.s.day += 1;
       this.rushAnnounced = false;
       st.tipsToday = 0; st.earnedToday = 0; st.servedToday = 0; st.angryToday = 0;
@@ -1001,10 +1135,10 @@ export class Game {
       this.coins.push({ mesh: coin, vel: new THREE.Vector3(rand(-1.5, 1.5), rand(2.5, 4.2), rand(0.5, 2.2)), spin: rand(4, 10), life: 1.3 });
     }
   }
-  spawnBills(n) {
+  spawnBills(n, from = L.register) {
     for (let i = 0; i < n; i++) {
       const bill = buildBill();
-      bill.position.copy(L.register).add(new THREE.Vector3(rand(-0.2, 0.2), 0.6, 0.4));
+      bill.position.copy(from).add(new THREE.Vector3(rand(-0.2, 0.2), 0.6, 0.4));
       this.scene.add(bill);
       this.coins.push({ mesh: bill, vel: new THREE.Vector3(rand(-1.2, -0.4), rand(1.2, 2), rand(-0.2, 0.2)), spin: rand(3, 6), life: 0.9, toStack: true });
     }
@@ -1063,7 +1197,10 @@ export class Game {
   // ---------------------------------------------------------- HUD
   updateHud() {
     if (!this.s) return;
-    $('hud-cash').textContent = money(this.s.cash);
+    $('hud-cash').textContent = money(this.displayCash);
+    $('hud-streak').textContent = this.s.streak ?? 0;
+    $('hud-streak').classList.toggle('hot', (this.s.streak ?? 0) >= 10);
+    this.ambience.setCrowd(this.customers.length);
     $('hud-till').textContent = money2(this.s.till);
     $('btn-collect').disabled = this.s.till <= 0;
     $('btn-collect').classList.toggle('hot', this.s.till >= 40);
@@ -1086,7 +1223,8 @@ export class Game {
     $('btn-collect').addEventListener('click', () => this.collect(true));
     $('btn-speed').addEventListener('click', () => { this.speed = this.speed >= 3 ? 1 : this.speed + 1; this.updateHud(); });
     $('btn-pause').addEventListener('click', () => this.togglePause());
-    $('btn-mute').addEventListener('click', () => { this.sfx.muted = !this.sfx.muted; $('btn-mute').textContent = this.sfx.muted ? 'Unmute' : 'Mute'; });
+    $('btn-mute').addEventListener('click', () => { this.sfx.muted = !this.sfx.muted; $('btn-mute').textContent = this.sfx.muted ? 'Unmute' : 'Mute'; this.ambience.setCrowd(this.customers.length); });
+    $('btn-music').addEventListener('click', () => { const on = this.music.toggle(); $('btn-music').classList.toggle('cherry', on); });
     $('btn-shop').addEventListener('click', () => $('shop').classList.toggle('open'));
     $('btn-shop-close').addEventListener('click', () => $('shop').classList.remove('open'));
     $('btn-reset').addEventListener('click', () => {
@@ -1117,7 +1255,13 @@ export class Game {
       const rect = this.canvas.getBoundingClientRect();
       this.pointer.set(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1);
       this.raycaster.setFromCamera(this.pointer, this.camera);
-      const hits = this.raycaster.intersectObjects([this.register, this.cashStack].filter(Boolean), true);
+      // staff first: a click on any worker makes them hustle
+      const staff = [...this.registers.map((r) => r.cashier).filter(Boolean), ...this.runners, this.chefRig].filter(Boolean);
+      const staffHits = this.raycaster.intersectObjects(staff.map((w) => w.obj), true);
+      if (staffHits.length) { this.hustle(staffHits[0].object); return; }
+      const guestHits = this.raycaster.intersectObjects(this.customers.map((c) => c.obj), true);
+      if (guestHits.length) { this.cheer(guestHits[0].object); return; }
+      const hits = this.raycaster.intersectObjects([...this.registers.map((r) => r.model), this.cashStack].filter(Boolean), true);
       if (hits.length) { if (this.s.till > 0) this.collect(true); else { this.sfx.pop(); this.toast('The register is empty. Serve some guests first.', 'info'); } }
     });
     addEventListener('visibilitychange', () => { if (document.hidden) this.save(); });
@@ -1143,6 +1287,35 @@ export class Game {
     this.camera.position.lerpVectors(tw.from, tw.to, e);
     this.controls.target.lerpVectors(tw.tFrom, tw.tTo, e);
     if (tw.t >= 1) this.camTween = null;
+  }
+
+  /** Find the Character that owns a clicked mesh. */
+  ownerOf(mesh) {
+    let o = mesh;
+    while (o) { const ch = CHARACTER_OF.get(o); if (ch) return ch; o = o.parent; }
+    return null;
+  }
+
+  hustle(mesh) {
+    const w = this.ownerOf(mesh);
+    if (!w) return;
+    if (!w.hustle()) { this.sfx.tooEarly(); this.toast(`Catching their breath… ${Math.ceil(w.cooldown)}s`, 'info', 1200); return; }
+    this.s.stats.hustles = (this.s.stats.hustles ?? 0) + 1;
+    this.sfx.levelUp();
+    this.float(w.obj.position, 'HUSTLE!', 'gold');
+    this.fx.sparkle(w.obj.position.clone().add(new THREE.Vector3(0, 1.2, 0)), 8);
+  }
+
+  cheer(mesh) {
+    const w = this.ownerOf(mesh);
+    const c = this.customers.find((x) => x.obj === mesh || (w && x.rig === w) || x.obj === mesh.parent);
+    if (!c) return;
+    if (c.cheered || !['queue', 'toWait', 'waitFood', 'enter'].includes(c.state)) { this.sfx.pop(); return; }
+    c.cheered = true;
+    c.patience = Math.min(c.patienceMax, c.patience + c.patienceMax * 0.35);
+    this.sfx.bell();
+    this.fx.hearts(c.obj.position, 2);
+    this.float(c.obj.position, 'Thanks!', 'good');
   }
 
   togglePause() {
@@ -1176,11 +1349,16 @@ export class Game {
       this.updateCashStack();
       this.updateCoins(dt);
       this.checkMilestones();
+      this.checkQuests();
+      this.fx.update(dt);
       this.saveTimer += real;
       if (this.saveTimer > 5) { this.saveTimer = 0; this.save(); }
-      if ((this.hudTimer = (this.hudTimer ?? 0) + real) > 0.25) { this.hudTimer = 0; this.updateHud(); }
-    } else if (this.cashier) {
-      this.cashier.update(real);
+      // cash counter rolls toward the real value
+      this.displayCash += (this.s.cash - this.displayCash) * Math.min(1, real * 6);
+      if (Math.abs(this.s.cash - this.displayCash) < 0.6) this.displayCash = this.s.cash;
+      if ((this.hudTimer = (this.hudTimer ?? 0) + real) > 0.12) { this.hudTimer = 0; this.updateHud(); }
+    } else {
+      for (const r of this.registers) r.cashier?.update(real);
       for (const r of this.runners) r.update(real);
       if (this.chefRig) this.chefRig.update(real);
     }
@@ -1205,7 +1383,7 @@ function makeBubble() {
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
   const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false }));
-  sprite.scale.set(0.8, 0.6, 1);
+  sprite.scale.set(0.66, 0.5, 1);
   sprite.userData.canvas = canvas;
   sprite.userData.last = '';
   sprite.renderOrder = 10;
