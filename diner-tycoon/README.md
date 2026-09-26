@@ -1,4 +1,4 @@
-# Short Order Tycoon
+# Short Order City
 
 A 3D kebab diner tycoon built with Three.js around the models in `models/`:
 the Poly by Google cash register and kebab, J-Toastie's Food Worker (the
@@ -57,6 +57,27 @@ on the title screen.
 | Neon sign | 25% more walk-ins per level |
 | Expand the menu | Unlocks veggie skewers, shakes and smoothies, then lamb and the mixed platter, then the Chef's Special |
 | Cash drawer | The cashier banks the register automatically |
+
+## The city
+
+The diner sits on the centre block of a 5×5 city grid. Press **C** (or the
+City button), pick a building, and click any empty block:
+
+| Building | Effect |
+| -------- | ------ |
+| Apartments | +12 citizens. Population raises walk-ins at the diner and foot traffic everywhere |
+| Office block | +20 jobs. Workers double what food businesses earn |
+| City park | +10% happiness, which multiplies all city income |
+| Corner shop | Earns from foot traffic |
+| Hot dog stand | A cart with your Poly hot dog on top |
+| Burger joint | A drive-through with jeremy's hamburger on the roof |
+| Kebab house | A spinning Poly kebab sign |
+
+City income is banked straight into your cash every second and shown in the
+top bar. Citizens walk the streets between buildings, and about a third of
+their trips end at the diner's door, where they join the queue as guests. A
+better-rated diner makes the whole city happier. The city is saved with the
+rest of your game.
 
 ## Playing, not just watching
 
@@ -134,6 +155,7 @@ src/game.js         simulation: guests, cashier, kitchen, runners, shop, save/lo
 src/world.js        diner scene builders and primitive placeholders
 src/config.js       menu, upgrade costs, quests, milestones, timing
 src/nav.js          walkability grid, A* pathfinding, crowd separation
+src/city.js         city grid, buildings, city economy, street-walking citizens
 src/fx.js           sprite particles (steam, sparkles, hearts, confetti)
 src/glb-loader.js   glTF/GLB loader with skins and animations for Three.js
 src/audio.js        synthesized sound effects

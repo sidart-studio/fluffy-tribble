@@ -59,9 +59,6 @@ export function buildWorld(scene) {
   floor.rotation.x = -Math.PI / 2;
   floor.receiveShadow = true;
   scene.add(floor);
-  // sidewalk outside the front
-  const walk = new THREE.Mesh(new THREE.PlaneGeometry(26, 5), mat(0x9aa0a6, { roughness: 1 }));
-  walk.rotation.x = -Math.PI / 2; walk.position.set(0, -0.002, 8.5); walk.receiveShadow = true; scene.add(walk);
 
   // walls: back + two sides, front is open to the camera
   const wallMat = mat(0xbfe3d6, { roughness: 0.95 });
@@ -123,9 +120,7 @@ export function buildWorld(scene) {
   let handles;
   {
   // ---- outside: kerb, road, lamp posts, roof sign, night sky
-  const kerb = new THREE.Mesh(new THREE.BoxGeometry(26, 0.12, 0.3), mat(0x8a9096)); kerb.position.set(0, 0.06, 11.0); kerb.receiveShadow = true; scene.add(kerb);
-  const road = new THREE.Mesh(new THREE.PlaneGeometry(26, 7), mat(0x3a3f47, { roughness: 1 })); road.rotation.x = -Math.PI / 2; road.position.set(0, -0.003, 14.6); road.receiveShadow = true; scene.add(road);
-  for (let i = -5; i <= 5; i++) { const dash = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 0.14), mat(0xf5f1e8)); dash.rotation.x = -Math.PI / 2; dash.position.set(i * 2.4, 0.002, 14.6); scene.add(dash); }
+  // streets, pavements and the other blocks are drawn by the city (src/city.js)
   for (const p of L.streetLamps) {
     const pole = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.07, p.y, 10), mat(0x2b2f38, { metalness: 0.6, roughness: 0.4 })));
     pole.position.set(p.x, p.y / 2, p.z); scene.add(pole);

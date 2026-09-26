@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 </head>
 <body>
-<title>Short Order Tycoon</title>
+<title>Short Order City</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Nunito:wght@500;700;800&display=swap">
 <style>
   :root {
@@ -72,6 +72,17 @@
   .u-bar { height: 4px; background: var(--chrome); border-radius: 2px; overflow: hidden; margin-top: 5px; }
   .u-bar i { display: block; height: 100%; background: var(--good); }
   #hud-streak.hot { color: var(--cherry); }
+  #city { position: absolute; top: calc(80px + env(safe-area-inset-top, 0px)); right: 14px; bottom: calc(80px + env(safe-area-inset-bottom, 0px)); width: 330px; background: var(--panel); border-radius: 16px; box-shadow: var(--shadow); display: none; flex-direction: column; overflow: hidden; }
+  #city.open { display: flex; }
+  #city header { display: flex; justify-content: space-between; align-items: center; padding: 12px 14px 8px; }
+  #city h2 { margin: 0; font-family: var(--font-display); font-size: 22px; letter-spacing: .5px; color: #b0771a; }
+  .city-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; padding: 0 12px 8px; }
+  .city-stats div { background: var(--cream); border-radius: 10px; padding: 6px 8px; text-align: center; }
+  .city-stats b { display: block; font-family: var(--font-display); font-size: 18px; }
+  .city-stats small { font-size: 9px; letter-spacing: .6px; text-transform: uppercase; color: var(--ink-soft); font-weight: 800; }
+  #city-list { overflow-y: auto; padding: 0 10px 10px; display: flex; flex-direction: column; gap: 8px; }
+  .upgrade.selected { border-color: var(--gold); background: #fff3c4; }
+  .city-hint { padding: 8px 14px 12px; font-size: 12px; color: var(--ink-soft); border-top: 1px dashed var(--chrome); }
   #shop { position: absolute; top: calc(80px + env(safe-area-inset-top, 0px)); right: 14px; bottom: calc(80px + env(safe-area-inset-bottom, 0px)); width: 330px; background: var(--panel); border-radius: 16px; box-shadow: var(--shadow); display: none; flex-direction: column; overflow: hidden; }
   #shop.open { display: flex; }
   #shop header { display: flex; justify-content: space-between; align-items: center; padding: 12px 14px 8px; }
@@ -124,7 +135,7 @@
     .topbar { flex-wrap: wrap; }
     .ticket { gap: 10px; padding: 8px 10px; } .stat { min-width: 50px; } .stat b { font-size: 19px; }
     .clock { width: 80px; }
-    #shop { left: 10px; right: 10px; width: auto; top: auto; bottom: calc(76px + env(safe-area-inset-bottom, 0px)); max-height: 60vh; }
+    #shop, #city { left: 10px; right: 10px; width: auto; top: auto; bottom: calc(76px + env(safe-area-inset-bottom, 0px)); max-height: 60vh; }
     .views { top: calc(112px + env(safe-area-inset-top, 0px)); }
     #quest { width: auto; left: 10px; right: 10px; top: calc(150px + env(safe-area-inset-top, 0px)); padding: 6px 10px; }
     #quest-text { font-size: 13px; }
@@ -149,8 +160,11 @@
       <div class="stat"><b id="hud-cash" class="money">$0</b><small>In the bank</small></div>
       <div class="stat"><b id="hud-stars">☆☆☆☆☆</b><small id="hud-rep">reputation</small></div>
       <div class="stat clock"><b id="hud-day">Day 1</b><div class="bar"><i id="hud-clock"></i></div></div>
+      <div class="stat"><b id="hud-pop">0</b><small>Citizens</small></div>
+      <div class="stat"><b id="hud-city-income" class="money">$0</b><small>City / min</small></div>
     </div>
     <div class="controls">
+      <button id="btn-city" class="btn gold">City (C)</button>
       <button id="btn-shop" class="btn cherry">Shop (B)</button>
       <button id="btn-music" class="btn" title="Music on/off">♪ Music</button>
       <button id="btn-speed" class="btn" title="Game speed (1/2/3)">1×</button>
@@ -168,6 +182,7 @@
     <button class="btn small" data-view="register">Register</button>
     <button class="btn small" data-view="kitchen">Kitchen</button>
     <button class="btn small" data-view="tables">Tables</button>
+    <button class="btn small" data-view="city">City</button>
   </div>
   <div id="summary" hidden>
     <h3 id="summary-title">Day closed</h3>
@@ -187,6 +202,12 @@
     </div>
   </div>
 
+  <aside id="city">
+    <header><h2>Build the city</h2><button id="btn-city-close" class="btn">Close</button></header>
+    <div class="city-stats" id="city-stats"></div>
+    <div id="city-list"></div>
+    <div class="city-hint">Pick a building, then click an empty block. Esc cancels.</div>
+  </aside>
   <aside id="shop">
     <header><h2>Upgrades</h2><button id="btn-shop-close" class="btn">Close</button></header>
     <div id="shop-list"></div>
@@ -203,13 +224,14 @@
 
 <div id="overlay-title" class="overlay show">
   <div class="card">
-    <h1>Short Order <span>TYCOON</span></h1>
-    <p class="tag">A diner with one register, one stove, and a line out the door.</p>
+    <h1>Short Order <span>CITY</span></h1>
+    <p class="tag">Run the diner. Build the city around it. Grow both.</p>
     <ul class="howto">
       <li><b>Guests</b> queue at the register. Your cashier takes the order and the money.</li>
       <li><b>The kitchen</b> cooks it. A runner carries the plate to the pickup counter.</li>
       <li><b>Cash</b> piles up on the register. Click it (or press Space) to bank it.</li>
       <li><b>Spend</b> in the Shop: runners, stoves, tables, lamps, a second register, a bigger menu.</li>
+      <li><b>Build</b> the city with the City button: apartments bring citizens, offices bring lunch crowds, parks make everyone happier, and your own food businesses earn every minute.</li>
       <li><b>Hustle:</b> click any staff member for a burst of speed. Click a waiting guest to calm them down.</li>
       <li>Follow the <b>quests</b> for cash rewards. Serve guests in a row to build a tip streak. Watch for the golden food critic.</li>
     </ul>
@@ -55503,17 +55525,24 @@ const QUESTS = [
   { id: 'q_collect3', text: 'Bank the register 3 times (click it or press Space)', reward: 60, check: (st) => st.collects >= 3 },
   { id: 'q_table', text: 'Buy a Dining table in the Shop (B)', reward: 90, check: (st, g) => g.lvl('tables') >= 1 },
   { id: 'q_hustle', text: 'Click a staff member to make them hustle', reward: 60, check: (st) => st.hustles >= 1 },
+  { id: 'q_apartments', text: 'Build Apartments on an empty block (City button, C)', reward: 150, check: (st, g) => g.city?.stats().population >= 12 },
   { id: 'q_runner', text: 'Hire a second runner', reward: 120, check: (st, g) => g.lvl('runner') >= 2 },
+  { id: 'q_foodstand', text: 'Open a hot dog stand in the city', reward: 150, check: (st, g) => [...(g.city?.buildings.values() ?? [])].some((b) => b.type === 'hotdogstand') },
   { id: 'q_stars3', text: 'Reach a 3-star rating', reward: 120, check: (st, g) => g.stars() >= 3 },
   { id: 'q_serve25', text: 'Serve 25 guests', reward: 150, check: (st) => st.servedTotal >= 25 },
   { id: 'q_knife', text: "Buy the chef a knife", reward: 120, check: (st, g) => g.lvl('knife') >= 1 },
   { id: 'q_menu', text: 'Expand the menu', reward: 200, check: (st, g) => g.lvl('menu') >= 1 },
+  { id: 'q_pop50', text: 'Reach a population of 50', reward: 250, check: (st, g) => g.city?.stats().population >= 50 },
+  { id: 'q_park', text: 'Build a park', reward: 150, check: (st, g) => [...(g.city?.buildings.values() ?? [])].some((b) => b.type === 'park') },
   { id: 'q_streak10', text: 'Serve 10 guests in a row with no walkouts', reward: 250, check: (st) => st.streakBest >= 10 },
   { id: 'q_vip', text: 'Impress a food critic (the golden guest)', reward: 300, check: (st) => st.vipHappy >= 1 },
   { id: 'q_stars4', text: 'Reach 4 stars', reward: 400, check: (st, g) => g.stars() >= 4 },
   { id: 'q_register2', text: 'Open a second register', reward: 500, check: (st, g) => g.lvl('register2') >= 1 },
   { id: 'q_chef2', text: 'Hire a sous chef', reward: 500, check: (st, g) => g.lvl('chef2') >= 1 },
+  { id: 'q_office', text: 'Build an office block', reward: 300, check: (st, g) => [...(g.city?.buildings.values() ?? [])].some((b) => b.type === 'office') },
   { id: 'q_serve100', text: 'Serve 100 guests', reward: 600, check: (st) => st.servedTotal >= 100 },
+  { id: 'q_pop150', text: 'Reach a population of 150', reward: 800, check: (st, g) => g.city?.stats().population >= 150 },
+  { id: 'q_city12', text: 'Fill 12 blocks of the city', reward: 1200, check: (st, g) => (g.city?.buildings.size ?? 0) >= 12 },
   { id: 'q_lamps', text: 'Light the dining room (Mood lighting ×3)', reward: 500, check: (st, g) => g.lvl('lamps') >= 3 },
   { id: 'q_special', text: "Serve the Chef's Special", reward: 800, check: (st) => st.specialsServed >= 1 },
   { id: 'q_cash10k', text: 'Earn $10,000 in total', reward: 1000, check: (st) => st.earnedTotal >= 10000 },
@@ -55753,6 +55782,328 @@ function tryMove(agent, dx, dz, nav) {
 }
 
 
+// ---- src/city.js
+// The city around the diner: a grid of blocks you can build on. Buildings add
+// population, jobs and happiness, earn money, and send citizens walking the
+// streets, some of whom drop into the diner.
+
+
+
+const PITCH = 22;          // block-to-block distance (12 m block + pavement + 6 m street)
+const BLOCK = 12;          // buildable square per block
+const RADIUS = 2;          // blocks from the diner in each direction (5x5 grid)
+
+const cmat = (color, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.75, metalness: 0.05, ...extra });
+const cshadowed = (m) => { m.castShadow = true; m.receiveShadow = true; return m; };
+
+const BUILDINGS = [
+  { id: 'apartments', name: 'Apartments', icon: '🏢', cost: 350, desc: 'Home to 12 citizens. More people means more walk-ins everywhere.', population: 12, income: 3 },
+  { id: 'office', name: 'Office block', icon: '🏬', cost: 650, desc: '20 jobs. Workers eat out: lunch rush at every food business.', jobs: 20, income: 6 },
+  { id: 'park', name: 'City park', icon: '🌳', cost: 300, desc: 'Trees, a fountain and benches. +10% happiness, which multiplies all city income.', happiness: 10 },
+  { id: 'shop', name: 'Corner shop', icon: '🛒', cost: 300, desc: 'Earns from foot traffic.', income: 7 },
+  { id: 'hotdogstand', name: 'Hot dog stand', icon: '🌭', cost: 220, desc: 'A cart with a giant hot dog on top. Cheap and cheerful.', income: 5, food: true },
+  { id: 'burgerjoint', name: 'Burger joint', icon: '🍔', cost: 520, desc: 'A drive-through with a rooftop burger. Big earner near offices.', income: 10, food: true },
+  { id: 'kebabhouse', name: 'Kebab house', icon: '🍢', cost: 480, desc: 'A spinning skewer sign that pulls people in.', income: 9, food: true },
+];
+const BUILDING_BY_ID = Object.fromEntries(BUILDINGS.map((b) => [b.id, b]));
+
+// ---------------------------------------------------------------- textures
+function windowTexture(base, glass, cols, rows) {
+  const c = document.createElement('canvas'); c.width = 256; c.height = 256;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = base; ctx.fillRect(0, 0, 256, 256);
+  const w = 256 / cols, h = 256 / rows;
+  for (let j = 0; j < rows; j++) for (let i = 0; i < cols; i++) {
+    ctx.fillStyle = Math.random() < 0.75 ? glass : '#ffe9a8';
+    ctx.fillRect(i * w + w * 0.2, j * h + h * 0.2, w * 0.6, h * 0.55);
+  }
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  return t;
+}
+function signTexture(text, fg, bg) {
+  const c = document.createElement('canvas'); c.width = 512; c.height = 128;
+  const ctx = c.getContext('2d'); ctx.fillStyle = bg; ctx.fillRect(0, 0, 512, 128);
+  ctx.fillStyle = fg; ctx.font = 'bold 64px "Lilita One", "Arial Black", sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(text, 256, 68);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+}
+
+// ---------------------------------------------------------------- builders
+function tree(x, z, h = 2.2) {
+  const g = new THREE.Group();
+  const trunk = cshadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.16, h * 0.4, 8), cmat(0x6d4c41))); trunk.position.y = h * 0.2; g.add(trunk);
+  const crown = cshadowed(new THREE.Mesh(new THREE.ConeGeometry(0.9, h * 0.8, 9), cmat(0x3f8f4a + Math.floor(Math.random() * 0x001500)))); crown.position.y = h * 0.7; g.add(crown);
+  g.position.set(x, 0, z);
+  return g;
+}
+
+function buildApartments() {
+  const g = new THREE.Group();
+  const floors = 4 + Math.floor(Math.random() * 3);
+  const h = floors * 2.6;
+  const w = 9, d = 8;
+  const walls = cmat(0xf1e1c8, { map: windowTexture('#e9d8bd', '#3c6f9a', 6, floors) });
+  const body = cshadowed(new THREE.Mesh(new THREE.BoxGeometry(w, h, d), walls)); body.position.y = h / 2; g.add(body);
+  const roof = new THREE.Mesh(new THREE.BoxGeometry(w + 0.3, 0.25, d + 0.3), cmat(0x8d6e63)); roof.position.y = h + 0.12; g.add(roof);
+  const tank = cshadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.7, 1.4, 12), cmat(0x9e9e9e))); tank.position.set(-2.5, h + 0.95, 2); g.add(tank);
+  const door = new THREE.Mesh(new THREE.BoxGeometry(1.4, 2.2, 0.1), cmat(0x5d4037)); door.position.set(0, 1.1, d / 2 + 0.05); g.add(door);
+  g.add(tree(-5, 4.5, 2.4)); g.add(tree(5, 4.5, 2.0));
+  return g;
+}
+
+function buildOffice() {
+  const g = new THREE.Group();
+  const h = 18 + Math.random() * 6;
+  const glass = cmat(0x7fb3d5, { metalness: 0.6, roughness: 0.15, map: windowTexture('#5c8db3', '#c7e6ff', 8, 14) });
+  const body = cshadowed(new THREE.Mesh(new THREE.BoxGeometry(8, h, 8), glass)); body.position.y = h / 2; g.add(body);
+  const cap = new THREE.Mesh(new THREE.BoxGeometry(8.4, 0.5, 8.4), cmat(0x37474f)); cap.position.y = h + 0.25; g.add(cap);
+  const antenna = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.1, 3, 6), cmat(0x37474f)); antenna.position.y = h + 2; g.add(antenna);
+  const beacon = new THREE.Mesh(new THREE.SphereGeometry(0.16, 8, 6), new THREE.MeshStandardMaterial({ color: 0xff1744, emissive: 0xff1744, emissiveIntensity: 2 })); beacon.position.y = h + 3.5; g.add(beacon);
+  const lobby = new THREE.Mesh(new THREE.BoxGeometry(10, 3.2, 10), cmat(0x546e7a, { metalness: 0.3, roughness: 0.4 })); lobby.position.y = 1.6; g.add(lobby);
+  return g;
+}
+
+function buildPark() {
+  const g = new THREE.Group();
+  const lawn = new THREE.Mesh(new THREE.PlaneGeometry(BLOCK, BLOCK), cmat(0x6abf4b, { roughness: 1 })); lawn.rotation.x = -Math.PI / 2; lawn.position.y = 0.01; lawn.receiveShadow = true; g.add(lawn);
+  for (let i = 0; i < 9; i++) { const a = (i / 9) * Math.PI * 2; g.add(tree(Math.cos(a) * 4.6, Math.sin(a) * 4.6, 2 + Math.random() * 1.2)); }
+  const basin = cshadowed(new THREE.Mesh(new THREE.CylinderGeometry(1.8, 1.8, 0.5, 20), cmat(0xbdbdbd))); basin.position.y = 0.25; g.add(basin);
+  const water = new THREE.Mesh(new THREE.CylinderGeometry(1.6, 1.6, 0.1, 20), cmat(0x4fc3f7, { roughness: 0.1, metalness: 0.2 })); water.position.y = 0.5; g.add(water);
+  const spout = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.25, 1.2, 10), cmat(0xbdbdbd)); spout.position.y = 1.0; g.add(spout);
+  for (const [x, z, r] of [[-3, 0, Math.PI / 2], [3, 0, -Math.PI / 2], [0, -3, 0], [0, 3, Math.PI]]) {
+    const bench = cshadowed(new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.12, 0.5), cmat(0x8d6e63))); bench.position.set(x, 0.5, z); bench.rotation.y = r; g.add(bench);
+    const back = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.5, 0.08), cmat(0x8d6e63)); back.position.set(x, 0.8, z); back.rotation.y = r; back.translateZ(-0.22); g.add(back);
+  }
+  return g;
+}
+
+function buildShop() {
+  const g = new THREE.Group();
+  const body = cshadowed(new THREE.Mesh(new THREE.BoxGeometry(8, 4, 7), cmat(0xffcc80))); body.position.y = 2; g.add(body);
+  const awning = new THREE.Mesh(new THREE.BoxGeometry(8.4, 0.1, 1.6), cmat(0xc73e3a)); awning.position.set(0, 3.0, 4.2); awning.rotation.x = 0.25; g.add(awning);
+  const win = new THREE.Mesh(new THREE.BoxGeometry(6, 2, 0.1), cmat(0x9fd8ff, { roughness: 0.1, metalness: 0.3 })); win.position.set(0, 1.6, 3.55); g.add(win);
+  const sign = new THREE.Mesh(new THREE.PlaneGeometry(5, 1.2), new THREE.MeshBasicMaterial({ map: signTexture('CORNER SHOP', '#fff5e1', '#2b2f38') })); sign.position.set(0, 3.5, 3.56); g.add(sign);
+  return g;
+}
+
+/** A cart with a giant hot dog on top; `proto` is the fitted Poly hot dog. */
+function buildHotDogStand(proto) {
+  const g = new THREE.Group();
+  const cart = cshadowed(new THREE.Mesh(new THREE.BoxGeometry(3.2, 1.3, 1.6), cmat(0xf5f1e8))); cart.position.y = 0.9; g.add(cart);
+  for (const s of [-1, 1]) { const wheel = cshadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 0.2, 14), cmat(0x2b2f38))); wheel.rotation.z = Math.PI / 2; wheel.position.set(s * 1.3, 0.4, 0.9); g.add(wheel); }
+  const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 2.6, 8), cmat(0x9e9e9e)); pole.position.set(0, 2.5, 0); g.add(pole);
+  const umbrella = cshadowed(new THREE.Mesh(new THREE.ConeGeometry(2.2, 0.9, 12, 1, true), cmat(0xc73e3a, { side: THREE.DoubleSide }))); umbrella.position.y = 3.6; g.add(umbrella);
+  if (proto) { const dog = proto.clone(true); const s = 2.6 / proto.userData.size.z; dog.scale.setScalar(s); dog.position.set(0, 4.15, 0); dog.rotation.y = Math.PI / 2; g.add(dog); g.userData.spin = dog; }
+  const sign = new THREE.Mesh(new THREE.PlaneGeometry(3, 0.8), new THREE.MeshBasicMaterial({ map: signTexture('HOT DOGS', '#fff5e1', '#c73e3a') })); sign.position.set(0, 1.2, 0.81); g.add(sign);
+  g.add(tree(-4.5, -3.5, 2.2)); g.add(tree(4.5, 3.5, 2.4));
+  return g;
+}
+
+/** A drive-through with the jeremy hamburger on the roof. */
+function buildBurgerJoint(proto) {
+  const g = new THREE.Group();
+  const body = cshadowed(new THREE.Mesh(new THREE.BoxGeometry(9, 4.2, 7), cmat(0xffe0b2))); body.position.y = 2.1; g.add(body);
+  const band = new THREE.Mesh(new THREE.BoxGeometry(9.2, 0.7, 7.2), cmat(0xe53935)); band.position.y = 4.0; g.add(band);
+  const win = new THREE.Mesh(new THREE.BoxGeometry(7, 2, 0.1), cmat(0x9fd8ff, { roughness: 0.1, metalness: 0.3 })); win.position.set(0, 1.7, 3.55); g.add(win);
+  if (proto) { const b = proto.clone(true); const s = 3.2 / proto.userData.size.y; b.scale.setScalar(s); b.position.set(0, 4.4, 0); g.add(b); g.userData.spin = b; }
+  const sign = new THREE.Mesh(new THREE.PlaneGeometry(6, 1.2), new THREE.MeshBasicMaterial({ map: signTexture('BURGERS', '#ffd166', '#2b2f38') })); sign.position.set(0, 3.3, 3.56); g.add(sign);
+  return g;
+}
+
+/** A kebab house with a slowly turning skewer sign. */
+function buildKebabHouse(proto) {
+  const g = new THREE.Group();
+  const body = cshadowed(new THREE.Mesh(new THREE.BoxGeometry(8, 5, 7), cmat(0xd7ccc8))); body.position.y = 2.5; g.add(body);
+  const trim = new THREE.Mesh(new THREE.BoxGeometry(8.2, 0.4, 7.2), cmat(0x2e7d32)); trim.position.y = 5.0; g.add(trim);
+  const win = new THREE.Mesh(new THREE.BoxGeometry(5, 2.2, 0.1), cmat(0x9fd8ff, { roughness: 0.1, metalness: 0.3 })); win.position.set(0, 1.8, 3.55); g.add(win);
+  const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 3, 8), cmat(0x9e9e9e)); pole.position.set(0, 6.6, 0); g.add(pole);
+  if (proto) { const k = proto.clone(true); const s = 4.5 / proto.userData.size.y; k.scale.setScalar(s); k.position.set(0, 5.3, 0); g.add(k); g.userData.spin = k; }
+  const sign = new THREE.Mesh(new THREE.PlaneGeometry(5, 1.2), new THREE.MeshBasicMaterial({ map: signTexture('KEBAB HOUSE', '#fff5e1', '#2e7d32') })); sign.position.set(0, 3.9, 3.56); g.add(sign);
+  return g;
+}
+
+function buildFor(id, protos) {
+  switch (id) {
+    case 'apartments': return buildApartments();
+    case 'office': return buildOffice();
+    case 'park': return buildPark();
+    case 'shop': return buildShop();
+    case 'hotdogstand': return buildHotDogStand(protos.hotdog);
+    case 'burgerjoint': return buildBurgerJoint(protos.hamburger);
+    case 'kebabhouse': return buildKebabHouse(protos.kebab);
+    default: return new THREE.Group();
+  }
+}
+
+// ---------------------------------------------------------------- ground
+/** Asphalt streets, pavements and block outlines for the whole city grid. */
+function buildCityGround(scene) {
+  const span = (RADIUS * 2 + 1) * PITCH;
+  const asphalt = new THREE.Mesh(new THREE.PlaneGeometry(span + 20, span + 20), cmat(0x3a3f47, { roughness: 1 }));
+  asphalt.rotation.x = -Math.PI / 2; asphalt.position.y = -0.03; asphalt.receiveShadow = true; scene.add(asphalt);
+  const pavementMat = cmat(0x9aa0a6, { roughness: 1 });
+  const outlineMat = cmat(0xb9c0c6, { roughness: 1 });
+  const lots = new Map();
+  for (let i = -RADIUS; i <= RADIUS; i++) for (let j = -RADIUS; j <= RADIUS; j++) {
+    const cx = i * PITCH, cz = j * PITCH;
+    const pave = new THREE.Mesh(new THREE.PlaneGeometry(BLOCK + 4, BLOCK + 4), pavementMat);
+    pave.rotation.x = -Math.PI / 2; pave.position.set(cx, -0.02, cz); pave.receiveShadow = true; scene.add(pave);
+    if (i === 0 && j === 0) continue; // the diner block
+    const lot = new THREE.Mesh(new THREE.PlaneGeometry(BLOCK, BLOCK), outlineMat);
+    lot.rotation.x = -Math.PI / 2; lot.position.set(cx, -0.01, cz); lot.receiveShadow = true; scene.add(lot);
+    lots.set(`${i},${j}`, lot);
+  }
+  // dashed centre lines along every street
+  const dashMat = cmat(0xf5f1e8);
+  for (let k = -RADIUS; k < RADIUS; k++) {
+    const c = (k + 0.5) * PITCH;
+    for (let s = -span / 2; s < span / 2; s += 3) {
+      const d1 = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 0.16), dashMat); d1.rotation.x = -Math.PI / 2; d1.position.set(s, -0.025, c); scene.add(d1);
+      const d2 = new THREE.Mesh(new THREE.PlaneGeometry(0.16, 1.4), dashMat); d2.rotation.x = -Math.PI / 2; d2.position.set(c, -0.025, s); scene.add(d2);
+    }
+  }
+  // highlight square for placement
+  const hl = new THREE.Mesh(new THREE.PlaneGeometry(BLOCK + 0.6, BLOCK + 0.6), new THREE.MeshBasicMaterial({ color: 0xffd54f, transparent: true, opacity: 0.35, depthWrite: false }));
+  hl.rotation.x = -Math.PI / 2; hl.position.y = 0.02; hl.visible = false; scene.add(hl);
+  return { lots, highlight: hl };
+}
+
+// ---------------------------------------------------------------- city sim
+class City {
+  constructor(game) {
+    this.game = game;
+    this.buildings = new Map(); // "i,j" -> { i, j, type, obj }
+    this.citizens = [];
+    this.ground = buildCityGround(game.scene);
+    this.placing = null; // building id while in build mode
+    this.income = 0;
+  }
+  key(i, j) { return `${i},${j}`; }
+  inGrid(i, j) { return Math.abs(i) <= RADIUS && Math.abs(j) <= RADIUS && !(i === 0 && j === 0); }
+  tileAt(x, z) { return [Math.round(x / PITCH), Math.round(z / PITCH)]; }
+  tileCenter(i, j) { return new THREE.Vector3(i * PITCH, 0, j * PITCH); }
+  canBuild(i, j) { return this.inGrid(i, j) && !this.buildings.has(this.key(i, j)); }
+
+  place(i, j, type, { silent = false } = {}) {
+    if (!this.canBuild(i, j)) return null;
+    const def = BUILDING_BY_ID[type];
+    if (!def) return null;
+    const obj = buildFor(type, this.game.foodProtos());
+    obj.position.copy(this.tileCenter(i, j));
+    this.game.scene.add(obj);
+    const b = { i, j, type, obj };
+    this.buildings.set(this.key(i, j), b);
+    const lot = this.ground.lots.get(this.key(i, j));
+    if (lot) lot.visible = false;
+    if (!silent) this.game.fx.confetti(obj.position.clone().add(new THREE.Vector3(0, 4, 0)), 30);
+    return b;
+  }
+
+  clear() {
+    for (const b of this.buildings.values()) { this.game.scene.remove(b.obj); const lot = this.ground.lots.get(this.key(b.i, b.j)); if (lot) lot.visible = true; }
+    this.buildings.clear();
+    for (const c of this.citizens) this.game.scene.remove(c.rig.obj);
+    this.citizens = [];
+  }
+
+  serialize() { return [...this.buildings.values()].map((b) => ({ i: b.i, j: b.j, type: b.type })); }
+  restore(list) { for (const b of list ?? []) this.place(b.i, b.j, b.type, { silent: true }); }
+
+  stats() {
+    let population = 0, jobs = 0, happiness = 55, income = 0, food = 0;
+    for (const b of this.buildings.values()) {
+      const d = BUILDING_BY_ID[b.type];
+      population += d.population ?? 0; jobs += d.jobs ?? 0; happiness += d.happiness ?? 0; if (d.food) food++;
+    }
+    const diner = this.game.stars() * 5; // a great diner lifts the whole neighbourhood
+    happiness = Math.min(100, happiness + diner);
+    const traffic = 0.5 + population / 60 + jobs / 80;
+    for (const b of this.buildings.values()) {
+      const d = BUILDING_BY_ID[b.type];
+      if (d.income) income += d.income * traffic * (happiness / 100) * (d.food ? 1 + jobs / 100 : 1);
+    }
+    return { population, jobs, happiness: Math.round(happiness), income: Math.round(income * 10) / 10, food, buildings: this.buildings.size };
+  }
+
+  /** Called every sim tick: bank city income, keep citizens walking, spin signs. */
+  update(dt) {
+    const st = this.stats();
+    this.income = st.income;
+    if (st.income > 0) { this.game.s.cash += (st.income / 60) * dt; this.game.s.stats.earnedTotal += (st.income / 60) * dt; this.game.s.stats.cityEarned = (this.game.s.stats.cityEarned ?? 0) + (st.income / 60) * dt; }
+    for (const b of this.buildings.values()) if (b.obj.userData.spin) b.obj.userData.spin.rotation.y += dt * 0.8;
+    this.updateCitizens(dt, st);
+  }
+
+  // citizens walk block to block along the streets; some head for the diner
+  updateCitizens(dt, st) {
+    const wanted = Math.min(14, Math.floor(st.population / 6));
+    if (this.citizens.length < wanted && this.buildings.size && Math.random() < dt * 0.6) this.spawnCitizen();
+    for (const c of this.citizens) {
+      c.rig.update(dt);
+      if (!c.route.length) { this.newRoute(c); continue; }
+      const target = c.route[0];
+      const dx = target.x - c.rig.obj.position.x, dz = target.z - c.rig.obj.position.z;
+      const dist = Math.hypot(dx, dz);
+      if (dist < 0.15) {
+        c.route.shift();
+        if (!c.route.length) {
+          if (c.toDiner) { this.arriveAtDiner(c); continue; }
+          c.rest = 1 + Math.random() * 3;
+        }
+        continue;
+      }
+      if (c.rest > 0) { c.rest -= dt; c.rig.play('idle'); continue; }
+      const step = Math.min(dist, c.speed * dt);
+      c.rig.obj.position.x += (dx / dist) * step; c.rig.obj.position.z += (dz / dist) * step;
+      c.rig.obj.rotation.y = Math.atan2(dx, dz);
+      c.rig.play('walk');
+    }
+    this.citizens = this.citizens.filter((c) => !c.dead);
+  }
+
+  spawnCitizen() {
+    const homes = [...this.buildings.values()].filter((b) => b.type === 'apartments');
+    const from = homes.length ? homes[Math.floor(Math.random() * homes.length)] : [...this.buildings.values()][0];
+    const rig = this.game.makeCitizenRig();
+    if (!rig) return;
+    const start = this.doorstep(from.i, from.j);
+    rig.obj.position.copy(start);
+    const c = { rig, route: [], rest: 0, speed: 1.4 + Math.random() * 0.6, toDiner: false, dead: false, home: from };
+    this.citizens.push(c);
+    this.newRoute(c);
+  }
+
+  /** The pavement point in front of a block (its south edge, on the street side). */
+  doorstep(i, j) { return new THREE.Vector3(i * PITCH + (Math.random() - 0.5) * 6, 0, j * PITCH + BLOCK / 2 + 1.2); }
+
+  /** Manhattan route along the street grid from the citizen to a block's doorstep, or to the diner door. */
+  newRoute(c) {
+    const targets = [...this.buildings.values()].filter((b) => b !== c.home);
+    const goDiner = Math.random() < 0.35;
+    let dest, isDiner = false;
+    if (goDiner) { dest = new THREE.Vector3(-9.0, 0, 8.5); isDiner = true; }
+    else if (targets.length) { const b = targets[Math.floor(Math.random() * targets.length)]; dest = this.doorstep(b.i, b.j); }
+    else dest = this.doorstep(c.home.i, c.home.j);
+    const p = c.rig.obj.position;
+    // walk to the nearest street line (horizontal), then along it, then up/down to the destination
+    const streetZ = (v) => (Math.floor(v / PITCH) + 0.5) * PITCH - 3.5; // the pavement on the north side of the street
+    const z1 = streetZ(p.z), z2 = streetZ(dest.z);
+    const route = [new THREE.Vector3(p.x, 0, z1)];
+    if (Math.abs(z2 - z1) > 0.1) { const xs = (Math.floor(dest.x / PITCH) + 0.5) * PITCH - 3.5; route.push(new THREE.Vector3(xs, 0, z1)); route.push(new THREE.Vector3(xs, 0, z2)); }
+    route.push(new THREE.Vector3(dest.x, 0, z2));
+    route.push(dest);
+    c.route = route; c.toDiner = isDiner;
+  }
+
+  arriveAtDiner(c) {
+    c.dead = true;
+    this.game.scene.remove(c.rig.obj);
+    const guest = this.game.spawnCustomer();
+    guest.obj.position.copy(c.rig.obj.position);
+    guest.fromCity = true;
+  }
+}
+
+
 // ---- src/world.js
 // Static diner scene: floor, walls, counters, tables, decor, and primitive
 // builders for the things that have no model yet (customers, food, the chef).
@@ -55815,9 +56166,6 @@ function buildWorld(scene) {
   floor.rotation.x = -Math.PI / 2;
   floor.receiveShadow = true;
   scene.add(floor);
-  // sidewalk outside the front
-  const walk = new THREE.Mesh(new THREE.PlaneGeometry(26, 5), mat(0x9aa0a6, { roughness: 1 }));
-  walk.rotation.x = -Math.PI / 2; walk.position.set(0, -0.002, 8.5); walk.receiveShadow = true; scene.add(walk);
 
   // walls: back + two sides, front is open to the camera
   const wallMat = mat(0xbfe3d6, { roughness: 0.95 });
@@ -55879,9 +56227,7 @@ function buildWorld(scene) {
   let handles;
   {
   // ---- outside: kerb, road, lamp posts, roof sign, night sky
-  const kerb = new THREE.Mesh(new THREE.BoxGeometry(26, 0.12, 0.3), mat(0x8a9096)); kerb.position.set(0, 0.06, 11.0); kerb.receiveShadow = true; scene.add(kerb);
-  const road = new THREE.Mesh(new THREE.PlaneGeometry(26, 7), mat(0x3a3f47, { roughness: 1 })); road.rotation.x = -Math.PI / 2; road.position.set(0, -0.003, 14.6); road.receiveShadow = true; scene.add(road);
-  for (let i = -5; i <= 5; i++) { const dash = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 0.14), mat(0xf5f1e8)); dash.rotation.x = -Math.PI / 2; dash.position.set(i * 2.4, 0.002, 14.6); scene.add(dash); }
+  // streets, pavements and the other blocks are drawn by the city (src/city.js)
   for (const p of L.streetLamps) {
     const pole = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.07, p.y, 10), mat(0x2b2f38, { metalness: 0.6, roughness: 0.4 })));
     pole.position.set(p.x, p.y / 2, p.z); scene.add(pole);
@@ -56187,6 +56533,7 @@ function textTexture(text, fg, bg, fontPx = 52) {
 
 
 
+
 const $ = (id) => document.getElementById(id);
 const money = (n) => `$${Math.floor(n).toLocaleString()}`;
 const money2 = (n) => `$${n.toFixed(2)}`;
@@ -56351,16 +56698,16 @@ class Game {
     this.renderer = renderer;
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0xf6e7d2);
-    scene.fog = new THREE.Fog(0xf6e7d2, 28, 48);
+    scene.fog = new THREE.Fog(0xf6e7d2, 90, 190);
     this.scene = scene;
-    this.camera = new THREE.PerspectiveCamera(38, 1, 0.1, 120);
+    this.camera = new THREE.PerspectiveCamera(38, 1, 0.1, 260);
     this.camera.position.set(6.5, 8.6, 11.8);
     const controls = new OrbitControls(this.camera, this.canvas);
     controls.target.set(0.3, 0.6, 0.9);
     controls.enableDamping = true;
     controls.dampingFactor = 0.08;
     controls.minDistance = 5;
-    controls.maxDistance = 26;
+    controls.maxDistance = 95;
     controls.maxPolarAngle = 1.3;
     controls.minPolarAngle = 0.25;
     controls.screenSpacePanning = false;
@@ -56371,10 +56718,10 @@ class Game {
     scene.add(this.hemi);
     const sun = new THREE.DirectionalLight(0xfff1dc, 2.0);
     this.sun = sun;
-    sun.position.set(6, 12, 8);
+    sun.position.set(30, 60, 40);
     sun.castShadow = true;
-    sun.shadow.mapSize.set(2048, 2048);
-    Object.assign(sun.shadow.camera, { left: -12, right: 12, top: 12, bottom: -12, near: 1, far: 40 });
+    sun.shadow.mapSize.set(4096, 4096);
+    Object.assign(sun.shadow.camera, { left: -62, right: 62, top: 62, bottom: -62, near: 1, far: 140 });
     sun.shadow.bias = -0.0006;
     scene.add(sun);
     const kitchenLight = new THREE.PointLight(0xdfefff, 14, 8, 2); kitchenLight.position.set(1, 2.6, -3.5); scene.add(kitchenLight);
@@ -56382,6 +56729,7 @@ class Game {
     this.skyDay = new THREE.Color(0xf6e7d2); this.skyDusk = new THREE.Color(0xe8a87c); this.skyNight = new THREE.Color(0x2a3350);
 
     this.world = buildWorld(scene);
+    this.city = new City(this);
     this.buildNav();
     this.chef = buildChefPlaceholder();
     this.chef.position.copy(L.chef);
@@ -56402,7 +56750,6 @@ class Game {
     nav.rect(-12, 12, -8, -6.0, A);
     nav.rect(-8.3, -8.0, -6.2, 6.2, A);   // side walls only span the building; the pavement outside is open
     nav.rect(8.0, 8.3, -6.2, 6.2, A);
-    nav.rect(-12, 12, 10.5, 11, A);      // far edge of the road
     nav.rect(-8.0, -7.8, 6.0, 6.2, A);
     nav.rect(-6.2, 8.0, 6.0, 6.2, A);
     // counters
@@ -56548,11 +56895,13 @@ class Game {
       milestones: [],
       streak: 0,
       questIndex: 0,
+      city: [],
     };
   }
   hasSave() { try { return Boolean(localStorage.getItem(SAVE_KEY)); } catch { return false; } }
   save() {
     if (!this.running) return;
+    this.s.city = this.city.serialize();
     try { localStorage.setItem(SAVE_KEY, JSON.stringify(this.s)); } catch {}
   }
   startNew() {
@@ -56578,6 +56927,9 @@ class Game {
     this.applyUpgradesToWorld();
     this.running = true;
     this.displayCash = this.s.cash;
+    this.city.clear();
+    this.city.restore(this.s.city);
+    this.renderCity();
     this.renderQuest();
     this.paused = false;
     this.spawnTimer = 1.5;
@@ -56700,7 +57052,7 @@ class Game {
   }
 
   // ---------------------------------------------------------- economy helpers
-  arrivalsPerMinute() { return (3.6 + this.stars() * 1.8) * (1 + 0.25 * this.lvl('sign')) * (this.rush > 0 ? 1.9 : 1) * (this.registers.length > 1 ? 1.25 : 1); }
+  arrivalsPerMinute() { const pop = this.city ? this.city.stats().population : 0; return (3.6 + this.stars() * 1.8) * (1 + 0.25 * this.lvl('sign')) * (this.rush > 0 ? 1.9 : 1) * (this.registers.length > 1 ? 1.25 : 1) * (1 + pop / 150); }
   /** Cosy lighting keeps guests patient: +12% per lamp level. */
   patienceMult() { return 1 + 0.12 * this.lvl('lamps'); }
   tipMult() { return 1 + Math.min(this.s.streak ?? 0, 20) / 20; }
@@ -56738,6 +57090,14 @@ class Game {
     }
     agent.moving = false;
     return true;
+  }
+
+  /** A tinted character rig for a city citizen (no diner mask: they walk the streets). */
+  makeCitizenRig() {
+    const protos = [this.models.runner, this.models.cashier].filter(Boolean);
+    if (!protos.length) return null;
+    const tint = new THREE.Color().setHSL(Math.random(), 0.5, 0.78);
+    return new Character(cloneRig(pick(protos)), this.scene, { tint });
   }
 
   /** Everyone who can bump into someone this frame. */
@@ -57479,6 +57839,10 @@ class Game {
     $('hud-stars').textContent = '★'.repeat(Math.round(st)) + '☆'.repeat(5 - Math.round(st));
     $('hud-rep').textContent = `${st.toFixed(1)} · ${this.arrivalsPerMinute().toFixed(1)} guests/min`;
     $('hud-day').textContent = `Day ${this.s.day}`;
+    const cs = this.city.stats();
+    $('hud-pop').textContent = cs.population;
+    if ($('city').classList.contains('open') && (this.cityHudTick = (this.cityHudTick ?? 0) + 1) % 8 === 0) this.renderCity();
+    $('hud-city-income').textContent = `${money(cs.income)}`;
     $('hud-clock').style.width = `${(this.s.dayTime / DAY_LENGTH) * 100}%`;
     $('hud-served').textContent = this.s.stats.servedToday;
     $('hud-queue').textContent = this.customers.filter((c) => c.state === 'queue' || c.state === 'enter').length;
@@ -57496,7 +57860,11 @@ class Game {
     $('btn-pause').addEventListener('click', () => this.togglePause());
     $('btn-mute').addEventListener('click', () => { this.sfx.muted = !this.sfx.muted; $('btn-mute').textContent = this.sfx.muted ? 'Unmute' : 'Mute'; this.ambience.setCrowd(this.customers.length); });
     $('btn-music').addEventListener('click', () => { const on = this.music.toggle(); $('btn-music').classList.toggle('cherry', on); });
-    $('btn-shop').addEventListener('click', () => $('shop').classList.toggle('open'));
+    $('btn-shop').addEventListener('click', () => { $('shop').classList.toggle('open'); $('city').classList.remove('open'); });
+    $('btn-city').addEventListener('click', () => { $('city').classList.toggle('open'); $('shop').classList.remove('open'); this.renderCity(); if (!$('city').classList.contains('open')) this.setPlacing(null); });
+    $('btn-city-close').addEventListener('click', () => { $('city').classList.remove('open'); this.setPlacing(null); });
+    $('city-list').addEventListener('click', (e) => { const b = e.target.closest('.u-buy'); if (b) this.setPlacing(this.city.placing === b.dataset.id ? null : b.dataset.id); });
+    this.canvas.addEventListener('pointermove', (e) => { if (this.city.placing) this.hoverTile(e); });
     $('btn-shop-close').addEventListener('click', () => $('shop').classList.remove('open'));
     $('btn-reset').addEventListener('click', () => {
       if (!confirm('Start over? This wipes the saved diner.')) return;
@@ -57511,7 +57879,9 @@ class Game {
       if (!this.running) return;
       if (e.code === 'Space') { e.preventDefault(); this.collect(true); }
       else if (e.key === 'p' || e.key === 'P') this.togglePause();
-      else if (e.key === 'b' || e.key === 'B') $('shop').classList.toggle('open');
+      else if (e.key === 'b' || e.key === 'B') { $('shop').classList.toggle('open'); $('city').classList.remove('open'); }
+      else if (e.key === 'c' || e.key === 'C') { $('city').classList.toggle('open'); $('shop').classList.remove('open'); this.renderCity(); if (!$('city').classList.contains('open')) this.setPlacing(null); }
+      else if (e.key === 'Escape') this.setPlacing(null);
       else if (e.key === '1' || e.key === '2' || e.key === '3') { this.speed = Number(e.key); this.updateHud(); }
       else if (e.key === 'v' || e.key === 'V') { const order = ['overview', 'register', 'kitchen', 'tables']; this.viewIdx = ((this.viewIdx ?? 0) + 1) % order.length; this.viewPreset(order[this.viewIdx]); }
     });
@@ -57526,6 +57896,7 @@ class Game {
       const rect = this.canvas.getBoundingClientRect();
       this.pointer.set(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1);
       this.raycaster.setFromCamera(this.pointer, this.camera);
+      if (this.city.placing) { this.tryBuild(); return; }
       // staff first: a click on any worker makes them hustle
       const staff = [...this.registers.map((r) => r.cashier).filter(Boolean), ...this.runners, ...(this.chefs ?? []).map((c) => c.rig)];
       const staffHits = this.raycaster.intersectObjects(staff.map((w) => w.obj), true);
@@ -57544,6 +57915,7 @@ class Game {
       register: { pos: [4.5, 3.2, 5.0], target: [2.6, 1.0, 1.0] },
       kitchen: { pos: [1.5, 3.4, 1.8], target: [0.8, 1.0, -3.0] },
       tables: { pos: [8.5, 5.0, 9.0], target: [4.5, 0.6, 4.0] },
+      city: { pos: [34, 48, 52], target: [0, 0, 6] },
     };
     const p = presets[name];
     if (!p) return;
@@ -57558,6 +57930,63 @@ class Game {
     this.camera.position.lerpVectors(tw.from, tw.to, e);
     this.controls.target.lerpVectors(tw.tFrom, tw.tTo, e);
     if (tw.t >= 1) this.camTween = null;
+  }
+
+  // ---------------------------------------------------------- city building
+  groundPoint() {
+    const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+    const p = new THREE.Vector3();
+    return this.raycaster.ray.intersectPlane(plane, p) ? p : null;
+  }
+  setPlacing(id) {
+    this.city.placing = id;
+    this.city.ground.highlight.visible = false;
+    this.canvas.style.cursor = id ? 'crosshair' : '';
+    this.renderCity();
+    if (id) this.toast(`Click an empty block to build ${BUILDING_BY_ID[id].name} (${money(BUILDING_BY_ID[id].cost)}). Esc cancels.`, 'info', 3500);
+  }
+  hoverTile(e) {
+    const rect = this.canvas.getBoundingClientRect();
+    this.pointer.set(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1);
+    this.raycaster.setFromCamera(this.pointer, this.camera);
+    const p = this.groundPoint();
+    const hl = this.city.ground.highlight;
+    if (!p) { hl.visible = false; return; }
+    const [i, j] = this.city.tileAt(p.x, p.z);
+    const ok = this.city.canBuild(i, j);
+    hl.visible = this.city.inGrid(i, j);
+    hl.position.copy(this.city.tileCenter(i, j)); hl.position.y = 0.03;
+    hl.material.color.setHex(ok ? 0xffd54f : 0xe53935);
+  }
+  tryBuild() {
+    const p = this.groundPoint();
+    if (!p) return;
+    const [i, j] = this.city.tileAt(p.x, p.z);
+    const def = BUILDING_BY_ID[this.city.placing];
+    if (!this.city.canBuild(i, j)) { this.sfx.tooEarly(); this.toast('That block is taken. Pick an empty one.', 'warn'); return; }
+    if (this.s.cash < def.cost) { this.sfx.tooEarly(); this.toast(`Need ${money(def.cost)} for ${def.name}.`, 'warn'); return; }
+    this.s.cash -= def.cost;
+    this.city.place(i, j, def.id);
+    this.sfx.levelUp();
+    this.log(`Built ${def.name} for ${money(def.cost)}.`);
+    this.toast(`${def.icon} ${def.name} built.`, 'good');
+    this.setPlacing(null);
+    this.renderCity();
+    this.updateHud();
+    this.save();
+  }
+  renderCity() {
+    const st = this.city.stats();
+    $('city-stats').innerHTML = `<div><b>${st.population}</b><small>Citizens</small></div><div><b>${st.jobs}</b><small>Jobs</small></div><div><b>${st.happiness}%</b><small>Happy</small></div><div><b>${money(st.income)}</b><small>Per min</small></div>`;
+    $('city-list').innerHTML = BUILDINGS.map((b) => {
+      const can = this.s && this.s.cash >= b.cost;
+      const count = [...this.city.buildings.values()].filter((x) => x.type === b.id).length;
+      return `<div class="upgrade ${this.city.placing === b.id ? 'selected' : can ? 'can' : ''}">
+        <div class="u-icon">${b.icon}</div>
+        <div class="u-body"><div class="u-name">${b.name} <span class="u-lvl">${count ? `×${count}` : ''}</span></div><div class="u-desc">${b.desc}</div></div>
+        <button class="u-buy" data-id="${b.id}" ${can ? '' : 'disabled'}>${this.city.placing === b.id ? 'Placing…' : money(b.cost)}</button>
+      </div>`;
+    }).join('');
   }
 
   /** Find the Character that owns a clicked mesh. */
@@ -57616,6 +58045,7 @@ class Game {
       this.updateRunners(dt);
       if (this.lvl('auto') > 0) { this.autoTimer += dt; if (this.autoTimer >= 6 && this.s.till > 0) { this.autoTimer = 0; this.collect(false); } }
       this.updateDay(dt);
+      this.city.update(dt);
       this.updateLighting();
       this.updateCashStack();
       this.updateCoins(dt);

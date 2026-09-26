@@ -8,6 +8,7 @@ import { loadModelFitted, parseGLTF, fitModel, applyClipPose } from './glb-loade
 import { Sfx, Music, Ambience } from './audio.js';
 import { Fx } from './fx.js';
 import { NavGrid, MASK, separate } from './nav.js';
+import { City, BUILDINGS, BUILDING_BY_ID } from './city.js';
 import { L, COUNTER_TOP, buildWorld, buildTable, buildCustomer, buildChefPlaceholder, buildFood, buildCoin, buildBill, buildToque, buildCrown, buildHustleRing } from './world.js';
 import { DAY_LENGTH, START_CASH, START_REPUTATION, QUEUE_PATIENCE, FOOD_PATIENCE, EAT_TIME, SAVE_KEY, MENU, UPGRADES, MILESTONES, QUESTS, CATEGORIES, upgradeCost } from './config.js';
 
@@ -175,16 +176,16 @@ export class Game {
     this.renderer = renderer;
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0xf6e7d2);
-    scene.fog = new THREE.Fog(0xf6e7d2, 28, 48);
+    scene.fog = new THREE.Fog(0xf6e7d2, 90, 190);
     this.scene = scene;
-    this.camera = new THREE.PerspectiveCamera(38, 1, 0.1, 120);
+    this.camera = new THREE.PerspectiveCamera(38, 1, 0.1, 260);
     this.camera.position.set(6.5, 8.6, 11.8);
     const controls = new OrbitControls(this.camera, this.canvas);
     controls.target.set(0.3, 0.6, 0.9);
     controls.enableDamping = true;
     controls.dampingFactor = 0.08;
     controls.minDistance = 5;
-    controls.maxDistance = 26;
+    controls.maxDistance = 95;
     controls.maxPolarAngle = 1.3;
     controls.minPolarAngle = 0.25;
     controls.screenSpacePanning = false;
@@ -195,10 +196,10 @@ export class Game {
     scene.add(this.hemi);
     const sun = new THREE.DirectionalLight(0xfff1dc, 2.0);
     this.sun = sun;
-    sun.position.set(6, 12, 8);
+    sun.position.set(30, 60, 40);
     sun.castShadow = true;
-    sun.shadow.mapSize.set(2048, 2048);
-    Object.assign(sun.shadow.camera, { left: -12, right: 12, top: 12, bottom: -12, near: 1, far: 40 });
+    sun.shadow.mapSize.set(4096, 4096);
+    Object.assign(sun.shadow.camera, { left: -62, right: 62, top: 62, bottom: -62, near: 1, far: 140 });
     sun.shadow.bias = -0.0006;
     scene.add(sun);
     const kitchenLight = new THREE.PointLight(0xdfefff, 14, 8, 2); kitchenLight.position.set(1, 2.6, -3.5); scene.add(kitchenLight);
@@ -206,6 +207,7 @@ export class Game {
     this.skyDay = new THREE.Color(0xf6e7d2); this.skyDusk = new THREE.Color(0xe8a87c); this.skyNight = new THREE.Color(0x2a3350);
 
     this.world = buildWorld(scene);
+    this.city = new City(this);
     this.buildNav();
     this.chef = buildChefPlaceholder();
     this.chef.position.copy(L.chef);
@@ -226,7 +228,6 @@ export class Game {
     nav.rect(-12, 12, -8, -6.0, A);
     nav.rect(-8.3, -8.0, -6.2, 6.2, A);   // side walls only span the building; the pavement outside is open
     nav.rect(8.0, 8.3, -6.2, 6.2, A);
-    nav.rect(-12, 12, 10.5, 11, A);      // far edge of the road
     nav.rect(-8.0, -7.8, 6.0, 6.2, A);
     nav.rect(-6.2, 8.0, 6.0, 6.2, A);
     // counters
@@ -372,11 +373,13 @@ export class Game {
       milestones: [],
       streak: 0,
       questIndex: 0,
+      city: [],
     };
   }
   hasSave() { try { return Boolean(localStorage.getItem(SAVE_KEY)); } catch { return false; } }
   save() {
     if (!this.running) return;
+    this.s.city = this.city.serialize();
     try { localStorage.setItem(SAVE_KEY, JSON.stringify(this.s)); } catch {}
   }
   startNew() {
@@ -402,6 +405,9 @@ export class Game {
     this.applyUpgradesToWorld();
     this.running = true;
     this.displayCash = this.s.cash;
+    this.city.clear();
+    this.city.restore(this.s.city);
+    this.renderCity();
     this.renderQuest();
     this.paused = false;
     this.spawnTimer = 1.5;
@@ -524,7 +530,7 @@ export class Game {
   }
 
   // ---------------------------------------------------------- economy helpers
-  arrivalsPerMinute() { return (3.6 + this.stars() * 1.8) * (1 + 0.25 * this.lvl('sign')) * (this.rush > 0 ? 1.9 : 1) * (this.registers.length > 1 ? 1.25 : 1); }
+  arrivalsPerMinute() { const pop = this.city ? this.city.stats().population : 0; return (3.6 + this.stars() * 1.8) * (1 + 0.25 * this.lvl('sign')) * (this.rush > 0 ? 1.9 : 1) * (this.registers.length > 1 ? 1.25 : 1) * (1 + pop / 150); }
   /** Cosy lighting keeps guests patient: +12% per lamp level. */
   patienceMult() { return 1 + 0.12 * this.lvl('lamps'); }
   tipMult() { return 1 + Math.min(this.s.streak ?? 0, 20) / 20; }
@@ -562,6 +568,14 @@ export class Game {
     }
     agent.moving = false;
     return true;
+  }
+
+  /** A tinted character rig for a city citizen (no diner mask: they walk the streets). */
+  makeCitizenRig() {
+    const protos = [this.models.runner, this.models.cashier].filter(Boolean);
+    if (!protos.length) return null;
+    const tint = new THREE.Color().setHSL(Math.random(), 0.5, 0.78);
+    return new Character(cloneRig(pick(protos)), this.scene, { tint });
   }
 
   /** Everyone who can bump into someone this frame. */
@@ -1303,6 +1317,10 @@ export class Game {
     $('hud-stars').textContent = '★'.repeat(Math.round(st)) + '☆'.repeat(5 - Math.round(st));
     $('hud-rep').textContent = `${st.toFixed(1)} · ${this.arrivalsPerMinute().toFixed(1)} guests/min`;
     $('hud-day').textContent = `Day ${this.s.day}`;
+    const cs = this.city.stats();
+    $('hud-pop').textContent = cs.population;
+    if ($('city').classList.contains('open') && (this.cityHudTick = (this.cityHudTick ?? 0) + 1) % 8 === 0) this.renderCity();
+    $('hud-city-income').textContent = `${money(cs.income)}`;
     $('hud-clock').style.width = `${(this.s.dayTime / DAY_LENGTH) * 100}%`;
     $('hud-served').textContent = this.s.stats.servedToday;
     $('hud-queue').textContent = this.customers.filter((c) => c.state === 'queue' || c.state === 'enter').length;
@@ -1320,7 +1338,11 @@ export class Game {
     $('btn-pause').addEventListener('click', () => this.togglePause());
     $('btn-mute').addEventListener('click', () => { this.sfx.muted = !this.sfx.muted; $('btn-mute').textContent = this.sfx.muted ? 'Unmute' : 'Mute'; this.ambience.setCrowd(this.customers.length); });
     $('btn-music').addEventListener('click', () => { const on = this.music.toggle(); $('btn-music').classList.toggle('cherry', on); });
-    $('btn-shop').addEventListener('click', () => $('shop').classList.toggle('open'));
+    $('btn-shop').addEventListener('click', () => { $('shop').classList.toggle('open'); $('city').classList.remove('open'); });
+    $('btn-city').addEventListener('click', () => { $('city').classList.toggle('open'); $('shop').classList.remove('open'); this.renderCity(); if (!$('city').classList.contains('open')) this.setPlacing(null); });
+    $('btn-city-close').addEventListener('click', () => { $('city').classList.remove('open'); this.setPlacing(null); });
+    $('city-list').addEventListener('click', (e) => { const b = e.target.closest('.u-buy'); if (b) this.setPlacing(this.city.placing === b.dataset.id ? null : b.dataset.id); });
+    this.canvas.addEventListener('pointermove', (e) => { if (this.city.placing) this.hoverTile(e); });
     $('btn-shop-close').addEventListener('click', () => $('shop').classList.remove('open'));
     $('btn-reset').addEventListener('click', () => {
       if (!confirm('Start over? This wipes the saved diner.')) return;
@@ -1335,7 +1357,9 @@ export class Game {
       if (!this.running) return;
       if (e.code === 'Space') { e.preventDefault(); this.collect(true); }
       else if (e.key === 'p' || e.key === 'P') this.togglePause();
-      else if (e.key === 'b' || e.key === 'B') $('shop').classList.toggle('open');
+      else if (e.key === 'b' || e.key === 'B') { $('shop').classList.toggle('open'); $('city').classList.remove('open'); }
+      else if (e.key === 'c' || e.key === 'C') { $('city').classList.toggle('open'); $('shop').classList.remove('open'); this.renderCity(); if (!$('city').classList.contains('open')) this.setPlacing(null); }
+      else if (e.key === 'Escape') this.setPlacing(null);
       else if (e.key === '1' || e.key === '2' || e.key === '3') { this.speed = Number(e.key); this.updateHud(); }
       else if (e.key === 'v' || e.key === 'V') { const order = ['overview', 'register', 'kitchen', 'tables']; this.viewIdx = ((this.viewIdx ?? 0) + 1) % order.length; this.viewPreset(order[this.viewIdx]); }
     });
@@ -1350,6 +1374,7 @@ export class Game {
       const rect = this.canvas.getBoundingClientRect();
       this.pointer.set(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1);
       this.raycaster.setFromCamera(this.pointer, this.camera);
+      if (this.city.placing) { this.tryBuild(); return; }
       // staff first: a click on any worker makes them hustle
       const staff = [...this.registers.map((r) => r.cashier).filter(Boolean), ...this.runners, ...(this.chefs ?? []).map((c) => c.rig)];
       const staffHits = this.raycaster.intersectObjects(staff.map((w) => w.obj), true);
@@ -1368,6 +1393,7 @@ export class Game {
       register: { pos: [4.5, 3.2, 5.0], target: [2.6, 1.0, 1.0] },
       kitchen: { pos: [1.5, 3.4, 1.8], target: [0.8, 1.0, -3.0] },
       tables: { pos: [8.5, 5.0, 9.0], target: [4.5, 0.6, 4.0] },
+      city: { pos: [34, 48, 52], target: [0, 0, 6] },
     };
     const p = presets[name];
     if (!p) return;
@@ -1382,6 +1408,63 @@ export class Game {
     this.camera.position.lerpVectors(tw.from, tw.to, e);
     this.controls.target.lerpVectors(tw.tFrom, tw.tTo, e);
     if (tw.t >= 1) this.camTween = null;
+  }
+
+  // ---------------------------------------------------------- city building
+  groundPoint() {
+    const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+    const p = new THREE.Vector3();
+    return this.raycaster.ray.intersectPlane(plane, p) ? p : null;
+  }
+  setPlacing(id) {
+    this.city.placing = id;
+    this.city.ground.highlight.visible = false;
+    this.canvas.style.cursor = id ? 'crosshair' : '';
+    this.renderCity();
+    if (id) this.toast(`Click an empty block to build ${BUILDING_BY_ID[id].name} (${money(BUILDING_BY_ID[id].cost)}). Esc cancels.`, 'info', 3500);
+  }
+  hoverTile(e) {
+    const rect = this.canvas.getBoundingClientRect();
+    this.pointer.set(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1);
+    this.raycaster.setFromCamera(this.pointer, this.camera);
+    const p = this.groundPoint();
+    const hl = this.city.ground.highlight;
+    if (!p) { hl.visible = false; return; }
+    const [i, j] = this.city.tileAt(p.x, p.z);
+    const ok = this.city.canBuild(i, j);
+    hl.visible = this.city.inGrid(i, j);
+    hl.position.copy(this.city.tileCenter(i, j)); hl.position.y = 0.03;
+    hl.material.color.setHex(ok ? 0xffd54f : 0xe53935);
+  }
+  tryBuild() {
+    const p = this.groundPoint();
+    if (!p) return;
+    const [i, j] = this.city.tileAt(p.x, p.z);
+    const def = BUILDING_BY_ID[this.city.placing];
+    if (!this.city.canBuild(i, j)) { this.sfx.tooEarly(); this.toast('That block is taken. Pick an empty one.', 'warn'); return; }
+    if (this.s.cash < def.cost) { this.sfx.tooEarly(); this.toast(`Need ${money(def.cost)} for ${def.name}.`, 'warn'); return; }
+    this.s.cash -= def.cost;
+    this.city.place(i, j, def.id);
+    this.sfx.levelUp();
+    this.log(`Built ${def.name} for ${money(def.cost)}.`);
+    this.toast(`${def.icon} ${def.name} built.`, 'good');
+    this.setPlacing(null);
+    this.renderCity();
+    this.updateHud();
+    this.save();
+  }
+  renderCity() {
+    const st = this.city.stats();
+    $('city-stats').innerHTML = `<div><b>${st.population}</b><small>Citizens</small></div><div><b>${st.jobs}</b><small>Jobs</small></div><div><b>${st.happiness}%</b><small>Happy</small></div><div><b>${money(st.income)}</b><small>Per min</small></div>`;
+    $('city-list').innerHTML = BUILDINGS.map((b) => {
+      const can = this.s && this.s.cash >= b.cost;
+      const count = [...this.city.buildings.values()].filter((x) => x.type === b.id).length;
+      return `<div class="upgrade ${this.city.placing === b.id ? 'selected' : can ? 'can' : ''}">
+        <div class="u-icon">${b.icon}</div>
+        <div class="u-body"><div class="u-name">${b.name} <span class="u-lvl">${count ? `×${count}` : ''}</span></div><div class="u-desc">${b.desc}</div></div>
+        <button class="u-buy" data-id="${b.id}" ${can ? '' : 'disabled'}>${this.city.placing === b.id ? 'Placing…' : money(b.cost)}</button>
+      </div>`;
+    }).join('');
   }
 
   /** Find the Character that owns a clicked mesh. */
@@ -1440,6 +1523,7 @@ export class Game {
       this.updateRunners(dt);
       if (this.lvl('auto') > 0) { this.autoTimer += dt; if (this.autoTimer >= 6 && this.s.till > 0) { this.autoTimer = 0; this.collect(false); } }
       this.updateDay(dt);
+      this.city.update(dt);
       this.updateLighting();
       this.updateCashStack();
       this.updateCoins(dt);

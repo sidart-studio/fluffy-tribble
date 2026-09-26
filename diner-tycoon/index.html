@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Short Order Tycoon</title>
+<title>Short Order City</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Nunito:wght@500;700;800&display=swap">
 <style>
   :root {
@@ -70,6 +70,17 @@
   .u-bar { height: 4px; background: var(--chrome); border-radius: 2px; overflow: hidden; margin-top: 5px; }
   .u-bar i { display: block; height: 100%; background: var(--good); }
   #hud-streak.hot { color: var(--cherry); }
+  #city { position: absolute; top: calc(80px + env(safe-area-inset-top, 0px)); right: 14px; bottom: calc(80px + env(safe-area-inset-bottom, 0px)); width: 330px; background: var(--panel); border-radius: 16px; box-shadow: var(--shadow); display: none; flex-direction: column; overflow: hidden; }
+  #city.open { display: flex; }
+  #city header { display: flex; justify-content: space-between; align-items: center; padding: 12px 14px 8px; }
+  #city h2 { margin: 0; font-family: var(--font-display); font-size: 22px; letter-spacing: .5px; color: #b0771a; }
+  .city-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; padding: 0 12px 8px; }
+  .city-stats div { background: var(--cream); border-radius: 10px; padding: 6px 8px; text-align: center; }
+  .city-stats b { display: block; font-family: var(--font-display); font-size: 18px; }
+  .city-stats small { font-size: 9px; letter-spacing: .6px; text-transform: uppercase; color: var(--ink-soft); font-weight: 800; }
+  #city-list { overflow-y: auto; padding: 0 10px 10px; display: flex; flex-direction: column; gap: 8px; }
+  .upgrade.selected { border-color: var(--gold); background: #fff3c4; }
+  .city-hint { padding: 8px 14px 12px; font-size: 12px; color: var(--ink-soft); border-top: 1px dashed var(--chrome); }
   #shop { position: absolute; top: calc(80px + env(safe-area-inset-top, 0px)); right: 14px; bottom: calc(80px + env(safe-area-inset-bottom, 0px)); width: 330px; background: var(--panel); border-radius: 16px; box-shadow: var(--shadow); display: none; flex-direction: column; overflow: hidden; }
   #shop.open { display: flex; }
   #shop header { display: flex; justify-content: space-between; align-items: center; padding: 12px 14px 8px; }
@@ -122,7 +133,7 @@
     .topbar { flex-wrap: wrap; }
     .ticket { gap: 10px; padding: 8px 10px; } .stat { min-width: 50px; } .stat b { font-size: 19px; }
     .clock { width: 80px; }
-    #shop { left: 10px; right: 10px; width: auto; top: auto; bottom: calc(76px + env(safe-area-inset-bottom, 0px)); max-height: 60vh; }
+    #shop, #city { left: 10px; right: 10px; width: auto; top: auto; bottom: calc(76px + env(safe-area-inset-bottom, 0px)); max-height: 60vh; }
     .views { top: calc(112px + env(safe-area-inset-top, 0px)); }
     #quest { width: auto; left: 10px; right: 10px; top: calc(150px + env(safe-area-inset-top, 0px)); padding: 6px 10px; }
     #quest-text { font-size: 13px; }
@@ -149,8 +160,11 @@
       <div class="stat"><b id="hud-cash" class="money">$0</b><small>In the bank</small></div>
       <div class="stat"><b id="hud-stars">☆☆☆☆☆</b><small id="hud-rep">reputation</small></div>
       <div class="stat clock"><b id="hud-day">Day 1</b><div class="bar"><i id="hud-clock"></i></div></div>
+      <div class="stat"><b id="hud-pop">0</b><small>Citizens</small></div>
+      <div class="stat"><b id="hud-city-income" class="money">$0</b><small>City / min</small></div>
     </div>
     <div class="controls">
+      <button id="btn-city" class="btn gold">City (C)</button>
       <button id="btn-shop" class="btn cherry">Shop (B)</button>
       <button id="btn-music" class="btn" title="Music on/off">♪ Music</button>
       <button id="btn-speed" class="btn" title="Game speed (1/2/3)">1×</button>
@@ -168,6 +182,7 @@
     <button class="btn small" data-view="register">Register</button>
     <button class="btn small" data-view="kitchen">Kitchen</button>
     <button class="btn small" data-view="tables">Tables</button>
+    <button class="btn small" data-view="city">City</button>
   </div>
   <div id="summary" hidden>
     <h3 id="summary-title">Day closed</h3>
@@ -187,6 +202,12 @@
     </div>
   </div>
 
+  <aside id="city">
+    <header><h2>Build the city</h2><button id="btn-city-close" class="btn">Close</button></header>
+    <div class="city-stats" id="city-stats"></div>
+    <div id="city-list"></div>
+    <div class="city-hint">Pick a building, then click an empty block. Esc cancels.</div>
+  </aside>
   <aside id="shop">
     <header><h2>Upgrades</h2><button id="btn-shop-close" class="btn">Close</button></header>
     <div id="shop-list"></div>
@@ -203,13 +224,14 @@
 
 <div id="overlay-title" class="overlay show">
   <div class="card">
-    <h1>Short Order <span>TYCOON</span></h1>
-    <p class="tag">A diner with one register, one stove, and a line out the door.</p>
+    <h1>Short Order <span>CITY</span></h1>
+    <p class="tag">Run the diner. Build the city around it. Grow both.</p>
     <ul class="howto">
       <li><b>Guests</b> queue at the register. Your cashier takes the order and the money.</li>
       <li><b>The kitchen</b> cooks it. A runner carries the plate to the pickup counter.</li>
       <li><b>Cash</b> piles up on the register. Click it (or press Space) to bank it.</li>
       <li><b>Spend</b> in the Shop: runners, stoves, tables, lamps, a second register, a bigger menu.</li>
+      <li><b>Build</b> the city with the City button: apartments bring citizens, offices bring lunch crowds, parks make everyone happier, and your own food businesses earn every minute.</li>
       <li><b>Hustle:</b> click any staff member for a burst of speed. Click a waiting guest to calm them down.</li>
       <li>Follow the <b>quests</b> for cash rewards. Serve guests in a row to build a tip streak. Watch for the golden food critic.</li>
     </ul>

@@ -52,6 +52,7 @@ const modules = [
   'src/fx.js',
   'src/config.js',
   'src/nav.js',
+  'src/city.js',
   'src/world.js',
   'src/game.js',
 ];
