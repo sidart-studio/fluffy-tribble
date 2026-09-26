@@ -40,6 +40,8 @@ export class Fx {
     return sp;
   }
   steam(pos) { for (let i = 0; i < 2; i++) this.spawn('puff', pos.clone().add(new THREE.Vector3((Math.random() - 0.5) * 0.3, 0, (Math.random() - 0.5) * 0.3)), { vel: new THREE.Vector3((Math.random() - 0.5) * 0.2, 0.5 + Math.random() * 0.3, 0), life: 1.6, size: 0.18, grow: 0.35, color: 0xf0f0f0 }); }
+  /** Big slow chimney smoke for factories and power plants. */
+  smoke(pos) { this.spawn('puff', pos.clone().add(new THREE.Vector3((Math.random() - 0.5) * 0.4, 0, (Math.random() - 0.5) * 0.4)), { vel: new THREE.Vector3(0.4 + Math.random() * 0.3, 1.2 + Math.random() * 0.5, 0.2), life: 3.5, size: 0.9, grow: 0.9, color: 0xb0b0b0 }); }
   sparkle(pos, n = 6) { for (let i = 0; i < n; i++) this.spawn('spark', pos.clone().add(new THREE.Vector3((Math.random() - 0.5) * 0.4, Math.random() * 0.3, (Math.random() - 0.5) * 0.4)), { vel: new THREE.Vector3((Math.random() - 0.5) * 0.8, 0.6 + Math.random() * 0.8, (Math.random() - 0.5) * 0.8), life: 0.7, size: 0.12 + Math.random() * 0.12, gravity: 1.5 }); }
   heart(pos) { this.spawn('heart', pos.clone().add(new THREE.Vector3(0, 2.0, 0)), { vel: new THREE.Vector3((Math.random() - 0.5) * 0.3, 0.9, 0), life: 1.3, size: 0.3, grow: 0.2 }); }
   hearts(pos, n = 3) { for (let i = 0; i < n; i++) setTimeout(() => this.heart(pos), i * 120); }

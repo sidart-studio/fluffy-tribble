@@ -1,21 +1,25 @@
 # Short Order City
 
-A 3D kebab diner tycoon built with Three.js around the models in `models/`:
-the Poly by Google cash register and kebab, J-Toastie's Food Worker (the
-cashier), Retail Worker (the runner) and Cash Stack, Kay Lousberg's kitchen
-cabinet and chef's knife, sirkitree's kitchen, Ali12's hanging light, which
-lights the counters and every dining table, the Poly hot dog and jeremy's
-hamburger as dishes on the menu. Every person in the game,
-guests and chef included, is one of the two J-Toastie character rigs with a
-different tint; every skewer on the menu is the Poly kebab with its meat
-recolored per dish.
+A 3D city tycoon built with Three.js. You start as mayor of a crossroads with
+one diner on it and build the city around it: homes, workplaces, food
+businesses, parks, schools, power plants, all the way to a metropolis. People
+move in when there are homes, jobs and food, pay tax every minute, and leave
+again when they are hungry, unemployed or breathing factory smoke.
 
-Guests queue at the register. The cashier takes their order and their money,
-which piles up as a cash stack on the register until you bank it. The kitchen
-cooks, the runner carries plates to the pickup counter, guests eat in at
-tables or take it to go, and happy guests raise your star rating, which
-brings in more guests. Spend the cash on staff, kitchen gear, tables, a neon
-sign, and a bigger menu.
+The models in `models/` are all in the game: the Poly by Google cash register
+and kebab, J-Toastie's Food Worker (the cashier and the chefs), Retail Worker
+(the runners) and Cash Stack, Kay Lousberg's kitchen cabinet and chef's knife,
+sirkitree's kitchen, Ali12's hanging light, the Poly hot dog and jeremy's
+hamburger. Every person in the city, citizens and diner guests included, is
+one of the two J-Toastie character rigs with a different tint; the hot dog,
+hamburger and kebab sit on the roofs of the city's food businesses and on the
+diner's menu.
+
+The diner at the centre is a fully simulated business of its own: guests
+queue at the register, the cashier takes their money, the kitchen cooks, a
+runner carries plates to the pickup counter, and the cash stack on the
+register grows until you bank it. Citizens walk over from the city to eat
+there, so a bigger city means a busier diner.
 
 ## Play it
 
@@ -33,14 +37,40 @@ on the title screen.
 
 | Action | Input |
 | ------ | ----- |
-| Bank the cash on the register | Click the register, the Collect button, or Space |
-| Open the shop | Shop button or B |
+| Build | Pick a category in the bottom bar, pick a building, click an empty block |
+| Inspect, upgrade or demolish a building | Click it |
+| Bulldoze | Bulldoze button or X, then click a building |
+| Buy the next ring of land | Buy land button |
+| City view | City button or C |
+| Diner: bank the register | Zoom in, then click the register, the Collect button, or Space |
+| Diner upgrades | Diner upgrades button or B |
 | Game speed | 1× / 2× / 3× button, or keys 1, 2, 3 |
 | Pause | P |
 | Look around | Drag to orbit, wheel to zoom, right-drag to pan |
-| Camera views | Overview / Register / Kitchen / Tables buttons, or V to cycle |
+| Camera views | City / Diner / Register / Kitchen buttons, or V to cycle |
 
-## Upgrades
+## The city
+
+The map is a 9x9 grid of blocks with the diner in the middle. You start with
+the 3x3 around it and buy three more rings of land as you grow. The street
+grid powers 8 buildings for free; after that you need power plants or the
+newest buildings go dark and do nothing.
+
+| Building | Effect |
+| -------- | ------ |
+| Family houses / Apartments / Residential tower | Homes for 6 / 24 / 90 people |
+| Workshop / Office block / Factory | 12 / 40 / 70 jobs paying wages into the treasury; the factory costs happiness |
+| Hot dog stand / Kebab house / Burger joint | Food businesses that earn per customer; the uploaded hot dog, kebab and hamburger are their signs |
+| Corner shop / Shopping mall | Shops that earn from foot traffic; the mall also employs 25 |
+| City park / School / Hospital / Stadium | Happiness, plus faster move-ins (school, hospital) and a food sales boost (stadium) |
+| Power plant | Powers 12 more buildings |
+
+Every building can be upgraded to level 3 (1.5x and 2x its numbers).
+Ranks unlock buildings: Village at 25 people, Town at 100, City at 300,
+Metropolis at 800. Income per minute is tax (per citizen, scaled by
+happiness) plus wages plus sales, and the day report shows the split.
+
+## Diner upgrades
 
 | Upgrade | Effect |
 | ------- | ------ |
@@ -58,34 +88,16 @@ on the title screen.
 | Expand the menu | Unlocks veggie skewers, shakes and smoothies, then lamb and the mixed platter, then the Chef's Special |
 | Cash drawer | The cashier banks the register automatically |
 
-## The city
-
-The diner sits on the centre block of a 5×5 city grid. Press **C** (or the
-City button), pick a building, and click any empty block:
-
-| Building | Effect |
-| -------- | ------ |
-| Apartments | +12 citizens. Population raises walk-ins at the diner and foot traffic everywhere |
-| Office block | +20 jobs. Workers double what food businesses earn |
-| City park | +10% happiness, which multiplies all city income |
-| Corner shop | Earns from foot traffic |
-| Hot dog stand | A cart with your Poly hot dog on top |
-| Burger joint | A drive-through with jeremy's hamburger on the roof |
-| Kebab house | A spinning Poly kebab sign |
-
-City income is banked straight into your cash every second and shown in the
-top bar. Citizens walk the streets between buildings, and about a third of
-their trips end at the diner's door, where they join the queue as guests. A
-better-rated diner makes the whole city happier. The city is saved with the
-rest of your game.
-
 ## Playing, not just watching
 
 - **Hustle:** click any staff member (cashiers, runners, the chef) for six
   seconds of double speed. They need a breather before the next one.
 - **Calm a guest:** click a waiting guest once to top up their patience.
-- **Quests:** the panel under your cash shows the current goal and its cash
-  reward. Eighteen quests take you from "serve five guests" to five stars.
+- **Quests:** the panel under your treasury shows the current goal and its
+  cash reward. Twenty-seven quests take you from your first homes to a
+  metropolis with a five-star diner.
+- **City events:** street food festivals, tourist coaches and government
+  grants come around once your town has people in it.
 - **Streak:** every happy guest in a row raises the tip multiplier, up to
   double at twenty. A walkout resets it.
 - **Food critics:** a golden guest with a crown appears now and then. Serve
@@ -155,7 +167,7 @@ src/game.js         simulation: guests, cashier, kitchen, runners, shop, save/lo
 src/world.js        diner scene builders and primitive placeholders
 src/config.js       menu, upgrade costs, quests, milestones, timing
 src/nav.js          walkability grid, A* pathfinding, crowd separation
-src/city.js         city grid, buildings, city economy, street-walking citizens
+src/city.js         city grid, land rings, buildings, population/economy sim, citizens and cars
 src/fx.js           sprite particles (steam, sparkles, hearts, confetti)
 src/glb-loader.js   glTF/GLB loader with skins and animations for Three.js
 src/audio.js        synthesized sound effects

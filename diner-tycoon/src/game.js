@@ -8,7 +8,7 @@ import { loadModelFitted, parseGLTF, fitModel, applyClipPose } from './glb-loade
 import { Sfx, Music, Ambience } from './audio.js';
 import { Fx } from './fx.js';
 import { NavGrid, MASK, separate } from './nav.js';
-import { City, BUILDINGS, BUILDING_BY_ID } from './city.js';
+import { City, BUILDINGS, BUILDING_BY_ID, CITY_CATEGORIES, RANKS, LEVEL_MULT, MAX_LEVEL, levelUpCost, PITCH, RADIUS } from './city.js';
 import { L, COUNTER_TOP, buildWorld, buildTable, buildCustomer, buildChefPlaceholder, buildFood, buildCoin, buildBill, buildToque, buildCrown, buildHustleRing } from './world.js';
 import { DAY_LENGTH, START_CASH, START_REPUTATION, QUEUE_PATIENCE, FOOD_PATIENCE, EAT_TIME, SAVE_KEY, MENU, UPGRADES, MILESTONES, QUESTS, CATEGORIES, upgradeCost } from './config.js';
 
@@ -176,16 +176,16 @@ export class Game {
     this.renderer = renderer;
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0xf6e7d2);
-    scene.fog = new THREE.Fog(0xf6e7d2, 90, 190);
+    scene.fog = new THREE.Fog(0xf6e7d2, 150, 380);
     this.scene = scene;
-    this.camera = new THREE.PerspectiveCamera(38, 1, 0.1, 260);
-    this.camera.position.set(6.5, 8.6, 11.8);
+    this.camera = new THREE.PerspectiveCamera(38, 1, 0.1, 600);
+    this.camera.position.set(40, 60, 70);
     const controls = new OrbitControls(this.camera, this.canvas);
-    controls.target.set(0.3, 0.6, 0.9);
+    controls.target.set(0, 0, 8);
     controls.enableDamping = true;
     controls.dampingFactor = 0.08;
     controls.minDistance = 5;
-    controls.maxDistance = 95;
+    controls.maxDistance = 260;
     controls.maxPolarAngle = 1.3;
     controls.minPolarAngle = 0.25;
     controls.screenSpacePanning = false;
@@ -196,10 +196,10 @@ export class Game {
     scene.add(this.hemi);
     const sun = new THREE.DirectionalLight(0xfff1dc, 2.0);
     this.sun = sun;
-    sun.position.set(30, 60, 40);
+    sun.position.set(60, 110, 80);
     sun.castShadow = true;
     sun.shadow.mapSize.set(4096, 4096);
-    Object.assign(sun.shadow.camera, { left: -62, right: 62, top: 62, bottom: -62, near: 1, far: 140 });
+    Object.assign(sun.shadow.camera, { left: -115, right: 115, top: 115, bottom: -115, near: 1, far: 220 });
     sun.shadow.bias = -0.0006;
     scene.add(sun);
     const kitchenLight = new THREE.PointLight(0xdfefff, 14, 8, 2); kitchenLight.position.set(1, 2.6, -3.5); scene.add(kitchenLight);
@@ -373,7 +373,7 @@ export class Game {
       milestones: [],
       streak: 0,
       questIndex: 0,
-      city: [],
+      city: null,
     };
   }
   hasSave() { try { return Boolean(localStorage.getItem(SAVE_KEY)); } catch { return false; } }
@@ -384,15 +384,15 @@ export class Game {
   }
   startNew() {
     this.s = this.freshState();
-    this.tutorial = { paid: false, shop: false, collected: false };
+    this.tutorial = { paid: false, shop: false, collected: false, homes: false };
     this.begin();
-    this.toast('Welcome to your diner. Guests are on their way.', 'info', 3500);
+    this.toast('Welcome, mayor. Pick Homes in the build bar and click an empty block to start your city.', 'info', 6000);
   }
   continueGame() {
     let s = null;
     try { s = JSON.parse(localStorage.getItem(SAVE_KEY)); } catch {}
     this.s = s ? { ...this.freshState(), ...s, stats: { ...this.freshState().stats, ...(s.stats ?? {}) }, upgrades: { ...this.freshState().upgrades, ...(s.upgrades ?? {}) } } : this.freshState();
-    this.tutorial = { paid: true, shop: true, collected: true };
+    this.tutorial = { paid: true, shop: true, collected: true, homes: true };
     this.begin();
     this.toast(`Welcome back. Day ${this.s.day}, ${money(this.s.cash)} in the bank.`, 'info', 3000);
   }
@@ -407,7 +407,12 @@ export class Game {
     this.displayCash = this.s.cash;
     this.city.clear();
     this.city.restore(this.s.city);
-    this.renderCity();
+    this.city.lastRank = this.city.rank().id;
+    this.buildTab = this.buildTab ?? 'homes';
+    this.renderBuild();
+    this.selectBuilding(null);
+    this.viewPreset('city');
+    this.camera.position.set(40, 60, 70); this.controls.target.set(0, 0, 8); this.camTween = null;
     this.renderQuest();
     this.paused = false;
     this.spawnTimer = 1.5;
@@ -530,7 +535,7 @@ export class Game {
   }
 
   // ---------------------------------------------------------- economy helpers
-  arrivalsPerMinute() { const pop = this.city ? this.city.stats().population : 0; return (3.6 + this.stars() * 1.8) * (1 + 0.25 * this.lvl('sign')) * (this.rush > 0 ? 1.9 : 1) * (this.registers.length > 1 ? 1.25 : 1) * (1 + pop / 150); }
+  arrivalsPerMinute() { const pop = this.city ? this.city.stats().population : 0; return (3.0 + this.stars() * 1.6) * (1 + 0.25 * this.lvl('sign')) * (this.rush > 0 ? 1.9 : 1) * (this.registers.length > 1 ? 1.25 : 1) * Math.min(2.2, 1 + pop / 250); }
   /** Cosy lighting keeps guests patient: +12% per lamp level. */
   patienceMult() { return 1 + 0.12 * this.lvl('lamps'); }
   tipMult() { return 1 + Math.min(this.s.streak ?? 0, 20) / 20; }
@@ -1070,7 +1075,7 @@ export class Game {
     this.spawnCoins(Math.min(18, 4 + Math.floor(amount / 8)));
     this.fx.sparkle(L.cashStack.clone().add(new THREE.Vector3(0, 0.3, 0)), 10);
     this.float(L.cashStack.clone().add(new THREE.Vector3(0, 0.8, 0)), `+${money2(amount)} banked`, 'gold');
-    if (fromClick && !this.tutorial.collected) { this.tutorial.collected = true; this.toast('Banked. Press B or the Shop button: a Dining table is $100, runners and stoves are there too.', 'info', 5500); }
+    if (fromClick && !this.tutorial.collected) { this.tutorial.collected = true; this.toast('Banked. Diner upgrades (B) buys tables, runners and stoves for the diner.', 'info', 5500); }
     this.updateHud();
     this.renderShop();
   }
@@ -1207,13 +1212,13 @@ export class Game {
     if (this.s.dayTime >= DAY_LENGTH) {
       this.s.dayTime -= DAY_LENGTH;
       const st = this.s.stats;
-      this.log(`Day ${this.s.day} closed: ${money(st.earnedToday)} earned, ${st.servedToday} served, ${st.angryToday} walked out.`);
-      this.toast(`Day ${this.s.day} closed · ${money(st.earnedToday)} · ${st.servedToday} guests`, 'info', 4500);
+      this.log(`Day ${this.s.day}: diner ${money(st.earnedToday)}, city ${money(st.cityToday ?? 0)}, population ${this.city.stats().population}.`);
+      this.toast(`Day ${this.s.day} report · city ${money(st.cityToday ?? 0)} · diner ${money(st.earnedToday)}`, 'info', 4500);
       this.showDaySummary(st);
       this.fx.confetti(new THREE.Vector3(0, 2.5, 2), 50);
       this.s.day += 1;
       this.rushAnnounced = false;
-      st.tipsToday = 0; st.earnedToday = 0; st.servedToday = 0; st.angryToday = 0;
+      st.tipsToday = 0; st.earnedToday = 0; st.servedToday = 0; st.angryToday = 0; st.cityToday = 0;
       this.sfx.bell();
       this.save();
     }
@@ -1222,14 +1227,19 @@ export class Game {
   showDaySummary(st) {
     const el = $('summary');
     const stars = this.stars();
-    $('summary-title').textContent = `Day ${this.s.day} closed`;
+    const cs = this.city.stats();
+    $('summary-title').textContent = `Day ${this.s.day} report`;
     $('summary-body').innerHTML = `
       <li><span>Sales</span><b>${money2(st.earnedToday - (st.tipsToday ?? 0))}</b></li>
       <li><span>Tips</span><b>${money2(st.tipsToday ?? 0)}</b></li>
       <li><span>Guests served</span><b>${st.servedToday}</b></li>
       <li><span>Walked out</span><b class="${st.angryToday ? 'bad' : ''}">${st.angryToday}</b></li>
       <li><span>Rating</span><b>${'★'.repeat(Math.round(stars))}${'☆'.repeat(5 - Math.round(stars))} ${stars.toFixed(1)}</b></li>
-      <li><span>In the bank</span><b>${money(this.s.cash)}</b></li>`;
+      <li class="head">City</li>
+      <li><span>Population</span><b>${cs.population} · ${this.city.rank().name}</b></li>
+      <li><span>City income today</span><b>${money(st.cityToday ?? 0)}</b></li>
+      <li><span>Happiness</span><b class="${cs.happiness < 40 ? 'bad' : ''}">${cs.happiness}%</b></li>
+      <li><span>Treasury</span><b>${money(this.s.cash)}</b></li>`;
     el.hidden = false;
     clearTimeout(this.summaryTimer);
     this.summaryTimer = setTimeout(() => { el.hidden = true; }, 7000);
@@ -1300,7 +1310,7 @@ export class Game {
     const line = document.createElement('div');
     line.textContent = msg;
     el.prepend(line);
-    while (el.children.length > 6) el.lastChild.remove();
+    while (el.children.length > 4) el.lastChild.remove();
   }
 
   // ---------------------------------------------------------- HUD
@@ -1315,19 +1325,32 @@ export class Game {
     $('btn-collect').classList.toggle('hot', this.s.till >= 40);
     const st = this.stars();
     $('hud-stars').textContent = '★'.repeat(Math.round(st)) + '☆'.repeat(5 - Math.round(st));
-    $('hud-rep').textContent = `${st.toFixed(1)} · ${this.arrivalsPerMinute().toFixed(1)} guests/min`;
+    $('hud-rep').textContent = `${st.toFixed(1)} stars · ${this.arrivalsPerMinute().toFixed(1)}/min`;
     $('hud-day').textContent = `Day ${this.s.day}`;
     const cs = this.city.stats();
-    $('hud-pop').textContent = cs.population;
-    if ($('city').classList.contains('open') && (this.cityHudTick = (this.cityHudTick ?? 0) + 1) % 8 === 0) this.renderCity();
-    $('hud-city-income').textContent = `${money(cs.income)}`;
+    $('hud-pop').textContent = cs.population.toLocaleString();
+    const nr = this.city.nextRank();
+    $('hud-rank').textContent = nr ? `${this.city.rank().name} · next at ${nr.pop}` : this.city.rank().name;
+    $('hud-happy').textContent = `${cs.happiness}%`;
+    $('hud-happy').className = cs.happiness < 40 ? 'bad' : cs.happiness < 60 ? 'warn' : '';
+    $('hud-income').textContent = `${money(cs.income + this.dinerRate())}`;
+    $('hud-power').textContent = `${cs.powerUsed}/${cs.power}`;
+    $('hud-power').className = cs.powerUsed > cs.power ? 'bad' : cs.powerUsed >= cs.power ? 'warn' : '';
+    $('m-homes').style.width = `${Math.round(cs.wantHomes * 100)}%`; $('m-homes-v').textContent = `${cs.population}/${Math.round(cs.housing)}`;
+    $('m-jobs').style.width = `${Math.round(cs.wantJobs * 100)}%`; $('m-jobs-v').textContent = `${cs.employed}/${cs.jobs}`;
+    $('m-food').style.width = `${Math.round(cs.wantFood * 100)}%`; $('m-food-v').textContent = `${Math.round(cs.foodDemand)}/${Math.round(cs.foodCap)}`;
+    $('demand-tip').textContent = this.demandTip(cs);
+    if ((this.buildTick = (this.buildTick ?? 0) + 1) % 6 === 0) { this.renderBuild(); if (this.selected) this.renderInfo(); }
+    const near = this.camera.position.distanceTo(new THREE.Vector3(0, 0, 1)) < 34;
+    $('hud').classList.toggle('near-diner', near);
+    for (const b of document.querySelectorAll('[data-view]')) b.classList.toggle('on', b.dataset.view === this.currentView);
     $('hud-clock').style.width = `${(this.s.dayTime / DAY_LENGTH) * 100}%`;
     $('hud-served').textContent = this.s.stats.servedToday;
     $('hud-queue').textContent = this.customers.filter((c) => c.state === 'queue' || c.state === 'enter').length;
     $('hud-kitchen').textContent = `${this.orders.filter((o) => o.state === 'cooking' || o.state === 'prepping').length}/${this.stoves()}`;
     $('hud-waiting').textContent = this.orders.length;
     $('btn-speed').textContent = `${this.speed}×`;
-    if (!this.tutorial.shop && this.s.cash >= 100) { this.tutorial.shop = true; this.toast('You can afford a Dining table. Open the Shop (B) → Dining table.', 'info', 5000); }
+    if (!this.tutorial.shop && this.s.cash >= 260 && this.city.buildings.size >= 2) { this.tutorial.shop = true; this.toast('Tip: the diner earns too. Zoom in on it (Diner view) and buy upgrades with B.', 'info', 5000); }
   }
 
   bindUI() {
@@ -1338,10 +1361,18 @@ export class Game {
     $('btn-pause').addEventListener('click', () => this.togglePause());
     $('btn-mute').addEventListener('click', () => { this.sfx.muted = !this.sfx.muted; $('btn-mute').textContent = this.sfx.muted ? 'Unmute' : 'Mute'; this.ambience.setCrowd(this.customers.length); });
     $('btn-music').addEventListener('click', () => { const on = this.music.toggle(); $('btn-music').classList.toggle('cherry', on); });
-    $('btn-shop').addEventListener('click', () => { $('shop').classList.toggle('open'); $('city').classList.remove('open'); });
-    $('btn-city').addEventListener('click', () => { $('city').classList.toggle('open'); $('shop').classList.remove('open'); this.renderCity(); if (!$('city').classList.contains('open')) this.setPlacing(null); });
-    $('btn-city-close').addEventListener('click', () => { $('city').classList.remove('open'); this.setPlacing(null); });
-    $('city-list').addEventListener('click', (e) => { const b = e.target.closest('.u-buy'); if (b) this.setPlacing(this.city.placing === b.dataset.id ? null : b.dataset.id); });
+    $('btn-shop').addEventListener('click', () => { $('shop').classList.toggle('open'); });
+    $('tabs').addEventListener('click', (e) => {
+      const t = e.target.closest('.tab'); if (!t) return;
+      const id = t.dataset.tab;
+      if (id === 'bulldoze') { this.setPlacing(this.city.placing === 'bulldoze' ? null : 'bulldoze'); return; }
+      if (id === 'land') { this.buyLand(); return; }
+      this.buildTab = this.buildTab === id ? null : id; this.setPlacing(null); this.renderBuild();
+    });
+    $('cards').addEventListener('click', (e) => { const b = e.target.closest('.card-b'); if (b && !b.classList.contains('locked')) this.setPlacing(this.city.placing === b.dataset.id ? null : b.dataset.id); });
+    $('btn-upgrade').addEventListener('click', () => this.upgradeSelected());
+    $('btn-demolish').addEventListener('click', () => this.demolishSelected());
+    $('btn-info-close').addEventListener('click', () => this.selectBuilding(null));
     this.canvas.addEventListener('pointermove', (e) => { if (this.city.placing) this.hoverTile(e); });
     $('btn-shop-close').addEventListener('click', () => $('shop').classList.remove('open'));
     $('btn-reset').addEventListener('click', () => {
@@ -1357,11 +1388,12 @@ export class Game {
       if (!this.running) return;
       if (e.code === 'Space') { e.preventDefault(); this.collect(true); }
       else if (e.key === 'p' || e.key === 'P') this.togglePause();
-      else if (e.key === 'b' || e.key === 'B') { $('shop').classList.toggle('open'); $('city').classList.remove('open'); }
-      else if (e.key === 'c' || e.key === 'C') { $('city').classList.toggle('open'); $('shop').classList.remove('open'); this.renderCity(); if (!$('city').classList.contains('open')) this.setPlacing(null); }
-      else if (e.key === 'Escape') this.setPlacing(null);
+      else if (e.key === 'b' || e.key === 'B') { $('shop').classList.toggle('open'); }
+      else if (e.key === 'c' || e.key === 'C') this.viewPreset('city');
+      else if (e.key === 'x' || e.key === 'X') this.setPlacing(this.city.placing === 'bulldoze' ? null : 'bulldoze');
+      else if (e.key === 'Escape') { this.setPlacing(null); this.selectBuilding(null); }
       else if (e.key === '1' || e.key === '2' || e.key === '3') { this.speed = Number(e.key); this.updateHud(); }
-      else if (e.key === 'v' || e.key === 'V') { const order = ['overview', 'register', 'kitchen', 'tables']; this.viewIdx = ((this.viewIdx ?? 0) + 1) % order.length; this.viewPreset(order[this.viewIdx]); }
+      else if (e.key === 'v' || e.key === 'V') { const order = ['city', 'overview', 'register', 'kitchen']; this.viewIdx = ((this.viewIdx ?? 0) + 1) % order.length; this.viewPreset(order[this.viewIdx]); }
     });
     // click = collect from the register / cash stack (distinguish from orbit drag)
     let down = null;
@@ -1374,7 +1406,12 @@ export class Game {
       const rect = this.canvas.getBoundingClientRect();
       this.pointer.set(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1);
       this.raycaster.setFromCamera(this.pointer, this.camera);
+      if (this.city.placing === 'bulldoze') { this.tryBulldoze(); return; }
       if (this.city.placing) { this.tryBuild(); return; }
+      // a city building: select it
+      const bHits = this.raycaster.intersectObjects([...this.city.buildings.values()].map((b) => b.obj), true);
+      if (bHits.length) { this.selectBuilding(this.buildingOf(bHits[0].object)); return; }
+      if (this.selected) this.selectBuilding(null);
       // staff first: a click on any worker makes them hustle
       const staff = [...this.registers.map((r) => r.cashier).filter(Boolean), ...this.runners, ...(this.chefs ?? []).map((c) => c.rig)];
       const staffHits = this.raycaster.intersectObjects(staff.map((w) => w.obj), true);
@@ -1389,14 +1426,16 @@ export class Game {
 
   viewPreset(name) {
     const presets = {
-      overview: { pos: [7, 9.5, 12.5], target: [0.3, 0.6, 0.8] },
+      overview: { pos: [9, 11, 15], target: [0.3, 0.6, 0.8] },
       register: { pos: [4.5, 3.2, 5.0], target: [2.6, 1.0, 1.0] },
       kitchen: { pos: [1.5, 3.4, 1.8], target: [0.8, 1.0, -3.0] },
       tables: { pos: [8.5, 5.0, 9.0], target: [4.5, 0.6, 4.0] },
-      city: { pos: [34, 48, 52], target: [0, 0, 6] },
+      city: { pos: [40, 60, 70], target: [0, 0, 8] },
     };
     const p = presets[name];
     if (!p) return;
+    this.currentView = name;
+    if (name === 'city' && this.city.rings > 1) { const k = 0.6 + this.city.rings * 0.35; p.pos = [40 * k, 60 * k, 70 * k]; }
     this.camTween = { from: this.camera.position.clone(), to: new THREE.Vector3(...p.pos), tFrom: this.controls.target.clone(), tTo: new THREE.Vector3(...p.target), t: 0 };
   }
 
@@ -1420,8 +1459,9 @@ export class Game {
     this.city.placing = id;
     this.city.ground.highlight.visible = false;
     this.canvas.style.cursor = id ? 'crosshair' : '';
-    this.renderCity();
-    if (id) this.toast(`Click an empty block to build ${BUILDING_BY_ID[id].name} (${money(BUILDING_BY_ID[id].cost)}). Esc cancels.`, 'info', 3500);
+    this.renderBuild();
+    if (id === 'bulldoze') this.toast('Wrecking ball: click a building to demolish it (half the price back). Esc cancels.', 'warn', 3500);
+    else if (id) { this.selectBuilding(null); this.toast(`Click an empty block to build ${BUILDING_BY_ID[id].name} (${money(BUILDING_BY_ID[id].cost)}). Esc cancels.`, 'info', 3500); }
   }
   hoverTile(e) {
     const rect = this.canvas.getBoundingClientRect();
@@ -1431,40 +1471,158 @@ export class Game {
     const hl = this.city.ground.highlight;
     if (!p) { hl.visible = false; return; }
     const [i, j] = this.city.tileAt(p.x, p.z);
-    const ok = this.city.canBuild(i, j);
+    const bull = this.city.placing === 'bulldoze';
+    const ok = bull ? this.city.buildings.has(this.city.key(i, j)) : this.city.canBuild(i, j);
     hl.visible = this.city.inGrid(i, j);
     hl.position.copy(this.city.tileCenter(i, j)); hl.position.y = 0.03;
-    hl.material.color.setHex(ok ? 0xffd54f : 0xe53935);
+    hl.material.color.setHex(ok ? (bull ? 0xff7043 : 0xffd54f) : 0xe53935);
   }
   tryBuild() {
     const p = this.groundPoint();
     if (!p) return;
     const [i, j] = this.city.tileAt(p.x, p.z);
     const def = BUILDING_BY_ID[this.city.placing];
+    if (!this.city.inGrid(i, j)) return;
+    if (!this.city.owned(i, j)) { this.sfx.tooEarly(); const c = this.city.nextRingCost(); this.toast(c ? `That land isn't yours yet. Buy the next ring for ${money(c)} (Land button).` : 'That block is outside the city limits.', 'warn', 3500); return; }
     if (!this.city.canBuild(i, j)) { this.sfx.tooEarly(); this.toast('That block is taken. Pick an empty one.', 'warn'); return; }
     if (this.s.cash < def.cost) { this.sfx.tooEarly(); this.toast(`Need ${money(def.cost)} for ${def.name}.`, 'warn'); return; }
     this.s.cash -= def.cost;
-    this.city.place(i, j, def.id);
+    const b = this.city.place(i, j, def.id);
+    this.s.stats.built = (this.s.stats.built ?? 0) + 1;
     this.sfx.levelUp();
     this.log(`Built ${def.name} for ${money(def.cost)}.`);
     this.toast(`${def.icon} ${def.name} built.`, 'good');
-    this.setPlacing(null);
-    this.renderCity();
+    const cs = this.city.stats();
+    if (!b.powered) this.toast(`⚡ ${def.name} has no power. Build a power plant (Services).`, 'warn', 4500);
+    if (!this.tutorial.homes && def.housing) { this.tutorial.homes = true; setTimeout(() => this.toast('People need jobs and food to move in. Try a Workshop (Jobs) and a Hot dog stand (Food).', 'info', 6000), 2500); }
+    void cs;
+    // keep placing the same type while you can afford it
+    if (this.s.cash < def.cost) this.setPlacing(null); else this.renderBuild();
     this.updateHud();
     this.save();
   }
-  renderCity() {
-    const st = this.city.stats();
-    $('city-stats').innerHTML = `<div><b>${st.population}</b><small>Citizens</small></div><div><b>${st.jobs}</b><small>Jobs</small></div><div><b>${st.happiness}%</b><small>Happy</small></div><div><b>${money(st.income)}</b><small>Per min</small></div>`;
-    $('city-list').innerHTML = BUILDINGS.map((b) => {
-      const can = this.s && this.s.cash >= b.cost;
-      const count = [...this.city.buildings.values()].filter((x) => x.type === b.id).length;
-      return `<div class="upgrade ${this.city.placing === b.id ? 'selected' : can ? 'can' : ''}">
-        <div class="u-icon">${b.icon}</div>
-        <div class="u-body"><div class="u-name">${b.name} <span class="u-lvl">${count ? `×${count}` : ''}</span></div><div class="u-desc">${b.desc}</div></div>
-        <button class="u-buy" data-id="${b.id}" ${can ? '' : 'disabled'}>${this.city.placing === b.id ? 'Placing…' : money(b.cost)}</button>
-      </div>`;
+  tryBulldoze() {
+    const p = this.groundPoint();
+    if (!p) return;
+    const [i, j] = this.city.tileAt(p.x, p.z);
+    const b = this.city.buildings.get(this.city.key(i, j));
+    if (!b) { this.sfx.pop(); return; }
+    this.demolish(b);
+  }
+  demolish(b) {
+    const def = BUILDING_BY_ID[b.type];
+    const refund = Math.round(def.cost * 0.5 * LEVEL_MULT[b.level - 1]);
+    this.s.cash += refund;
+    this.fx.steam(b.obj.position.clone().add(new THREE.Vector3(0, 2, 0)));
+    this.fx.confetti(b.obj.position.clone().add(new THREE.Vector3(0, 3, 0)), 20);
+    this.city.remove(b);
+    if (this.selected === b) this.selectBuilding(null);
+    this.sfx.pop();
+    this.toast(`${def.name} demolished. ${money(refund)} back.`, 'info');
+    this.renderBuild(); this.updateHud(); this.save();
+  }
+  buyLand() {
+    const cost = this.city.nextRingCost();
+    if (!cost) { this.toast('You own all the land there is.', 'info'); return; }
+    if (this.s.cash < cost) { this.sfx.tooEarly(); this.toast(`The next ring of land costs ${money(cost)}.`, 'warn'); return; }
+    this.s.cash -= cost;
+    this.city.buyRing();
+    this.sfx.levelUp();
+    this.fx.confetti(new THREE.Vector3(0, 10, 0), 80);
+    const n = (this.city.rings * 2 + 1) ** 2 - 1;
+    this.toast(`🗺️ City limits expanded: ${n} blocks to build on.`, 'good', 4000);
+    this.log(`Bought a ring of land for ${money(cost)}.`);
+    this.viewPreset('city');
+    this.renderBuild(); this.updateHud(); this.save();
+  }
+  buildingOf(mesh) {
+    let o = mesh;
+    while (o) { for (const b of this.city.buildings.values()) if (b.obj === o) return b; o = o.parent; }
+    return null;
+  }
+  selectBuilding(b) {
+    this.selected = b;
+    const sel = this.city.ground.select;
+    sel.visible = Boolean(b);
+    if (b) { sel.position.copy(b.obj.position); sel.position.y = 0.04; this.sfx.pop(); this.renderInfo(); }
+    $('info').hidden = !b;
+  }
+  renderInfo() {
+    const b = this.selected; if (!b) return;
+    const d = BUILDING_BY_ID[b.type], m = LEVEL_MULT[b.level - 1];
+    $('info-name').textContent = `${d.icon} ${d.name}`;
+    $('info-level').textContent = `Level ${b.level} of ${MAX_LEVEL}${b.powered ? '' : ' · NO POWER'}`;
+    const rows = [];
+    if (d.housing) rows.push(['Homes for', Math.round(d.housing * m)]);
+    if (d.jobs) rows.push(['Jobs', Math.round(d.jobs * m)]);
+    if (d.customers) rows.push(['Customers / min', `${(d.customers * m * (b.fill ?? 1)).toFixed(1)} of ${Math.round(d.customers * m)}`]);
+    if (d.customers) rows.push(['Sales / min', money(d.customers * m * d.price * (b.fill ?? 1))]);
+    if (d.jobPay && d.jobs) rows.push(['Wages / min', money(d.jobs * m * d.jobPay)]);
+    if (d.power) rows.push(['Powers', `${Math.round(d.power * m)} buildings`]);
+    if (d.happy) rows.push(['Happiness', `${d.happy > 0 ? '+' : ''}${Math.round(d.happy * (d.happy > 0 ? 1 + (b.level - 1) * 0.3 : 1))}`]);
+    if (d.growth) rows.push(['Move-in speed', `+${Math.round(d.growth * 100)}%`]);
+    if (d.foodBoost) rows.push(['Food sales', `+${Math.round(d.foodBoost * 100)}%`]);
+    if (!b.powered) rows.push(['Status', 'Unpowered: does nothing']);
+    $('info-body').innerHTML = rows.map(([k, v]) => `<li><span>${k}</span><b class="${v === 'Unpowered: does nothing' ? 'bad' : ''}">${v}</b></li>`).join('');
+    const up = $('btn-upgrade');
+    if (b.level >= MAX_LEVEL) { up.textContent = 'Max level'; up.disabled = true; }
+    else { const c = levelUpCost(d, b.level); up.textContent = `Upgrade ${money(c)}`; up.disabled = this.s.cash < c; }
+    $('btn-demolish').textContent = `Demolish (+${money(d.cost * 0.5 * m)})`;
+  }
+  upgradeSelected() {
+    const b = this.selected; if (!b) return;
+    const d = BUILDING_BY_ID[b.type];
+    if (b.level >= MAX_LEVEL) return;
+    const c = levelUpCost(d, b.level);
+    if (this.s.cash < c) { this.sfx.tooEarly(); this.toast(`Need ${money(c)} to upgrade.`, 'warn'); return; }
+    this.s.cash -= c;
+    this.city.levelUp(b);
+    this.s.stats.levelUps = (this.s.stats.levelUps ?? 0) + 1;
+    this.sfx.levelUp();
+    this.toast(`${d.icon} ${d.name} is now level ${b.level}.`, 'good');
+    this.renderInfo(); this.updateHud(); this.save();
+  }
+  demolishSelected() { if (this.selected) this.demolish(this.selected); }
+  renderBuild() {
+    const cs = this.city.stats();
+    const rank = this.city.rank();
+    const land = this.city.nextRingCost();
+    $('tabs').innerHTML = CITY_CATEGORIES.map((c) => `<button class="tab ${this.buildTab === c.id ? 'on' : ''}" data-tab="${c.id}">${c.icon} ${c.name}</button>`).join('')
+      + `<button class="tab" data-tab="land" ${land ? '' : 'disabled'}>🗺️ ${land ? `Buy land ${money(land)}` : 'All land owned'}</button>`
+      + `<button class="tab tool ${this.city.placing === 'bulldoze' ? 'on' : ''}" data-tab="bulldoze">🚧 Bulldoze (X)</button>`;
+    const list = this.buildTab ? BUILDINGS.filter((b) => b.cat === this.buildTab) : [];
+    $('cards').innerHTML = list.map((b) => {
+      const locked = b.rank > rank.id;
+      const can = !locked && this.s && this.s.cash >= b.cost;
+      const n = cs.byType[b.id] ?? 0;
+      return `<button class="card-b ${locked ? 'locked' : this.city.placing === b.id ? 'selected' : can ? 'can' : ''}" data-id="${b.id}">
+        <div class="ic">${b.icon}</div><div class="nm">${b.name}</div><div class="ds">${b.desc}</div>
+        <div class="pr">${locked ? `Unlocks at ${RANKS[b.rank].name} (${RANKS[b.rank].pop} people)` : this.city.placing === b.id ? 'Placing…' : money(b.cost)}</div>
+        <div class="ct">${n ? `${n} built` : ''}</div></button>`;
     }).join('');
+  }
+  demandTip(cs) {
+    if (!this.city.buildings.size) return 'Start with Homes. People pay tax every minute.';
+    if (cs.powerUsed > cs.power) return 'Buildings are dark. Build a Power plant (Services).';
+    if (cs.housing === 0) return 'Nobody lives here yet. Build homes.';
+    if (cs.wantJobs > 0.6) return 'Too many people out of work. Build Jobs.';
+    if (cs.wantFood > 0.5) return 'People are hungry. Open a food business.';
+    if (cs.happiness < 45) return 'Unhappy citizens leave. Build a park, school or hospital.';
+    if (cs.wantHomes > 0.7) return 'Homes are full. Build more, or buy land.';
+    const nr = this.city.nextRank();
+    return nr ? `${nr.pop - cs.population} more people until your ${nr.name.toLowerCase()} unlocks new buildings.` : 'A metropolis. Keep building.';
+  }
+  /** What the diner itself makes per minute, roughly, for the income readout. */
+  dinerRate() { const st = this.s.stats; const f = this.s.dayTime > 20 ? this.s.dayTime / 60 : 0; return f > 0 ? (st.earnedToday ?? 0) / f : 0; }
+  fmt(n) { return money(n); }
+  cityFloat(text, kind) { this.float(this.controls.target.clone().add(new THREE.Vector3(0, 6, 0)), text, `city ${kind}`); }
+  onRankUp(rank) {
+    if (rank.id === 0) return;
+    this.sfx.levelUp();
+    this.fx.confetti(this.controls.target.clone().add(new THREE.Vector3(0, 12, 0)), 120);
+    this.toast(`🏙️ Your settlement is now a ${rank.name}! New buildings unlocked.`, 'good', 5000);
+    this.log(`Rank up: ${rank.name}.`);
+    this.renderBuild();
   }
 
   /** Find the Character that owns a clicked mesh. */

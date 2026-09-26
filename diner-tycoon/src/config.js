@@ -1,12 +1,12 @@
 // Balance sheet for Short Order Tycoon. Everything tunable lives here.
 
 export const DAY_LENGTH = 120;          // game seconds per business day
-export const START_CASH = 150;
+export const START_CASH = 400;
 export const START_REPUTATION = 50;     // 0..100 -> 0..5 stars
 export const QUEUE_PATIENCE = 32;       // seconds a customer waits in line
 export const FOOD_PATIENCE = 60;        // seconds a customer waits for food after ordering
 export const EAT_TIME = 9;
-export const SAVE_KEY = 'short-order-tycoon:save:v1';
+export const SAVE_KEY = 'short-order-city:save:v2';
 
 export const MENU = [
   // Every skewer uses the Poly kebab model; `meat` tints its meat cubes.
@@ -48,33 +48,36 @@ export const CATEGORIES = [
 ];
 
 // Quests: one at a time, in order. `check` gets (stats, game).
+const cityHas = (g, type) => (g.city?.stats().byType[type] ?? 0) > 0;
+const cityPop = (g) => g.city?.stats().population ?? 0;
 export const QUESTS = [
-  { id: 'q_serve5', text: 'Serve 5 guests', reward: 60, check: (st) => st.servedTotal >= 5 },
-  { id: 'q_collect3', text: 'Bank the register 3 times (click it or press Space)', reward: 60, check: (st) => st.collects >= 3 },
-  { id: 'q_table', text: 'Buy a Dining table in the Shop (B)', reward: 90, check: (st, g) => g.lvl('tables') >= 1 },
-  { id: 'q_hustle', text: 'Click a staff member to make them hustle', reward: 60, check: (st) => st.hustles >= 1 },
-  { id: 'q_apartments', text: 'Build Apartments on an empty block (City button, C)', reward: 150, check: (st, g) => g.city?.stats().population >= 12 },
-  { id: 'q_runner', text: 'Hire a second runner', reward: 120, check: (st, g) => g.lvl('runner') >= 2 },
-  { id: 'q_foodstand', text: 'Open a hot dog stand in the city', reward: 150, check: (st, g) => [...(g.city?.buildings.values() ?? [])].some((b) => b.type === 'hotdogstand') },
-  { id: 'q_stars3', text: 'Reach a 3-star rating', reward: 120, check: (st, g) => g.stars() >= 3 },
-  { id: 'q_serve25', text: 'Serve 25 guests', reward: 150, check: (st) => st.servedTotal >= 25 },
-  { id: 'q_knife', text: "Buy the chef a knife", reward: 120, check: (st, g) => g.lvl('knife') >= 1 },
-  { id: 'q_menu', text: 'Expand the menu', reward: 200, check: (st, g) => g.lvl('menu') >= 1 },
-  { id: 'q_pop50', text: 'Reach a population of 50', reward: 250, check: (st, g) => g.city?.stats().population >= 50 },
-  { id: 'q_park', text: 'Build a park', reward: 150, check: (st, g) => [...(g.city?.buildings.values() ?? [])].some((b) => b.type === 'park') },
-  { id: 'q_streak10', text: 'Serve 10 guests in a row with no walkouts', reward: 250, check: (st) => st.streakBest >= 10 },
-  { id: 'q_vip', text: 'Impress a food critic (the golden guest)', reward: 300, check: (st) => st.vipHappy >= 1 },
-  { id: 'q_stars4', text: 'Reach 4 stars', reward: 400, check: (st, g) => g.stars() >= 4 },
-  { id: 'q_register2', text: 'Open a second register', reward: 500, check: (st, g) => g.lvl('register2') >= 1 },
-  { id: 'q_chef2', text: 'Hire a sous chef', reward: 500, check: (st, g) => g.lvl('chef2') >= 1 },
-  { id: 'q_office', text: 'Build an office block', reward: 300, check: (st, g) => [...(g.city?.buildings.values() ?? [])].some((b) => b.type === 'office') },
-  { id: 'q_serve100', text: 'Serve 100 guests', reward: 600, check: (st) => st.servedTotal >= 100 },
-  { id: 'q_pop150', text: 'Reach a population of 150', reward: 800, check: (st, g) => g.city?.stats().population >= 150 },
-  { id: 'q_city12', text: 'Fill 12 blocks of the city', reward: 1200, check: (st, g) => (g.city?.buildings.size ?? 0) >= 12 },
-  { id: 'q_lamps', text: 'Light the dining room (Mood lighting ×3)', reward: 500, check: (st, g) => g.lvl('lamps') >= 3 },
-  { id: 'q_special', text: "Serve the Chef's Special", reward: 800, check: (st) => st.specialsServed >= 1 },
-  { id: 'q_cash10k', text: 'Earn $10,000 in total', reward: 1000, check: (st) => st.earnedTotal >= 10000 },
-  { id: 'q_stars5', text: 'Five stars. The best diner in the world.', reward: 2500, check: (st, g) => g.stars() >= 5 },
+  { id: 'q_homes', text: 'Build your first homes (Homes → Family houses, then click a block)', reward: 120, check: (st, g) => (g.city?.stats().housing ?? 0) > 0 },
+  { id: 'q_food', text: 'Open a food business (Food & shops)', reward: 120, check: (st, g) => cityHas(g, 'hotdogstand') || cityHas(g, 'kebabhouse') || cityHas(g, 'burgerjoint') },
+  { id: 'q_jobs', text: 'Give people work: build a Workshop', reward: 150, check: (st, g) => (g.city?.stats().jobs ?? 0) >= 12 },
+  { id: 'q_pop10', text: 'Reach 10 residents', reward: 150, check: (st, g) => cityPop(g) >= 10 },
+  { id: 'q_collect', text: 'Zoom in on the diner and bank its register (click it or press Space)', reward: 100, check: (st) => st.collects >= 1 },
+  { id: 'q_park', text: 'Build a park', reward: 180, check: (st, g) => cityHas(g, 'park') },
+  { id: 'q_village', text: 'Become a Village (25 people)', reward: 250, check: (st, g) => cityPop(g) >= 25 },
+  { id: 'q_apartments', text: 'Build Apartments', reward: 250, check: (st, g) => cityHas(g, 'apartments') },
+  { id: 'q_power', text: 'Build a Power plant before the lights go out', reward: 300, check: (st, g) => cityHas(g, 'powerplant') },
+  { id: 'q_level', text: 'Upgrade a building to level 2 (click it)', reward: 250, check: (st) => (st.levelUps ?? 0) >= 1 },
+  { id: 'q_office', text: 'Build an Office block', reward: 350, check: (st, g) => cityHas(g, 'office') },
+  { id: 'q_table', text: 'Buy the diner a Dining table (Diner upgrades, B)', reward: 200, check: (st, g) => g.lvl('tables') >= 1 },
+  { id: 'q_land', text: 'Buy the next ring of land', reward: 500, check: (st, g) => (g.city?.rings ?? 1) >= 2 },
+  { id: 'q_town', text: 'Become a Town (100 people)', reward: 600, check: (st, g) => cityPop(g) >= 100 },
+  { id: 'q_school', text: 'Build a School', reward: 450, check: (st, g) => cityHas(g, 'school') },
+  { id: 'q_stars3', text: 'Get the diner to a 3-star rating', reward: 400, check: (st, g) => g.stars() >= 3 },
+  { id: 'q_happy70', text: 'Reach 70% happiness with 100+ people', reward: 700, check: (st, g) => cityPop(g) >= 100 && g.city.stats().happiness >= 70 },
+  { id: 'q_income200', text: 'Earn $200 a minute from the city', reward: 800, check: (st, g) => (g.city?.income ?? 0) >= 200 },
+  { id: 'q_tower', text: 'Build a Residential tower', reward: 900, check: (st, g) => cityHas(g, 'tower') },
+  { id: 'q_mall', text: 'Build a Shopping mall', reward: 900, check: (st, g) => cityHas(g, 'mall') },
+  { id: 'q_hospital', text: 'Build a Hospital', reward: 1000, check: (st, g) => cityHas(g, 'hospital') },
+  { id: 'q_city', text: 'Become a City (300 people)', reward: 1500, check: (st, g) => cityPop(g) >= 300 },
+  { id: 'q_blocks30', text: 'Fill 30 blocks', reward: 1500, check: (st, g) => (g.city?.buildings.size ?? 0) >= 30 },
+  { id: 'q_land4', text: 'Own all the land (4 rings)', reward: 2500, check: (st, g) => (g.city?.rings ?? 1) >= 4 },
+  { id: 'q_stadium', text: 'Build the Stadium', reward: 3000, check: (st, g) => cityHas(g, 'stadium') },
+  { id: 'q_metro', text: 'Metropolis: 800 people', reward: 5000, check: (st, g) => cityPop(g) >= 800 },
+  { id: 'q_stars5', text: 'Five-star diner in a five-star city', reward: 5000, check: (st, g) => g.stars() >= 5 },
 ];
 
 export function upgradeCost(def, level) {
@@ -82,10 +85,10 @@ export function upgradeCost(def, level) {
 }
 
 export const MILESTONES = [
-  { id: 'first50', label: 'Serve 50 guests', check: (s) => s.servedTotal >= 50 },
-  { id: 'cash1k', label: 'Bank $1,000', check: (s) => s.earnedTotal >= 1000 },
-  { id: 'stars4', label: 'Reach 4 stars', check: (s) => s.reputation >= 80 },
+  { id: 'first50', label: 'Serve 50 diner guests', check: (s) => s.servedTotal >= 50 },
+  { id: 'cash1k', label: 'Earn $1,000', check: (s) => s.earnedTotal >= 1000 },
+  { id: 'stars4', label: 'Diner at 4 stars', check: (s) => s.reputation >= 80 },
   { id: 'menu3', label: 'Serve the Chef\'s Special', check: (s) => s.specialsServed >= 1 },
-  { id: 'cash10k', label: 'Bank $10,000', check: (s) => s.earnedTotal >= 10000 },
+  { id: 'cash10k', label: 'Earn $10,000', check: (s) => s.earnedTotal >= 10000 },
   { id: 'stars5', label: 'Five stars', check: (s) => s.reputation >= 100 },
 ];
