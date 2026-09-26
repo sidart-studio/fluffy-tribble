@@ -3,8 +3,9 @@
 A 3D kebab diner tycoon built with Three.js around the models in `models/`:
 the Poly by Google cash register and kebab, J-Toastie's Food Worker (the
 cashier), Retail Worker (the runner) and Cash Stack, Kay Lousberg's kitchen
-cabinet and chef's knife, sirkitree's kitchen, and Ali12's hanging light, which
-lights the counters and every dining table. Every person in the game,
+cabinet and chef's knife, sirkitree's kitchen, Ali12's hanging light, which
+lights the counters and every dining table, the Poly hot dog and jeremy's
+hamburger as dishes on the menu. Every person in the game,
 guests and chef included, is one of the two J-Toastie character rigs with a
 different tint; every skewer on the menu is the Poly kebab with its meat
 recolored per dish.

@@ -762,9 +762,10 @@ export class Game {
     if (skewers.length && plate.userData.bitePlane) {
       const sk = skewers[Math.min(skewers.length - 1, 1)];
       sk.updateMatrixWorld(true);
-      const L = plate.userData.skewerLength;
-      const axis = new THREE.Vector3(0, 1, 0).transformDirection(sk.matrixWorld).normalize();
-      const tip = sk.localToWorld(new THREE.Vector3(0, L, 0));
+      const tipLocal = plate.userData.biteTipLocal ?? new THREE.Vector3(0, plate.userData.skewerLength, 0);
+      const L = plate.userData.biteLength ?? plate.userData.skewerLength;
+      const axis = tipLocal.clone().normalize().transformDirection(sk.matrixWorld).normalize();
+      const tip = sk.localToWorld(tipLocal.clone());
       const cut = tip.addScaledVector(axis, -eaten * L);
       plate.userData.bitePlane.normal.copy(axis).negate();
       plate.userData.bitePlane.constant = axis.dot(cut);
@@ -891,6 +892,7 @@ export class Game {
     this.chef.position.y = busy ? Math.abs(Math.sin(this.time * 8)) * 0.05 : 0;
   }
 
+  foodProtos() { return { kebab: this.models.kebab, hotdog: this.models.hotdog, hamburger: this.models.hamburger }; }
   prepTime() { return 1.6 * Math.pow(0.8, this.lvl('knife')); }
   stoveTime(item) { return item.cook * Math.pow(0.88, this.lvl('cabinet')); }
 
@@ -898,7 +900,7 @@ export class Game {
   plateToPass(o) {
     const slot = this.passPlates.findIndex((p) => !p);
     if (slot < 0) return false;
-    const plate = o.plate ?? buildFood(o.item, { kebab: this.models.kebab });
+    const plate = o.plate ?? buildFood(o.item, this.foodProtos());
     plate.scale.setScalar(1);
     plate.position.copy(L.passSlots[slot]);
     this.scene.add(plate);
@@ -959,7 +961,7 @@ export class Game {
         if (this.walkTo(chef, c.stove, speed, dt)) {
           const o = c.order;
           if (!o) { c.state = 'idle'; break; }
-          o.plate = buildFood(o.item, { kebab: this.models.kebab });
+          o.plate = buildFood(o.item, this.foodProtos());
           o.plate.scale.setScalar(0.9);
           chef.carry.add(o.plate);
           c.state = 'toPass';
@@ -1497,7 +1499,7 @@ function drawBubble(sprite, { frac, item, ordering }) {
     ctx.fillStyle = '#' + item.color.toString(16).padStart(6, '0');
     ctx.beginPath(); ctx.arc(64, 30, 14, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = '#2b2f38'; ctx.font = 'bold 14px sans-serif'; ctx.textAlign = 'center';
-    ctx.fillText(item.shape === 'kebab' || item.shape === 'platter' || item.shape === 'special' ? '🍢' : '🥤', 64, 35);
+    ctx.fillText({ kebab: '🍢', platter: '🍢', special: '🍢', hotdog: '🌭', burger: '🍔' }[item.shape] ?? '🥤', 64, 35);
   } else {
     ctx.fillStyle = '#2b2f38'; ctx.font = 'bold 26px sans-serif'; ctx.textAlign = 'center';
     ctx.fillText(ordering ? '$' : '…', 64, 40);

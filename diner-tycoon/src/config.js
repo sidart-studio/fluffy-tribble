@@ -11,6 +11,8 @@ export const SAVE_KEY = 'short-order-tycoon:save:v1';
 export const MENU = [
   // Every skewer uses the Poly kebab model; `meat` tints its meat cubes.
   { id: 'soda', name: 'Fizzy Soda', price: 3.5, cook: 1.5, tier: 0, color: 0x8d3b2f, shape: 'cup' },
+  { id: 'hotdog', name: 'Hot Dog', price: 6, cook: 4, tier: 0, color: 0xd9822b, shape: 'hotdog' },
+  { id: 'burger', name: 'Diner Burger', price: 9.5, cook: 6.5, tier: 0, color: 0xb5651d, shape: 'burger' },
   { id: 'chicken', name: 'Chicken Kebab', price: 8, cook: 6, tier: 0, color: 0xf2c14e, shape: 'kebab', meat: 0xf0c987 },
   { id: 'beef', name: 'Beef Kebab', price: 10, cook: 7, tier: 0, color: 0xb5651d, shape: 'kebab', meat: 0x6b3a26 },
   { id: 'veggie', name: 'Veggie Kebab', price: 7.5, cook: 4.5, tier: 1, color: 0x6abf4b, shape: 'kebab', meat: 0x7cb342 },

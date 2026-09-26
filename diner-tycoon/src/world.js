@@ -272,6 +272,8 @@ export function buildFood(item, protos = {}) {
   g.userData.bitePlane = bitePlane;
   g.userData.skewers = [];
   g.userData.skewerLength = protos.kebab ? protos.kebab.userData.size.y : 0.4;
+  g.userData.biteTipLocal = new THREE.Vector3(0, g.userData.skewerLength, 0); // skewers are eaten from the tip (local +y)
+  g.userData.biteLength = g.userData.skewerLength;
   const skewer = (tint, dx = 0, dz = 0, yaw = 0) => {
     if (!protos.kebab) {
       const k = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.4, 0.06), mat(tint ?? c));
@@ -295,7 +297,22 @@ export function buildFood(item, protos = {}) {
     g.userData.skewers.push(k);
     return k;
   };
+  // whole-model dishes (hot dog, hamburger): eaten front to back along local +z
+  const modelDish = (proto, fallbackColor) => {
+    if (!proto) { const m = new THREE.Mesh(new THREE.SphereGeometry(0.12, 12, 8), mat(fallbackColor)); m.position.y = 0.12; m.material.clippingPlanes = [bitePlane]; g.add(m); g.userData.skewers.push(m); g.userData.biteTipLocal = new THREE.Vector3(0, 0, 0.12); g.userData.biteLength = 0.24; return; }
+    const d = proto.clone(true);
+    d.traverse((o) => { if (o.isMesh) { o.material = o.material.clone(); o.material.clippingPlanes = [bitePlane]; o.material.clipShadows = true; o.castShadow = true; } });
+    d.position.y = 0.025;
+    d.rotation.y = -Math.PI / 2; // tip toward plate -x, same side the kebab is eaten from
+    g.add(d);
+    g.userData.skewers.push(d);
+    const size = proto.userData.size;
+    g.userData.biteTipLocal = new THREE.Vector3(0, 0, size.z / 2);
+    g.userData.biteLength = size.z;
+  };
   switch (item.shape) {
+    case 'hotdog': { modelDish(protos.hotdog, 0xd9822b); break; }
+    case 'burger': { modelDish(protos.hamburger, 0xb5651d); break; }
     case 'kebab': {
       g.add(skewer(item.meat));
       const lemon = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.02, 12), mat(0xfff176)); lemon.position.set(0.08, 0.035, 0.09); g.add(lemon);

@@ -53,6 +53,18 @@
       "height": 0.9,
       "rotationY": 0,
       "credit": "the light by Ali12 (CC-BY 3.0)"
+    },
+    "hotdog": {
+      "file": "hot_dog.glb",
+      "height": 0.42,
+      "rotationY": 0,
+      "credit": "Hot dog by Poly by Google (CC-BY 3.0)"
+    },
+    "hamburger": {
+      "file": "hamburger.glb",
+      "height": 0.3,
+      "rotationY": 0,
+      "credit": "Hamburger by jeremy (CC-BY 3.0)"
     }
   },
   "pending": {

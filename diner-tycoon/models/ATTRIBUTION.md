@@ -8,6 +8,8 @@
 | `retail_worker.glb` | Retail Worker | J-Toastie | CC-BY 3.0 | Runners who carry plates, and tinted guests |
 | `kebab.glb` | Kebab | Poly by Google | CC-BY 3.0 | Every skewer on the menu, meat recolored per dish |
 | `the_light.glb` | the light | Ali12 | CC-BY 3.0 | Hanging lamps over the counters and tables; glows brighter as evening falls |
+| `hot_dog.glb` | Hot dog | Poly by Google | CC-BY 3.0 | The Hot Dog dish, eaten end to end |
+| `hamburger.glb` | Hamburger | jeremy | CC-BY 3.0 | The Diner Burger dish |
 | `kitchen.glb` | Kitchen | sirkitree | CC-BY 3.0 | The kitchen at the back |
 | `kitchen_cabinet.glb` | Kitchen Cabinet | Kay Lousberg | CC0 | Cabinet upgrade on the back wall |
 | `chef_knife.glb` | Chef Knife | Kay Lousberg | CC0 | Knife upgrade on the pass (converted from FBX with `tools/fbx2glb.mjs`, textured with the kit's shared atlas) |
@@ -27,5 +29,5 @@ Licenses as listed on the original Poly pages; verify before redistributing.
 
 - `height`: tallest dimension in world units after fitting. People are ~1.75, the counter is 0.95.
 - `rotationY`: degrees, if the model's front faces the wrong way.
-- Keys the game knows: `register`, `cashStack`, `cashier`, `runner`, `kitchen`, `cabinet`, `knife`, `kebab`, `light`, `chef`.
+- Keys the game knows: `register`, `cashStack`, `cashier`, `runner`, `kitchen`, `cabinet`, `knife`, `kebab`, `light`, `hotdog`, `hamburger`, `chef`.
   Rigged characters may include `Idle`, `Walk`, `Jump` clips; the game plays them when it finds them.
