@@ -257,7 +257,7 @@ export function buildToque() {
 export function buildFood(item, protos = {}) {
   const g = new THREE.Group();
   // a small saucer: the skewer should overhang it like a real kebab plate
-  const plateR = item.shape === 'platter' || item.shape === 'special' ? 0.17 : 0.13;
+  const plateR = item.shape === 'platter' || item.shape === 'special' ? 0.25 : 0.2;
   const plate = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(plateR, plateR * 0.8, 0.025, 20), mat(0xf7f7f2, { roughness: 0.3 })));
   plate.position.y = 0.0125; g.add(plate);
   const c = item.color;

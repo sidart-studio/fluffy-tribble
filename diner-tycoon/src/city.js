@@ -10,6 +10,13 @@ export const PITCH = 22;          // block-to-block distance (12 m block + pavem
 export const BLOCK = 12;          // buildable square per block
 export const RADIUS = 4;          // blocks from the diner in each direction (9x9 grid)
 export const FREE_POWER = 8;      // buildings the street grid powers before you need a plant
+export const OPEN_HOUR = 8;       // shops and the diner open
+export const CLOSE_HOUR = 18;     // ...and close; workers sweep up, everyone goes home
+export const CLEAN_SECONDS = 7;
+
+const FIRST_NAMES = ['Ada', 'Bo', 'Cleo', 'Dev', 'Eli', 'Fay', 'Gus', 'Hana', 'Ivo', 'Juno', 'Kai', 'Lou', 'Mia', 'Nia', 'Ola', 'Pip', 'Quin', 'Rae', 'Sam', 'Tao', 'Uma', 'Vik', 'Wren', 'Xia', 'Yara', 'Zed'];
+const LAST_NAMES = ['Baker', 'Brook', 'Carver', 'Day', 'Fielding', 'Glass', 'Hart', 'Ivers', 'Jones', 'Kim', 'Lane', 'Moss', 'North', 'Okafor', 'Park', 'Quill', 'Reyes', 'Stone', 'Tan', 'Vale', 'West', 'Young'];
+export function cityName() { return `${FIRST_NAMES[Math.floor(Math.random() * FIRST_NAMES.length)]} ${LAST_NAMES[Math.floor(Math.random() * LAST_NAMES.length)]}`; }
 
 const cmat = (color, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.75, metalness: 0.05, ...extra });
 const cshadowed = (m) => { m.castShadow = true; m.receiveShadow = true; return m; };
@@ -411,6 +418,7 @@ export class City {
     this.eventTimer = 90;
     this.boost = null;     // { name, mult, t } from a city event
     this.income = 0;
+    this.mood = 0;      // the mayor's praise and fines, decays over time
     this.cache = null;
   }
   key(i, j) { return `${i},${j}`; }
@@ -443,6 +451,8 @@ export class City {
   }
 
   remove(b) {
+    if (b.worker) { b.worker.working = null; b.worker.cleaning = 0; }
+    for (const c of this.citizens) if (c.inside && c.inside.b === b) { c.inside = false; c.rig.obj.visible = true; c.rig.obj.position.copy(this.doorstep(b.i, b.j, 3)); c.goal = null; c.route = []; }
     this.game.scene.remove(b.obj);
     this.buildings.delete(this.key(b.i, b.j));
     const lot = this.ground.lots.get(this.key(b.i, b.j));
@@ -479,6 +489,7 @@ export class City {
     for (const b of [...this.buildings.values()]) this.remove(b);
     for (const c of this.citizens) this.game.scene.remove(c.rig.obj);
     this.citizens = [];
+    this.mood = 0;
     for (const c of this.cars) this.game.scene.remove(c.obj);
     this.cars = [];
     // give the land back
@@ -552,7 +563,7 @@ export class City {
     st.foodDemand = 2 + pop * 0.06 + st.employed * 0.1;
     st.fill = st.customersCap > 0 ? Math.min(1, st.demand / st.customersCap) : 0;
     // happiness
-    let happy = st.happyBase + diner * 3;
+    let happy = st.happyBase + diner * 3 + (this.mood ?? 0);
     st.hunger = st.foodCap > 0 ? Math.max(0, st.foodDemand / st.foodCap - 1) : 1;
     happy -= Math.min(25, st.hunger * 40);
     if (pop > 0) happy -= Math.min(30, (st.unemployed / pop) * 55);
@@ -586,6 +597,7 @@ export class City {
   /** Called every sim tick: grow, bank income, spin signs, keep the streets busy. */
   update(dt) {
     this.cache = null;
+    if (this.mood) this.mood -= Math.sign(this.mood) * Math.min(Math.abs(this.mood), dt * 0.02);
     const st = this.stats();
     this.income = st.income;
     const g = this.game;
@@ -634,79 +646,218 @@ export class City {
   /** Pavement on the north side of the street below tile row j. */
   streetZ(v) { return (Math.floor(v / PITCH) + 0.5) * PITCH - 3.5; }
   /** The pavement point in front of a block (its south edge, on the street side). */
-  doorstep(i, j) { return new THREE.Vector3(i * PITCH + (Math.random() - 0.5) * 6, 0, j * PITCH + BLOCK / 2 + 1.2); }
-
-  updateCitizens(dt, st) {
-    const wanted = Math.min(24, Math.floor(st.population / 5) + (this.buildings.size ? 1 : 0));
-    if (this.citizens.length < wanted && Math.random() < dt * 0.8) this.spawnCitizen();
-    if (this.citizens.length > wanted + 4) { const c = this.citizens.pop(); this.game.scene.remove(c.rig.obj); }
-    for (const c of this.citizens) {
-      c.rig.update(dt);
-      if (!c.route.length) { this.newRoute(c); continue; }
-      const target = c.route[0];
-      const dx = target.x - c.rig.obj.position.x, dz = target.z - c.rig.obj.position.z;
-      const dist = Math.hypot(dx, dz);
-      if (dist < 0.15) {
-        c.route.shift();
-        if (!c.route.length) {
-          if (c.toDiner) { this.arriveAtDiner(c); continue; }
-          c.rest = 1 + Math.random() * 3;
-        }
-        continue;
-      }
-      if (c.rest > 0) { c.rest -= dt; c.rig.play('idle'); continue; }
-      const step = Math.min(dist, c.speed * dt);
-      c.rig.obj.position.x += (dx / dist) * step; c.rig.obj.position.z += (dz / dist) * step;
-      c.rig.obj.rotation.y = Math.atan2(dx, dz);
-      c.rig.play('walk');
-    }
-    this.citizens = this.citizens.filter((c) => !c.dead);
+  doorstep(i, j, jitter = 6) { return new THREE.Vector3(i * PITCH + (Math.random() - 0.5) * jitter, 0, j * PITCH + BLOCK / 2 + 1.2); }
+  /** The front door of a building: on the block's south edge. People appear and vanish here. */
+  door(b) { return new THREE.Vector3(b.i * PITCH, 0, b.j * PITCH + BLOCK / 2 - 0.4); }
+  /** Where a shop's worker stands while it is open. */
+  workerSpot(b) {
+    const o = b.type === 'hotdogstand' ? [0, -1.4] : [2.8, 4.6];
+    return new THREE.Vector3(b.i * PITCH + o[0], 0, b.j * PITCH + o[1]);
   }
-
-  spawnCitizen() {
-    const all = [...this.buildings.values()];
-    const homes = all.filter((b) => BUILDING_BY_ID[b.type].housing);
-    const from = homes.length ? homes[Math.floor(Math.random() * homes.length)] : all[Math.floor(Math.random() * all.length)];
-    const rig = this.game.makeCitizenRig();
-    if (!rig) return;
-    const start = from ? this.doorstep(from.i, from.j) : new THREE.Vector3(PITCH, 0, PITCH / 2 - 3.5);
-    rig.obj.position.copy(start);
-    const c = { rig, route: [], rest: 0, speed: 1.4 + Math.random() * 0.6, toDiner: false, dead: false, home: from };
-    this.citizens.push(c);
-    this.newRoute(c);
-  }
-
-  /** Manhattan route along the street grid to another block's doorstep, or to the diner door. */
-  newRoute(c) {
-    const targets = [...this.buildings.values()].filter((b) => b !== c.home);
-    const goDiner = Math.random() < 0.3;
-    let dest, isDiner = false;
-    if (goDiner) { dest = new THREE.Vector3(-9.0, 0, 8.5); isDiner = true; }
-    else if (targets.length) { const b = targets[Math.floor(Math.random() * targets.length)]; dest = this.doorstep(b.i, b.j); }
-    else if (c.home) dest = this.doorstep(c.home.i, c.home.j);
-    else dest = new THREE.Vector3(-PITCH, 0, PITCH / 2 - 3.5);
-    const p = c.rig.obj.position;
+  isShop(b) { const d = BUILDING_BY_ID[b.type]; return Boolean(d.customers); }
+  isWorkplace(b) { const d = BUILDING_BY_ID[b.type]; return Boolean(d.jobs); }
+  /** Manhattan route along the street grid from `p` to `dest`. */
+  routeBetween(p, dest) {
     const z1 = this.streetZ(p.z), z2 = this.streetZ(dest.z);
     const route = [new THREE.Vector3(p.x, 0, z1)];
     if (Math.abs(z2 - z1) > 0.1) { const xs = (Math.floor(dest.x / PITCH) + 0.5) * PITCH - 3.5; route.push(new THREE.Vector3(xs, 0, z1)); route.push(new THREE.Vector3(xs, 0, z2)); }
     route.push(new THREE.Vector3(dest.x, 0, z2));
     route.push(dest);
-    c.route = route; c.toDiner = isDiner;
+    return route;
   }
 
+  // -- citizens ---------------------------------------------------------
+  // Every visible citizen lives in a home and may work somewhere. The clock
+  // runs their day: workers walk to their shop at opening time, residents go
+  // shopping, everyone comes out of the shops at closing time and walks home,
+  // shop workers sweep up first. Nobody appears out of thin air: people step
+  // out of their own front doors.
+  shopsOpen() { const h = this.game.clockHour(); return h >= OPEN_HOUR && h < CLOSE_HOUR; }
+
+  updateCitizens(dt, st) {
+    const h = this.game.clockHour();
+    const homes = [...this.buildings.values()].filter((b) => BUILDING_BY_ID[b.type].housing && b.powered);
+    const wanted = homes.length ? Math.min(24, Math.ceil(st.population / 5)) : 0;
+    // people step out of their homes from early morning on; at night nobody new comes out
+    const outHours = h >= OPEN_HOUR - 0.5 && h < CLOSE_HOUR;
+    if (outHours && this.citizens.length < wanted && Math.random() < dt * 0.9) this.spawnCitizen(homes);
+    // shops: open/closed signs and worker bookkeeping
+    const open = this.shopsOpen();
+    for (const b of this.buildings.values()) {
+      if (!this.isShop(b)) continue;
+      const wantOpen = open && b.powered;
+      if (b.openSign !== wantOpen) { b.openSign = wantOpen; this.setShopSign(b, wantOpen); }
+    }
+    // make sure every open shop has a worker on the way
+    if (open && Math.random() < dt * 1.5) {
+      const shop = [...this.buildings.values()].find((b) => this.isShop(b) && b.powered && !b.worker);
+      if (shop && homes.length) { const w = this.spawnCitizen(homes, { work: shop }); if (w) { shop.worker = w; w.goal = { kind: 'work', b: shop }; w.route = this.routeBetween(w.rig.obj.position, this.doorstep(shop.i, shop.j, 2)); } }
+    }
+    const afterHours = h >= CLOSE_HOUR || h < OPEN_HOUR - 1;
+    for (const c of this.citizens) {
+      c.rig.update(dt);
+      if (c.inside) { this.updateInside(c, dt, h); continue; }
+      if (afterHours && !c.cleaning && !c.working && c.goal && c.goal.kind !== 'home' && !c.sentHome) { c.sentHome = true; this.goHome(c); continue; }
+      if (h >= 4 && h < OPEN_HOUR - 1 && !c.inside) { this.removeCitizen(c); continue; } // slipped home before dawn
+      if (c.cleaning) { this.updateCleaning(c, dt); continue; }
+      if (c.working && !c.route.length) { this.updateWorker(c, dt); continue; }
+      if (!c.route.length) { this.arrive(c, h); continue; }
+      const target = c.route[0];
+      const dx = target.x - c.rig.obj.position.x, dz = target.z - c.rig.obj.position.z;
+      const dist = Math.hypot(dx, dz);
+      if (dist < 0.15) { c.route.shift(); continue; }
+      if (c.rest > 0) { c.rest -= dt; c.rig.play('idle'); continue; }
+      const hurry = afterHours ? 1.8 : 1; // everyone hurries home after closing
+      const step = Math.min(dist, c.speed * hurry * dt);
+      c.rig.obj.position.x += (dx / dist) * step; c.rig.obj.position.z += (dz / dist) * step;
+      c.rig.obj.rotation.y = Math.atan2(dx, dz);
+      c.rig.play('walk');
+      c.rig.mixer.timeScale = hurry;
+      c.activity = c.goal ? ({ work: 'walking to work', working: 'opening up the shop', shop: 'going shopping', diner: 'heading to your diner', home: 'going home', park: 'off to the park', rested: 'strolling' })[c.goal.kind] ?? 'about town' : 'out for a walk';
+    }
+    this.citizens = this.citizens.filter((c) => !c.dead);
+  }
+
+  spawnCitizen(homes, { work = null } = {}) {
+    if (!homes.length) return null;
+    const home = homes[Math.floor(Math.random() * homes.length)];
+    const rig = this.game.makeCitizenRig();
+    if (!rig) return null;
+    rig.obj.position.copy(this.door(home));
+    const c = { rig, home, work, route: [], rest: 0, speed: 2.0 + Math.random() * 0.7, dead: false, inside: false, cleaning: 0, goal: null, name: cityName(), mood: 'content', activity: 'leaving home' };
+    this.citizens.push(c);
+    this.game.fx.sparkle(rig.obj.position.clone().add(new THREE.Vector3(0, 1, 0)), 3);
+    if (!work) this.planTrip(c);
+    return c;
+  }
+
+  /** Pick where to go next: work if you have a job and it is opening time, otherwise a shop, the park, the diner, or home. */
+  planTrip(c) {
+    const h = this.game.clockHour();
+    if (h >= CLOSE_HOUR || h < OPEN_HOUR - 0.5) { this.goHome(c); return; }
+    const all = [...this.buildings.values()].filter((b) => b.powered && b !== c.home);
+    const shops = all.filter((b) => this.isShop(b));
+    const parks = all.filter((b) => b.type === 'park' || b.type === 'stadium');
+    const roll = Math.random();
+    let kind, b = null, dest;
+    if (roll < 0.22 && this.game.dinerOpen() && this.game.customers.length < 22) { kind = 'diner'; dest = new THREE.Vector3(-9.0, 0, 8.5); }
+    else if (roll < 0.62 && shops.length) { kind = 'shop'; b = shops[Math.floor(Math.random() * shops.length)]; dest = this.doorstep(b.i, b.j, 2); }
+    else if (roll < 0.78 && parks.length) { kind = 'park'; b = parks[Math.floor(Math.random() * parks.length)]; dest = this.doorstep(b.i, b.j, 2); }
+    else if (all.length && roll < 0.9) { kind = 'shop'; b = all[Math.floor(Math.random() * all.length)]; dest = this.doorstep(b.i, b.j, 2); }
+    else { this.goHome(c); return; }
+    c.goal = { kind, b };
+    c.route = this.routeBetween(c.rig.obj.position, dest);
+  }
+  goHome(c) {
+    if (!this.buildings.has(this.key(c.home.i, c.home.j))) { this.removeCitizen(c); return; }
+    c.goal = { kind: 'home', b: c.home };
+    c.route = this.routeBetween(c.rig.obj.position, this.doorstep(c.home.i, c.home.j, 2));
+  }
+
+  /** Reached the end of a route. */
+  arrive(c, h) {
+    const g = c.goal;
+    if (!g) { this.planTrip(c); return; }
+    if (g.kind === 'diner') { this.arriveAtDiner(c); return; }
+    if (g.b && !this.buildings.has(this.key(g.b.i, g.b.j))) { this.planTrip(c); return; }
+    if (g.kind === 'home') { this.enter(c, g.b, 999); return; }
+    if (g.kind === 'work') {
+      if (this.isShop(g.b)) { this.stepToWorkerSpot(c, g.b); return; }
+      this.enter(c, g.b, 999); return;
+    }
+    if (g.kind === 'working') { c.route = []; return this.updateWorker(c, 0); }
+    if (g.kind === 'park') { c.rest = 3 + Math.random() * 5; c.activity = 'relaxing in the park'; c.goal = { kind: 'rested' }; c.route = [this.doorstep(g.b.i, g.b.j, 8)]; return; }
+    if (g.kind === 'rested') { this.planTrip(c); return; }
+    // a shop or another building: go in for a while (only while it's open)
+    if (this.isShop(g.b) && !this.shopsOpen()) { this.planTrip(c); return; }
+    this.enter(c, g.b, 4 + Math.random() * 7);
+  }
+
+  /** Walk into the building: vanish at the door, come back out later. */
+  enter(c, b, seconds) {
+    const door = this.door(b);
+    c.rig.obj.position.copy(door);
+    c.rig.obj.visible = false;
+    c.inside = { b, t: seconds };
+    c.activity = b === c.home ? 'at home' : `inside the ${BUILDING_BY_ID[b.type].name.toLowerCase()}`;
+    c.rig.play('idle');
+    if (b === c.home) { c.dead = true; this.game.scene.remove(c.rig.obj); } // home for now: the population is simulated, the rig is recycled
+  }
+  updateInside(c, dt, h) {
+    const b = c.inside.b;
+    if (!this.buildings.has(this.key(b.i, b.j))) { this.leaveBuilding(c); this.planTrip(c); return; }
+    c.inside.t -= dt;
+    const closing = this.isShop(b) && !this.shopsOpen();
+    const endOfDay = h >= CLOSE_HOUR;
+    if (c.inside.t <= 0 || closing || (endOfDay && b !== c.home)) {
+      this.leaveBuilding(c);
+      if (endOfDay || closing) this.goHome(c); else this.planTrip(c);
+    }
+  }
+  leaveBuilding(c) {
+    const b = c.inside.b;
+    c.rig.obj.position.copy(this.door(b));
+    c.rig.obj.visible = true;
+    c.inside = false;
+    c.route = [this.doorstep(b.i, b.j, 3)];
+    c.goal = null;
+    this.game.fx.sparkle(c.rig.obj.position.clone().add(new THREE.Vector3(0, 1, 0)), 2);
+  }
+  stepToWorkerSpot(c, b) {
+    c.goal = { kind: 'working', b };
+    c.route = [this.workerSpot(b)];
+    c.working = b;
+    c.activity = `working at the ${BUILDING_BY_ID[b.type].name.toLowerCase()}`;
+  }
+  updateWorker(c, dt) {
+    const b = c.working;
+    if (!b || !this.buildings.has(this.key(b.i, b.j))) { c.working = null; if (b) b.worker = null; this.planTrip(c); return; }
+    c.rig.obj.rotation.y = 0; // face the street
+    c.rig.play('idle');
+    c.activity = `serving customers at the ${BUILDING_BY_ID[b.type].name.toLowerCase()}`;
+    if (Math.random() < dt * 0.15) c.rig.play('jump', 0.2); // a wave at passers-by
+    if (!this.shopsOpen()) { c.working = null; c.cleaning = CLEAN_SECONDS * 3; c.cleanDir = 1; c.activity = 'sweeping up for tomorrow'; }
+  }
+  updateCleaning(c, dt) {
+    const b = c.goal?.b;
+    if (!b) { c.cleaning = 0; this.goHome(c); return; }
+    c.cleaning -= dt;
+    // sweep back and forth along the shop front
+    const z = b.j * PITCH + 4.6, x0 = b.i * PITCH - 3, x1 = b.i * PITCH + 3;
+    const p = c.rig.obj.position;
+    p.x += c.cleanDir * 1.2 * dt; p.z += (z - p.z) * Math.min(1, dt * 3);
+    if (p.x > x1) c.cleanDir = -1; if (p.x < x0) c.cleanDir = 1;
+    c.rig.obj.rotation.y = c.cleanDir > 0 ? Math.PI / 2 : -Math.PI / 2;
+    c.rig.play('walk');
+    if (Math.random() < dt * 6) this.game.fx.sparkle(p.clone().add(new THREE.Vector3(c.cleanDir * 0.4, 0.2, 0.2)), 1);
+    if (c.cleaning <= 0 || this.game.clockHour() >= CLOSE_HOUR + 1.5) { c.cleaning = 0; c.rig.mixer.timeScale = 1; b.worker = null; c.activity = 'going home after work'; this.goHome(c); }
+  }
+
+  setShopSign(b, open) {
+    if (!b.sign) { b.sign = labelSprite(open ? 'OPEN' : 'CLOSED'); b.sign.scale.set(2.4, 2.4, 1); b.sign.position.set(-3.5, 5.6, 4); b.obj.add(b.sign); }
+    const c = document.createElement('canvas'); c.width = 256; c.height = 128;
+    const ctx = c.getContext('2d'); ctx.fillStyle = open ? '#3f8f4a' : '#c73e3a'; ctx.beginPath(); ctx.roundRect(8, 24, 240, 80, 18); ctx.fill();
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 56px "Lilita One", "Arial Black", sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(open ? 'OPEN' : 'CLOSED', 128, 66);
+    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
+    b.sign.material.map?.dispose(); b.sign.material.map = t; b.sign.material.needsUpdate = true;
+    b.sign.scale.set(open ? 2.4 : 3.2, open ? 1.2 : 1.6, 1);
+  }
+
+  removeCitizen(c) { c.dead = true; this.game.scene.remove(c.rig.obj); if (c.working) c.working.worker = null; }
+
   arriveAtDiner(c) {
-    c.dead = true;
-    this.game.scene.remove(c.rig.obj);
-    if (this.game.customers.length >= 26) return;
+    this.removeCitizen(c);
+    if (!this.game.dinerOpen() || this.game.customers.length >= 26) return;
     const guest = this.game.spawnCustomer();
     guest.obj.position.copy(c.rig.obj.position);
-    guest.fromCity = true;
+    guest.fromCity = true; guest.name = c.name;
   }
 
   // -- traffic ---------------------------------------------------------
   /** Cars drive the street grid inside the land you own, turning at random at intersections. */
   updateCars(dt, st) {
-    const wanted = Math.min(28, 2 + Math.floor(st.population / 12) + Math.floor(st.employed / 20));
+    const night = !this.shopsOpen();
+    const wanted = Math.round(Math.min(28, 2 + Math.floor(st.population / 12) + Math.floor(st.employed / 20)) * (night ? 0.35 : 1));
     if (this.cars.length < wanted && Math.random() < dt * 0.7) this.spawnCar();
     while (this.cars.length > wanted + 3) { const c = this.cars.pop(); this.game.scene.remove(c.obj); }
     const lim = this.rings * PITCH + PITCH / 2; // street lines run from -lim to lim

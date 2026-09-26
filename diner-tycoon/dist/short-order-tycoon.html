@@ -86,6 +86,17 @@
   .card-b.locked .pr { color: var(--ink-soft); font-family: var(--font-body); font-size: 11px; font-weight: 800; }
   .card-b .ct { font-size: 10px; color: var(--ink-soft); font-weight: 800; }
 
+  #hud-talk { position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(150px + env(safe-area-inset-bottom, 0px)); background: var(--ink); color: var(--gold); font-weight: 800; padding: 6px 12px; border-radius: 10px; font-size: 13px; pointer-events: none; }
+  #judge { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 300px; background: var(--panel); border-radius: 16px; box-shadow: var(--shadow); padding: 12px 14px; border-left: 6px solid var(--gold); }
+  #judge small { font-size: 10px; letter-spacing: .8px; text-transform: uppercase; color: var(--ink-soft); font-weight: 800; }
+  #judge h3 { margin: 2px 0 6px; font-family: var(--font-display); font-size: 22px; }
+  #judge ul { list-style: none; margin: 0 0 8px; padding: 0; font-size: 13px; }
+  #judge li { display: flex; justify-content: space-between; gap: 8px; padding: 3px 0; border-bottom: 1px dashed var(--chrome); }
+  #judge li b { text-align: right; }
+  #judge .row { display: flex; gap: 6px; flex-wrap: wrap; }
+  #judge .btn { padding: 7px 10px; font-size: 12px; box-shadow: none; border: 1px solid var(--chrome); }
+  #judge .hint { font-size: 11px; color: var(--ink-soft); margin-top: 8px; line-height: 1.35; }
+
   /* building info */
   #info { position: absolute; right: 14px; bottom: calc(120px + env(safe-area-inset-bottom, 0px)); width: 280px; background: var(--panel); border-radius: 16px; box-shadow: var(--shadow); padding: 12px 14px; border-left: 6px solid var(--sky); }
   #info h3 { margin: 0; font-family: var(--font-display); font-size: 20px; }
@@ -225,7 +236,7 @@
     <div id="demand-tip"></div>
   </div>
     <div class="register-strip">
-      <small class="title">Your diner</small>
+      <small class="title">Your diner · <span id="hud-open">OPEN</span></small>
       <div class="till">
         <div class="stat"><b id="hud-till">$0.00</b><small>On the register</small></div>
         <button id="btn-collect" class="btn gold" disabled>Collect (Space)</button>
@@ -246,7 +257,9 @@
     <button class="btn small" data-view="overview">Diner</button>
     <button class="btn small" data-view="register">Register</button>
     <button class="btn small" data-view="kitchen">Kitchen</button>
+    <button class="btn small" id="btn-walk" title="Walk around as the mayor (M)">🚶 Walk (M)</button>
   </div>
+  <div id="hud-talk" hidden>E · talk</div>
   <div id="summary" hidden>
     <h3 id="summary-title">Day closed</h3>
     <ul id="summary-body"></ul>
@@ -262,6 +275,18 @@
       <button id="btn-demolish" class="btn">Demolish</button>
       <button id="btn-info-close" class="btn">Close</button>
     </div>
+  </aside>
+
+  <aside id="judge" hidden>
+    <small>The mayor has a word with</small>
+    <h3 id="judge-name">Citizen</h3>
+    <ul id="judge-body"></ul>
+    <div class="row">
+      <button id="btn-praise" class="btn gold">👏 Praise</button>
+      <button id="btn-fine" class="btn">⚖️ Fine $10</button>
+      <button id="btn-judge-close" class="btn">Close</button>
+    </div>
+    <div class="hint">Praise lifts the whole city's happiness a little. Fines fill the treasury but sour the mood.</div>
   </aside>
 
   <div id="build">
@@ -292,7 +317,10 @@
       <li><b>Keep them happy</b> with parks, schools and hospitals. Hunger, unemployment and factory smoke make people leave.</li>
       <li><b>Power:</b> the street grid powers 8 buildings. After that, build power plants or the newest buildings go dark.</li>
       <li><b>Grow:</b> buy more land, level buildings up (click one), and unlock towers, malls and a stadium as your population rises.</li>
-      <li><b>Your diner</b> at the centre still runs: zoom in to collect its cash, hustle staff and buy upgrades. Citizens walk over to eat there.</li>
+      <li><b>A day</b> runs 06:00 to 06:00. Shops and the diner open at 08:00 and close at 18:00: customers head home, workers sweep up and go home too, and come back in the morning to open up.</li>
+      <li><b>People live here.</b> Citizens step out of their own homes, walk to work, shop, eat at your diner, and go back inside at night. Click anyone to see who they are.</li>
+      <li><b>You are the mayor.</b> Press WASD to walk around as yourself, and E next to a citizen to praise or fine them.</li>
+      <li><b>Your diner</b> at the centre still runs: zoom in to collect its cash, hustle staff and buy upgrades.</li>
     </ul>
     <div class="row">
       <button id="btn-continue" class="btn" hidden>Continue</button>
@@ -55533,7 +55561,8 @@ class Fx {
 // ---- src/config.js
 // Balance sheet for Short Order Tycoon. Everything tunable lives here.
 
-const DAY_LENGTH = 120;          // game seconds per business day
+const DAY_LENGTH = 150;          // game seconds per day (06:00 to 06:00)
+const DAY_SPLIT = 115;           // seconds of daytime (06:00-18:00); the night takes the rest
 const START_CASH = 400;
 const START_REPUTATION = 50;     // 0..100 -> 0..5 stars
 const QUEUE_PATIENCE = 32;       // seconds a customer waits in line
@@ -55859,6 +55888,13 @@ const PITCH = 22;          // block-to-block distance (12 m block + pavement + 6
 const BLOCK = 12;          // buildable square per block
 const RADIUS = 4;          // blocks from the diner in each direction (9x9 grid)
 const FREE_POWER = 8;      // buildings the street grid powers before you need a plant
+const OPEN_HOUR = 8;       // shops and the diner open
+const CLOSE_HOUR = 18;     // ...and close; workers sweep up, everyone goes home
+const CLEAN_SECONDS = 7;
+
+const FIRST_NAMES = ['Ada', 'Bo', 'Cleo', 'Dev', 'Eli', 'Fay', 'Gus', 'Hana', 'Ivo', 'Juno', 'Kai', 'Lou', 'Mia', 'Nia', 'Ola', 'Pip', 'Quin', 'Rae', 'Sam', 'Tao', 'Uma', 'Vik', 'Wren', 'Xia', 'Yara', 'Zed'];
+const LAST_NAMES = ['Baker', 'Brook', 'Carver', 'Day', 'Fielding', 'Glass', 'Hart', 'Ivers', 'Jones', 'Kim', 'Lane', 'Moss', 'North', 'Okafor', 'Park', 'Quill', 'Reyes', 'Stone', 'Tan', 'Vale', 'West', 'Young'];
+function cityName() { return `${FIRST_NAMES[Math.floor(Math.random() * FIRST_NAMES.length)]} ${LAST_NAMES[Math.floor(Math.random() * LAST_NAMES.length)]}`; }
 
 const cmat = (color, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.75, metalness: 0.05, ...extra });
 const cshadowed = (m) => { m.castShadow = true; m.receiveShadow = true; return m; };
@@ -56260,6 +56296,7 @@ class City {
     this.eventTimer = 90;
     this.boost = null;     // { name, mult, t } from a city event
     this.income = 0;
+    this.mood = 0;      // the mayor's praise and fines, decays over time
     this.cache = null;
   }
   key(i, j) { return `${i},${j}`; }
@@ -56292,6 +56329,8 @@ class City {
   }
 
   remove(b) {
+    if (b.worker) { b.worker.working = null; b.worker.cleaning = 0; }
+    for (const c of this.citizens) if (c.inside && c.inside.b === b) { c.inside = false; c.rig.obj.visible = true; c.rig.obj.position.copy(this.doorstep(b.i, b.j, 3)); c.goal = null; c.route = []; }
     this.game.scene.remove(b.obj);
     this.buildings.delete(this.key(b.i, b.j));
     const lot = this.ground.lots.get(this.key(b.i, b.j));
@@ -56328,6 +56367,7 @@ class City {
     for (const b of [...this.buildings.values()]) this.remove(b);
     for (const c of this.citizens) this.game.scene.remove(c.rig.obj);
     this.citizens = [];
+    this.mood = 0;
     for (const c of this.cars) this.game.scene.remove(c.obj);
     this.cars = [];
     // give the land back
@@ -56401,7 +56441,7 @@ class City {
     st.foodDemand = 2 + pop * 0.06 + st.employed * 0.1;
     st.fill = st.customersCap > 0 ? Math.min(1, st.demand / st.customersCap) : 0;
     // happiness
-    let happy = st.happyBase + diner * 3;
+    let happy = st.happyBase + diner * 3 + (this.mood ?? 0);
     st.hunger = st.foodCap > 0 ? Math.max(0, st.foodDemand / st.foodCap - 1) : 1;
     happy -= Math.min(25, st.hunger * 40);
     if (pop > 0) happy -= Math.min(30, (st.unemployed / pop) * 55);
@@ -56435,6 +56475,7 @@ class City {
   /** Called every sim tick: grow, bank income, spin signs, keep the streets busy. */
   update(dt) {
     this.cache = null;
+    if (this.mood) this.mood -= Math.sign(this.mood) * Math.min(Math.abs(this.mood), dt * 0.02);
     const st = this.stats();
     this.income = st.income;
     const g = this.game;
@@ -56483,79 +56524,218 @@ class City {
   /** Pavement on the north side of the street below tile row j. */
   streetZ(v) { return (Math.floor(v / PITCH) + 0.5) * PITCH - 3.5; }
   /** The pavement point in front of a block (its south edge, on the street side). */
-  doorstep(i, j) { return new THREE.Vector3(i * PITCH + (Math.random() - 0.5) * 6, 0, j * PITCH + BLOCK / 2 + 1.2); }
-
-  updateCitizens(dt, st) {
-    const wanted = Math.min(24, Math.floor(st.population / 5) + (this.buildings.size ? 1 : 0));
-    if (this.citizens.length < wanted && Math.random() < dt * 0.8) this.spawnCitizen();
-    if (this.citizens.length > wanted + 4) { const c = this.citizens.pop(); this.game.scene.remove(c.rig.obj); }
-    for (const c of this.citizens) {
-      c.rig.update(dt);
-      if (!c.route.length) { this.newRoute(c); continue; }
-      const target = c.route[0];
-      const dx = target.x - c.rig.obj.position.x, dz = target.z - c.rig.obj.position.z;
-      const dist = Math.hypot(dx, dz);
-      if (dist < 0.15) {
-        c.route.shift();
-        if (!c.route.length) {
-          if (c.toDiner) { this.arriveAtDiner(c); continue; }
-          c.rest = 1 + Math.random() * 3;
-        }
-        continue;
-      }
-      if (c.rest > 0) { c.rest -= dt; c.rig.play('idle'); continue; }
-      const step = Math.min(dist, c.speed * dt);
-      c.rig.obj.position.x += (dx / dist) * step; c.rig.obj.position.z += (dz / dist) * step;
-      c.rig.obj.rotation.y = Math.atan2(dx, dz);
-      c.rig.play('walk');
-    }
-    this.citizens = this.citizens.filter((c) => !c.dead);
+  doorstep(i, j, jitter = 6) { return new THREE.Vector3(i * PITCH + (Math.random() - 0.5) * jitter, 0, j * PITCH + BLOCK / 2 + 1.2); }
+  /** The front door of a building: on the block's south edge. People appear and vanish here. */
+  door(b) { return new THREE.Vector3(b.i * PITCH, 0, b.j * PITCH + BLOCK / 2 - 0.4); }
+  /** Where a shop's worker stands while it is open. */
+  workerSpot(b) {
+    const o = b.type === 'hotdogstand' ? [0, -1.4] : [2.8, 4.6];
+    return new THREE.Vector3(b.i * PITCH + o[0], 0, b.j * PITCH + o[1]);
   }
-
-  spawnCitizen() {
-    const all = [...this.buildings.values()];
-    const homes = all.filter((b) => BUILDING_BY_ID[b.type].housing);
-    const from = homes.length ? homes[Math.floor(Math.random() * homes.length)] : all[Math.floor(Math.random() * all.length)];
-    const rig = this.game.makeCitizenRig();
-    if (!rig) return;
-    const start = from ? this.doorstep(from.i, from.j) : new THREE.Vector3(PITCH, 0, PITCH / 2 - 3.5);
-    rig.obj.position.copy(start);
-    const c = { rig, route: [], rest: 0, speed: 1.4 + Math.random() * 0.6, toDiner: false, dead: false, home: from };
-    this.citizens.push(c);
-    this.newRoute(c);
-  }
-
-  /** Manhattan route along the street grid to another block's doorstep, or to the diner door. */
-  newRoute(c) {
-    const targets = [...this.buildings.values()].filter((b) => b !== c.home);
-    const goDiner = Math.random() < 0.3;
-    let dest, isDiner = false;
-    if (goDiner) { dest = new THREE.Vector3(-9.0, 0, 8.5); isDiner = true; }
-    else if (targets.length) { const b = targets[Math.floor(Math.random() * targets.length)]; dest = this.doorstep(b.i, b.j); }
-    else if (c.home) dest = this.doorstep(c.home.i, c.home.j);
-    else dest = new THREE.Vector3(-PITCH, 0, PITCH / 2 - 3.5);
-    const p = c.rig.obj.position;
+  isShop(b) { const d = BUILDING_BY_ID[b.type]; return Boolean(d.customers); }
+  isWorkplace(b) { const d = BUILDING_BY_ID[b.type]; return Boolean(d.jobs); }
+  /** Manhattan route along the street grid from `p` to `dest`. */
+  routeBetween(p, dest) {
     const z1 = this.streetZ(p.z), z2 = this.streetZ(dest.z);
     const route = [new THREE.Vector3(p.x, 0, z1)];
     if (Math.abs(z2 - z1) > 0.1) { const xs = (Math.floor(dest.x / PITCH) + 0.5) * PITCH - 3.5; route.push(new THREE.Vector3(xs, 0, z1)); route.push(new THREE.Vector3(xs, 0, z2)); }
     route.push(new THREE.Vector3(dest.x, 0, z2));
     route.push(dest);
-    c.route = route; c.toDiner = isDiner;
+    return route;
   }
 
+  // -- citizens ---------------------------------------------------------
+  // Every visible citizen lives in a home and may work somewhere. The clock
+  // runs their day: workers walk to their shop at opening time, residents go
+  // shopping, everyone comes out of the shops at closing time and walks home,
+  // shop workers sweep up first. Nobody appears out of thin air: people step
+  // out of their own front doors.
+  shopsOpen() { const h = this.game.clockHour(); return h >= OPEN_HOUR && h < CLOSE_HOUR; }
+
+  updateCitizens(dt, st) {
+    const h = this.game.clockHour();
+    const homes = [...this.buildings.values()].filter((b) => BUILDING_BY_ID[b.type].housing && b.powered);
+    const wanted = homes.length ? Math.min(24, Math.ceil(st.population / 5)) : 0;
+    // people step out of their homes from early morning on; at night nobody new comes out
+    const outHours = h >= OPEN_HOUR - 0.5 && h < CLOSE_HOUR;
+    if (outHours && this.citizens.length < wanted && Math.random() < dt * 0.9) this.spawnCitizen(homes);
+    // shops: open/closed signs and worker bookkeeping
+    const open = this.shopsOpen();
+    for (const b of this.buildings.values()) {
+      if (!this.isShop(b)) continue;
+      const wantOpen = open && b.powered;
+      if (b.openSign !== wantOpen) { b.openSign = wantOpen; this.setShopSign(b, wantOpen); }
+    }
+    // make sure every open shop has a worker on the way
+    if (open && Math.random() < dt * 1.5) {
+      const shop = [...this.buildings.values()].find((b) => this.isShop(b) && b.powered && !b.worker);
+      if (shop && homes.length) { const w = this.spawnCitizen(homes, { work: shop }); if (w) { shop.worker = w; w.goal = { kind: 'work', b: shop }; w.route = this.routeBetween(w.rig.obj.position, this.doorstep(shop.i, shop.j, 2)); } }
+    }
+    const afterHours = h >= CLOSE_HOUR || h < OPEN_HOUR - 1;
+    for (const c of this.citizens) {
+      c.rig.update(dt);
+      if (c.inside) { this.updateInside(c, dt, h); continue; }
+      if (afterHours && !c.cleaning && !c.working && c.goal && c.goal.kind !== 'home' && !c.sentHome) { c.sentHome = true; this.goHome(c); continue; }
+      if (h >= 4 && h < OPEN_HOUR - 1 && !c.inside) { this.removeCitizen(c); continue; } // slipped home before dawn
+      if (c.cleaning) { this.updateCleaning(c, dt); continue; }
+      if (c.working && !c.route.length) { this.updateWorker(c, dt); continue; }
+      if (!c.route.length) { this.arrive(c, h); continue; }
+      const target = c.route[0];
+      const dx = target.x - c.rig.obj.position.x, dz = target.z - c.rig.obj.position.z;
+      const dist = Math.hypot(dx, dz);
+      if (dist < 0.15) { c.route.shift(); continue; }
+      if (c.rest > 0) { c.rest -= dt; c.rig.play('idle'); continue; }
+      const hurry = afterHours ? 1.8 : 1; // everyone hurries home after closing
+      const step = Math.min(dist, c.speed * hurry * dt);
+      c.rig.obj.position.x += (dx / dist) * step; c.rig.obj.position.z += (dz / dist) * step;
+      c.rig.obj.rotation.y = Math.atan2(dx, dz);
+      c.rig.play('walk');
+      c.rig.mixer.timeScale = hurry;
+      c.activity = c.goal ? ({ work: 'walking to work', working: 'opening up the shop', shop: 'going shopping', diner: 'heading to your diner', home: 'going home', park: 'off to the park', rested: 'strolling' })[c.goal.kind] ?? 'about town' : 'out for a walk';
+    }
+    this.citizens = this.citizens.filter((c) => !c.dead);
+  }
+
+  spawnCitizen(homes, { work = null } = {}) {
+    if (!homes.length) return null;
+    const home = homes[Math.floor(Math.random() * homes.length)];
+    const rig = this.game.makeCitizenRig();
+    if (!rig) return null;
+    rig.obj.position.copy(this.door(home));
+    const c = { rig, home, work, route: [], rest: 0, speed: 2.0 + Math.random() * 0.7, dead: false, inside: false, cleaning: 0, goal: null, name: cityName(), mood: 'content', activity: 'leaving home' };
+    this.citizens.push(c);
+    this.game.fx.sparkle(rig.obj.position.clone().add(new THREE.Vector3(0, 1, 0)), 3);
+    if (!work) this.planTrip(c);
+    return c;
+  }
+
+  /** Pick where to go next: work if you have a job and it is opening time, otherwise a shop, the park, the diner, or home. */
+  planTrip(c) {
+    const h = this.game.clockHour();
+    if (h >= CLOSE_HOUR || h < OPEN_HOUR - 0.5) { this.goHome(c); return; }
+    const all = [...this.buildings.values()].filter((b) => b.powered && b !== c.home);
+    const shops = all.filter((b) => this.isShop(b));
+    const parks = all.filter((b) => b.type === 'park' || b.type === 'stadium');
+    const roll = Math.random();
+    let kind, b = null, dest;
+    if (roll < 0.22 && this.game.dinerOpen() && this.game.customers.length < 22) { kind = 'diner'; dest = new THREE.Vector3(-9.0, 0, 8.5); }
+    else if (roll < 0.62 && shops.length) { kind = 'shop'; b = shops[Math.floor(Math.random() * shops.length)]; dest = this.doorstep(b.i, b.j, 2); }
+    else if (roll < 0.78 && parks.length) { kind = 'park'; b = parks[Math.floor(Math.random() * parks.length)]; dest = this.doorstep(b.i, b.j, 2); }
+    else if (all.length && roll < 0.9) { kind = 'shop'; b = all[Math.floor(Math.random() * all.length)]; dest = this.doorstep(b.i, b.j, 2); }
+    else { this.goHome(c); return; }
+    c.goal = { kind, b };
+    c.route = this.routeBetween(c.rig.obj.position, dest);
+  }
+  goHome(c) {
+    if (!this.buildings.has(this.key(c.home.i, c.home.j))) { this.removeCitizen(c); return; }
+    c.goal = { kind: 'home', b: c.home };
+    c.route = this.routeBetween(c.rig.obj.position, this.doorstep(c.home.i, c.home.j, 2));
+  }
+
+  /** Reached the end of a route. */
+  arrive(c, h) {
+    const g = c.goal;
+    if (!g) { this.planTrip(c); return; }
+    if (g.kind === 'diner') { this.arriveAtDiner(c); return; }
+    if (g.b && !this.buildings.has(this.key(g.b.i, g.b.j))) { this.planTrip(c); return; }
+    if (g.kind === 'home') { this.enter(c, g.b, 999); return; }
+    if (g.kind === 'work') {
+      if (this.isShop(g.b)) { this.stepToWorkerSpot(c, g.b); return; }
+      this.enter(c, g.b, 999); return;
+    }
+    if (g.kind === 'working') { c.route = []; return this.updateWorker(c, 0); }
+    if (g.kind === 'park') { c.rest = 3 + Math.random() * 5; c.activity = 'relaxing in the park'; c.goal = { kind: 'rested' }; c.route = [this.doorstep(g.b.i, g.b.j, 8)]; return; }
+    if (g.kind === 'rested') { this.planTrip(c); return; }
+    // a shop or another building: go in for a while (only while it's open)
+    if (this.isShop(g.b) && !this.shopsOpen()) { this.planTrip(c); return; }
+    this.enter(c, g.b, 4 + Math.random() * 7);
+  }
+
+  /** Walk into the building: vanish at the door, come back out later. */
+  enter(c, b, seconds) {
+    const door = this.door(b);
+    c.rig.obj.position.copy(door);
+    c.rig.obj.visible = false;
+    c.inside = { b, t: seconds };
+    c.activity = b === c.home ? 'at home' : `inside the ${BUILDING_BY_ID[b.type].name.toLowerCase()}`;
+    c.rig.play('idle');
+    if (b === c.home) { c.dead = true; this.game.scene.remove(c.rig.obj); } // home for now: the population is simulated, the rig is recycled
+  }
+  updateInside(c, dt, h) {
+    const b = c.inside.b;
+    if (!this.buildings.has(this.key(b.i, b.j))) { this.leaveBuilding(c); this.planTrip(c); return; }
+    c.inside.t -= dt;
+    const closing = this.isShop(b) && !this.shopsOpen();
+    const endOfDay = h >= CLOSE_HOUR;
+    if (c.inside.t <= 0 || closing || (endOfDay && b !== c.home)) {
+      this.leaveBuilding(c);
+      if (endOfDay || closing) this.goHome(c); else this.planTrip(c);
+    }
+  }
+  leaveBuilding(c) {
+    const b = c.inside.b;
+    c.rig.obj.position.copy(this.door(b));
+    c.rig.obj.visible = true;
+    c.inside = false;
+    c.route = [this.doorstep(b.i, b.j, 3)];
+    c.goal = null;
+    this.game.fx.sparkle(c.rig.obj.position.clone().add(new THREE.Vector3(0, 1, 0)), 2);
+  }
+  stepToWorkerSpot(c, b) {
+    c.goal = { kind: 'working', b };
+    c.route = [this.workerSpot(b)];
+    c.working = b;
+    c.activity = `working at the ${BUILDING_BY_ID[b.type].name.toLowerCase()}`;
+  }
+  updateWorker(c, dt) {
+    const b = c.working;
+    if (!b || !this.buildings.has(this.key(b.i, b.j))) { c.working = null; if (b) b.worker = null; this.planTrip(c); return; }
+    c.rig.obj.rotation.y = 0; // face the street
+    c.rig.play('idle');
+    c.activity = `serving customers at the ${BUILDING_BY_ID[b.type].name.toLowerCase()}`;
+    if (Math.random() < dt * 0.15) c.rig.play('jump', 0.2); // a wave at passers-by
+    if (!this.shopsOpen()) { c.working = null; c.cleaning = CLEAN_SECONDS * 3; c.cleanDir = 1; c.activity = 'sweeping up for tomorrow'; }
+  }
+  updateCleaning(c, dt) {
+    const b = c.goal?.b;
+    if (!b) { c.cleaning = 0; this.goHome(c); return; }
+    c.cleaning -= dt;
+    // sweep back and forth along the shop front
+    const z = b.j * PITCH + 4.6, x0 = b.i * PITCH - 3, x1 = b.i * PITCH + 3;
+    const p = c.rig.obj.position;
+    p.x += c.cleanDir * 1.2 * dt; p.z += (z - p.z) * Math.min(1, dt * 3);
+    if (p.x > x1) c.cleanDir = -1; if (p.x < x0) c.cleanDir = 1;
+    c.rig.obj.rotation.y = c.cleanDir > 0 ? Math.PI / 2 : -Math.PI / 2;
+    c.rig.play('walk');
+    if (Math.random() < dt * 6) this.game.fx.sparkle(p.clone().add(new THREE.Vector3(c.cleanDir * 0.4, 0.2, 0.2)), 1);
+    if (c.cleaning <= 0 || this.game.clockHour() >= CLOSE_HOUR + 1.5) { c.cleaning = 0; c.rig.mixer.timeScale = 1; b.worker = null; c.activity = 'going home after work'; this.goHome(c); }
+  }
+
+  setShopSign(b, open) {
+    if (!b.sign) { b.sign = labelSprite(open ? 'OPEN' : 'CLOSED'); b.sign.scale.set(2.4, 2.4, 1); b.sign.position.set(-3.5, 5.6, 4); b.obj.add(b.sign); }
+    const c = document.createElement('canvas'); c.width = 256; c.height = 128;
+    const ctx = c.getContext('2d'); ctx.fillStyle = open ? '#3f8f4a' : '#c73e3a'; ctx.beginPath(); ctx.roundRect(8, 24, 240, 80, 18); ctx.fill();
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 56px "Lilita One", "Arial Black", sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(open ? 'OPEN' : 'CLOSED', 128, 66);
+    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
+    b.sign.material.map?.dispose(); b.sign.material.map = t; b.sign.material.needsUpdate = true;
+    b.sign.scale.set(open ? 2.4 : 3.2, open ? 1.2 : 1.6, 1);
+  }
+
+  removeCitizen(c) { c.dead = true; this.game.scene.remove(c.rig.obj); if (c.working) c.working.worker = null; }
+
   arriveAtDiner(c) {
-    c.dead = true;
-    this.game.scene.remove(c.rig.obj);
-    if (this.game.customers.length >= 26) return;
+    this.removeCitizen(c);
+    if (!this.game.dinerOpen() || this.game.customers.length >= 26) return;
     const guest = this.game.spawnCustomer();
     guest.obj.position.copy(c.rig.obj.position);
-    guest.fromCity = true;
+    guest.fromCity = true; guest.name = c.name;
   }
 
   // -- traffic ---------------------------------------------------------
   /** Cars drive the street grid inside the land you own, turning at random at intersections. */
   updateCars(dt, st) {
-    const wanted = Math.min(28, 2 + Math.floor(st.population / 12) + Math.floor(st.employed / 20));
+    const night = !this.shopsOpen();
+    const wanted = Math.round(Math.min(28, 2 + Math.floor(st.population / 12) + Math.floor(st.employed / 20)) * (night ? 0.35 : 1));
     if (this.cars.length < wanted && Math.random() < dt * 0.7) this.spawnCar();
     while (this.cars.length > wanted + 3) { const c = this.cars.pop(); this.game.scene.remove(c.obj); }
     const lim = this.rings * PITCH + PITCH / 2; // street lines run from -lim to lim
@@ -56854,7 +57034,7 @@ function buildToque() {
 function buildFood(item, protos = {}) {
   const g = new THREE.Group();
   // a small saucer: the skewer should overhang it like a real kebab plate
-  const plateR = item.shape === 'platter' || item.shape === 'special' ? 0.17 : 0.13;
+  const plateR = item.shape === 'platter' || item.shape === 'special' ? 0.25 : 0.2;
   const plate = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(plateR, plateR * 0.8, 0.025, 20), mat(0xf7f7f2, { roughness: 0.3 })));
   plate.position.y = 0.0125; g.add(plate);
   const c = item.color;
@@ -57428,6 +57608,10 @@ class Game {
     this.renderQuest();
     this.paused = false;
     this.spawnTimer = 1.5;
+    this.setupOpeningHours();
+    this.spawnMayor();
+    this.walkMode = false;
+    this.openJudge(null);
     $('overlay-title').classList.remove('show');
     $('hud').classList.add('show');
     this.renderShop();
@@ -57599,9 +57783,9 @@ class Game {
   collectAgents() {
     const list = [];
     for (const c of this.customers) if (!c.dead) list.push(c);
-    for (const r of this.runners) list.push(r);
-    for (const c of this.chefs ?? []) list.push(c.rig);
-    for (const r of this.registers) if (r.cashier) list.push(r.cashier);
+    for (const r of this.runners) if (r.obj.visible) list.push(r);
+    for (const c of this.chefs ?? []) if (c.rig.obj.visible) list.push(c.rig);
+    for (const r of this.registers) if (r.cashier?.obj.visible) list.push(r.cashier);
     return list;
   }
 
@@ -57725,7 +57909,8 @@ class Game {
           break;
         }
         case 'leave': {
-          const moving = !this.walkTo(c, c.exit, c.speed * 1.15, dt);
+          const close = Math.hypot(o.position.x - c.exit.x, o.position.z - c.exit.z) < 0.4;
+          const moving = !close && !this.walkTo(c, c.exit, c.speed * 1.15, dt);
           this.bob(c, moving, dt);
           if (!moving) { this.scene.remove(o); c.dead = true; }
           break;
@@ -57850,8 +58035,10 @@ class Game {
     this.updateHud();
   }
 
-  abandon(c) {
-    // gave up waiting for food: cancel the order wherever it is
+  abandon(c) { this.cancelOrder(c); this.leave(c, false, 'waited too long'); }
+
+  /** Cancel a guest's order wherever it is in the kitchen. */
+  cancelOrder(c) {
     const o = c.order;
     if (o) {
       o.cancelled = true;
@@ -57860,8 +58047,22 @@ class Game {
       this.orders = this.orders.filter((x) => x !== o);
       if (o.state === 'carrying' && o.runner) { o.runner.carry.clear(); o.runner.order = null; o.runner.state = 'return'; }
       if (o.chef) { if (o.plate) o.chef.rig.carry.remove(o.plate); o.chef.order = null; o.chef.state = 'idle'; o.chef = null; }
+      c.order = null;
     }
-    this.leave(c, false, 'waited too long');
+  }
+
+  /** Closing time: the guest leaves without a fuss and without a penalty. */
+  dismiss(c) {
+    if (c.state === 'leave' || c.dead) return;
+    this.cancelOrder(c);
+    if (c.plate) { const hand = c.obj.getObjectByName('hand'); hand?.remove(c.plate); c.plate = null; }
+    if (c.seat) { c.seat.table.userData.taken[c.seat.index] = null; c.seat = null; }
+    if (c.waitSpot) { c.waitSpot.taken = false; c.waitSpot = null; }
+    if (c.register && c.register.busy === c) { c.register.busy = null; c.register.cashier?.play('idle'); }
+    if (c.rig) { c.rig.carryBlend = 0; c.rig.carryTarget = null; }
+    c.state = 'leave';
+    c.exit = L.spawn.clone().add(new THREE.Vector3(rand(-0.6, 0.6), 0, rand(-0.6, 0.6)));
+    this.float(c.obj.position, 'closing time', 'good');
   }
 
   // ---------------------------------------------------------- cashier
@@ -58189,27 +58390,29 @@ class Game {
 
   updateLighting() {
     const f = this.dayFraction();
-    // daylight peaks mid-day and fades to evening in the last third
-    const daylight = f < 0.55 ? 1 : Math.max(0.12, 1 - (f - 0.55) / 0.4);
+    // the day runs 06:00-18:00 over the first 75% of the clock; dusk from 16:00, night after 19:00, dawn in the last moments
+    const daylight = f < 0.62 ? Math.min(1, 0.55 + f * 4) : f < 0.8 ? Math.max(0.12, 1 - (f - 0.62) / 0.2) : f > 0.97 ? 0.12 + (f - 0.97) / 0.03 * 0.4 : 0.12;
     const evening = 1 - daylight;
     this.sun.intensity = 0.35 + 1.75 * daylight;
-    this.sun.color.setHex(f > 0.7 ? 0xffb07a : 0xfff1dc);
+    this.sun.color.setHex(f > 0.7 && f < 0.97 ? 0xffb07a : 0xfff1dc);
     this.hemi.intensity = 0.35 + 0.55 * daylight;
     const sky = new THREE.Color();
-    if (f < 0.55) sky.copy(this.skyDay);
-    else if (f < 0.8) sky.lerpColors(this.skyDay, this.skyDusk, (f - 0.55) / 0.25);
-    else sky.lerpColors(this.skyDusk, this.skyNight, (f - 0.8) / 0.2);
+    if (f < 0.62) sky.copy(this.skyDay);
+    else if (f < 0.8) sky.lerpColors(this.skyDay, this.skyDusk, (f - 0.62) / 0.18);
+    else if (f < 0.97) sky.lerpColors(this.skyDusk, this.skyNight, Math.min(1, (f - 0.8) / 0.1));
+    else sky.lerpColors(this.skyNight, this.skyDusk, (f - 0.97) / 0.03);
     this.scene.background.copy(sky);
     this.scene.fog.color.copy(sky);
     const glow = 0.25 + 0.75 * evening;
+    const dinerOn = this.dinerLit();
     for (const lamp of this.lamps) {
-      lamp.light.intensity = lamp.baseIntensity * (lamp.outdoor ? evening * 1.4 : 0.35 + 0.9 * evening);
-      for (const m of lamp.bulbMats) m.emissiveIntensity = 0.6 + 2.4 * glow;
+      lamp.light.intensity = lamp.baseIntensity * (lamp.outdoor ? evening * 1.4 : dinerOn ? 0.35 + 0.9 * evening : 0.02);
+      for (const m of lamp.bulbMats) m.emissiveIntensity = lamp.outdoor || dinerOn ? 0.6 + 2.4 * glow : 0.05;
     }
     this.renderer.toneMappingExposure = 1.0 + 0.15 * evening;
     if (this.world) {
       this.world.nightSky.opacity = Math.max(0, (f - 0.78) / 0.22) * 0.9;
-      this.world.neon.emissiveIntensity = 0.8 + 2.2 * evening + Math.sin(this.time * 7) * 0.15 * evening;
+      this.world.neon.emissiveIntensity = dinerOn ? 0.8 + 2.2 * evening + Math.sin(this.time * 7) * 0.15 * evening : 0.15;
       const lit = this.s ? this.stars() : 0;
       this.world.signStars.forEach((st, i) => { const on = lit >= i + 0.5; st.material.color.setHex(on ? 0xffd54f : 0x4a4f58); st.material.opacity = on ? 1 : 0.6; });
     }
@@ -58338,7 +58541,9 @@ class Game {
     const st = this.stars();
     $('hud-stars').textContent = '★'.repeat(Math.round(st)) + '☆'.repeat(5 - Math.round(st));
     $('hud-rep').textContent = `${st.toFixed(1)} stars · ${this.arrivalsPerMinute().toFixed(1)}/min`;
-    $('hud-day').textContent = `Day ${this.s.day}`;
+    $('hud-day').textContent = `Day ${this.s.day} · ${this.clockText()}`;
+    $('hud-open').textContent = { closed: 'CLOSED · opens 08:00', arriving: 'staff arriving', open: 'OPEN', closing: 'CLOSING', cleaning: 'cleaning up', leaving: 'staff going home' }[this.dinerPhase] ?? '';
+    $('btn-walk').classList.toggle('on', Boolean(this.walkMode));
     const cs = this.city.stats();
     $('hud-pop').textContent = cs.population.toLocaleString();
     const nr = this.city.nextRank();
@@ -58356,7 +58561,7 @@ class Game {
     const near = this.camera.position.distanceTo(new THREE.Vector3(0, 0, 1)) < 34;
     $('hud').classList.toggle('near-diner', near);
     for (const b of document.querySelectorAll('[data-view]')) b.classList.toggle('on', b.dataset.view === this.currentView);
-    $('hud-clock').style.width = `${(this.s.dayTime / DAY_LENGTH) * 100}%`;
+    $('hud-clock').style.width = `${((this.clockHour() - 6) / 24) * 100}%`;
     $('hud-served').textContent = this.s.stats.servedToday;
     $('hud-queue').textContent = this.customers.filter((c) => c.state === 'queue' || c.state === 'enter').length;
     $('hud-kitchen').textContent = `${this.orders.filter((o) => o.state === 'cooking' || o.state === 'prepping').length}/${this.stoves()}`;
@@ -58385,6 +58590,13 @@ class Game {
     $('btn-upgrade').addEventListener('click', () => this.upgradeSelected());
     $('btn-demolish').addEventListener('click', () => this.demolishSelected());
     $('btn-info-close').addEventListener('click', () => this.selectBuilding(null));
+    $('btn-walk').addEventListener('click', () => this.setWalkMode(!this.walkMode));
+    $('btn-praise').addEventListener('click', () => this.judge('praise'));
+    $('btn-fine').addEventListener('click', () => this.judge('fine'));
+    $('btn-judge-close').addEventListener('click', () => this.openJudge(null));
+    this.keys = new Set();
+    addEventListener('keyup', (e) => this.keys.delete(e.code));
+    addEventListener('blur', () => this.keys.clear());
     this.canvas.addEventListener('pointermove', (e) => { if (this.city.placing) this.hoverTile(e); });
     $('btn-shop-close').addEventListener('click', () => $('shop').classList.remove('open'));
     $('btn-reset').addEventListener('click', () => {
@@ -58403,7 +58615,10 @@ class Game {
       else if (e.key === 'b' || e.key === 'B') { $('shop').classList.toggle('open'); }
       else if (e.key === 'c' || e.key === 'C') this.viewPreset('city');
       else if (e.key === 'x' || e.key === 'X') this.setPlacing(this.city.placing === 'bulldoze' ? null : 'bulldoze');
-      else if (e.key === 'Escape') { this.setPlacing(null); this.selectBuilding(null); }
+      else if (e.key === 'Escape') { this.setPlacing(null); this.selectBuilding(null); this.openJudge(null); }
+      else if (e.key === 'm' || e.key === 'M') this.setWalkMode(!this.walkMode);
+      else if (e.key === 'e' || e.key === 'E') this.judgeNearby();
+      else if (['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ShiftLeft', 'ShiftRight'].includes(e.code)) { this.keys.add(e.code); if (e.code.startsWith('Arrow')) e.preventDefault(); if (!this.walkMode && this.mayor) this.setWalkMode(true); }
       else if (e.key === '1' || e.key === '2' || e.key === '3') { this.speed = Number(e.key); this.updateHud(); }
       else if (e.key === 'v' || e.key === 'V') { const order = ['city', 'overview', 'register', 'kitchen']; this.viewIdx = ((this.viewIdx ?? 0) + 1) % order.length; this.viewPreset(order[this.viewIdx]); }
     });
@@ -58420,6 +58635,10 @@ class Game {
       this.raycaster.setFromCamera(this.pointer, this.camera);
       if (this.city.placing === 'bulldoze') { this.tryBulldoze(); return; }
       if (this.city.placing) { this.tryBuild(); return; }
+      // a citizen on the street: the mayor has a word with them
+      const cit = this.city.citizens.filter((c) => !c.dead && c.rig.obj.visible);
+      const cHits = this.raycaster.intersectObjects(cit.map((c) => c.rig.obj), true);
+      if (cHits.length) { const who = cit.find((c) => c.rig === this.ownerOf(cHits[0].object)); if (who) { this.openJudge(who); return; } }
       // a city building: select it
       const bHits = this.raycaster.intersectObjects([...this.city.buildings.values()].map((b) => b.obj), true);
       if (bHits.length) { this.selectBuilding(this.buildingOf(bHits[0].object)); return; }
@@ -58447,6 +58666,7 @@ class Game {
     const p = presets[name];
     if (!p) return;
     this.currentView = name;
+    if (this.walkMode) this.setWalkMode(false, true);
     if (name === 'city' && this.city.rings > 1) { const k = 0.6 + this.city.rings * 0.35; p.pos = [40 * k, 60 * k, 70 * k]; }
     this.camTween = { from: this.camera.position.clone(), to: new THREE.Vector3(...p.pos), tFrom: this.controls.target.clone(), tTo: new THREE.Vector3(...p.target), t: 0 };
   }
@@ -58627,7 +58847,7 @@ class Game {
   /** What the diner itself makes per minute, roughly, for the income readout. */
   dinerRate() { const st = this.s.stats; const f = this.s.dayTime > 20 ? this.s.dayTime / 60 : 0; return f > 0 ? (st.earnedToday ?? 0) / f : 0; }
   fmt(n) { return money(n); }
-  cityFloat(text, kind) { this.float(this.controls.target.clone().add(new THREE.Vector3(0, 6, 0)), text, `city ${kind}`); }
+  cityFloat(text, kind, pos = null) { this.float((pos ?? this.controls.target).clone().add(new THREE.Vector3(0, 6, 0)), text, `city ${kind}`); }
   onRankUp(rank) {
     if (rank.id === 0) return;
     this.sfx.levelUp();
@@ -58673,6 +58893,253 @@ class Game {
     $('paused').hidden = !this.paused;
   }
 
+  // ---------------------------------------------------------- opening hours
+  /** Game clock: 06:00-18:00 over the first DAY_SPLIT seconds, 18:00-06:00 over the rest. */
+  clockHour() { const t = this.s ? this.s.dayTime : 0; return t < DAY_SPLIT ? 6 + (t / DAY_SPLIT) * 12 : 18 + ((t - DAY_SPLIT) / (DAY_LENGTH - DAY_SPLIT)) * 12; }
+  clockText() { const h = this.clockHour() % 24; const hh = Math.floor(h), mm = Math.floor((h - hh) * 60); return `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`; }
+  dinerOpen() { return this.dinerPhase === 'open'; }
+  dinerLit() { return ['open', 'closing', 'cleaning', 'arriving'].includes(this.dinerPhase); }
+  staff() {
+    const list = [];
+    for (const r of this.registers) if (r.cashier) list.push({ rig: r.cashier, post: r.stand, kind: 'staff', face: 0 });
+    for (const r of this.runners) list.push({ rig: r, post: r.idleSpot, kind: 'staff', face: null });
+    for (const c of this.chefs ?? []) list.push({ rig: c.rig, post: c.stove, kind: 'chef', face: Math.PI });
+    return list;
+  }
+  /** Called from begin(): put the diner in the right state for the saved time of day. */
+  setupOpeningHours() {
+    const h = this.clockHour();
+    const open = h >= OPEN_HOUR && h < CLOSE_HOUR;
+    this.dinerPhase = open ? 'open' : 'closed';
+    for (const st of this.staff()) { st.rig.commute = null; st.rig.obj.visible = open; st.rig.obj.position.copy(st.post); if (st.face != null) st.rig.obj.rotation.y = st.face; }
+  }
+  updateOpeningHours(dt) {
+    const h = this.clockHour();
+    switch (this.dinerPhase) {
+      case 'closed':
+        if (h >= OPEN_HOUR - 1 && h < CLOSE_HOUR) { this.dinerPhase = 'arriving'; this.startCommute(false); this.log('The diner staff are on their way in.'); }
+        break;
+      case 'arriving':
+        if (this.runCommutes(dt)) { this.dinerPhase = 'open'; this.toast('🍽️ The diner is open for the day.', 'good', 3000); this.sfx.bell(); }
+        break;
+      case 'open':
+        if (h >= CLOSE_HOUR) {
+          this.dinerPhase = 'closing'; this.closingTimer = 0;
+          for (const c of this.customers) if (['enter', 'queue', 'ordering'].includes(c.state)) this.dismiss(c);
+          this.toast('🌆 18:00: shops and the diner are closing. Everyone heads home.', 'warn', 4000);
+          this.log('Closing time. Guests still waiting for food get served first.');
+        }
+        break;
+      case 'closing':
+        this.closingTimer += dt;
+        if (!this.customers.some((c) => c.state !== 'leave') || h >= CLOSE_HOUR + 1) {
+          for (const c of this.customers) this.dismiss(c);
+          this.resetKitchen();
+          this.dinerPhase = 'cleaning'; this.cleanTimer = CLEAN_SECONDS;
+          for (const st of this.staff()) { st.rig.cleanBase = st.rig.obj.position.clone(); st.rig.cleanPhase = Math.random() * 6; }
+          this.log('The staff are cleaning the diner for tomorrow.');
+        }
+        break;
+      case 'cleaning':
+        this.cleanTimer -= dt;
+        if (h >= CLOSE_HOUR + 1.75 || h < OPEN_HOUR - 1) { this.dinerPhase = 'leaving'; this.startCommute(true); this.log('The diner is spotless. Staff heading home.'); }
+        break;
+      case 'leaving':
+        if (this.runCommutes(dt)) { this.dinerPhase = 'closed'; for (const st of this.staff()) st.rig.obj.visible = false; }
+        break;
+    }
+    if (this.dinerPhase !== 'open' && this.dinerPhase !== 'closing') { this.s.till = this.s.till; }
+  }
+  /** Staff cleaning (wiping, sweeping) or walking to/from their posts. */
+  updateStaffOffHours(dt) {
+    for (const st of this.staff()) {
+      const rig = st.rig;
+      rig.tickBoost(dt, this.time);
+      if (this.dinerPhase === 'cleaning' && rig.cleanBase) {
+        const t = this.time * 2 + rig.cleanPhase;
+        rig.obj.position.x = rig.cleanBase.x + Math.sin(t) * 0.35;
+        rig.obj.position.z = rig.cleanBase.z + Math.cos(t * 0.7) * 0.2;
+        rig.obj.rotation.y = Math.atan2(Math.cos(t) * 0.35, -Math.sin(t * 0.7) * 0.14);
+        rig.play('walk');
+        if (Math.random() < dt * 5) this.fx.sparkle(rig.obj.position.clone().add(new THREE.Vector3(Math.sin(t) * 0.3, 0.3, 0.3)), 1);
+      }
+      rig.update(dt);
+    }
+    if (this.dinerPhase === 'cleaning') this.dismissStragglers();
+  }
+  /** Closing time: clear the pass, the pickup counter and everyone's hands. */
+  resetKitchen() {
+    for (const o of this.orders) { if (o.plate) { o.plate.parent?.remove(o.plate); this.scene.remove(o.plate); } if (o.chef) { o.chef.order = null; o.chef.state = 'idle'; } if (o.runner) { o.runner.order = null; o.runner.state = 'idle'; } }
+    this.orders = [];
+    for (const p of this.passPlates) if (p) this.scene.remove(p);
+    for (const p of this.pickupPlates) if (p) this.scene.remove(p);
+    this.passPlates = [null, null, null, null];
+    this.pickupPlates = [null, null, null];
+    for (const c of this.chefs ?? []) { c.rig.carry.clear(); c.order = null; c.state = 'idle'; }
+    for (const r of this.runners) { r.carry.clear(); r.order = null; r.state = 'idle'; }
+    for (const r of this.registers) { r.busy = null; r.timer = 0; }
+  }
+  dismissStragglers() { for (const c of this.customers) if (c.state !== 'leave') this.dismiss(c); }
+  /** Build every staff member's walk in or out through the door, around the counter ends. */
+  startCommute(leaving) {
+    const side = new THREE.Vector3(5.9, 0, 1.3), cross = new THREE.Vector3(5.9, 0, 2.2), kitchenGate = new THREE.Vector3(5.5, 0, -2.0);
+    for (const st of this.staff()) {
+      const rig = st.rig;
+      rig.obj.visible = true;
+      const out = L.spawn.clone().add(new THREE.Vector3(rand(-1.2, 0.6), 0, rand(-0.4, 0.8)));
+      let segs;
+      if (leaving) {
+        segs = [];
+        if (st.kind === 'chef') segs.push({ t: kitchenGate.clone(), mask: MASK.CHEF });
+        segs.push({ t: side.clone(), mask: MASK.STAFF }, { t: cross.clone() }, { t: L.door.clone(), mask: MASK.CUSTOMER }, { t: out });
+      } else {
+        rig.obj.position.copy(out);
+        segs = [{ t: L.door.clone() }, { t: cross.clone(), mask: MASK.CUSTOMER }, { t: side.clone() }];
+        if (st.kind === 'chef') segs.push({ t: kitchenGate.clone(), mask: MASK.STAFF }, { t: st.post.clone(), mask: MASK.CHEF });
+        else segs.push({ t: st.post.clone(), mask: MASK.STAFF });
+      }
+      rig.commute = { segs, i: 0, done: false, delay: Math.random() * 1.5, homeMask: st.kind === 'chef' ? MASK.CHEF : MASK.STAFF, face: st.face };
+      rig.nav = null;
+    }
+  }
+  /** Advance every commute; true when all have arrived. */
+  runCommutes(dt) {
+    let all = true;
+    for (const st of this.staff()) {
+      const rig = st.rig, cm = rig.commute;
+      rig.tickBoost(dt, this.time);
+      if (!cm || cm.done) { rig.update(dt); continue; }
+      all = false;
+      if (cm.delay > 0) { cm.delay -= dt; rig.play('idle'); rig.update(dt); continue; }
+      const seg = cm.segs[cm.i];
+      let arrived;
+      if (seg.mask) { rig.mask = seg.mask; arrived = this.walkTo(rig, seg.t, 3.2, dt); }
+      else arrived = stepToward(rig.obj, seg.t, 3.2, dt, true, 0.12);
+      rig.play('walk');
+      if (arrived) { cm.i += 1; rig.nav = null; if (cm.i >= cm.segs.length) { cm.done = true; rig.mask = cm.homeMask; rig.moving = false; rig.play('idle'); if (cm.face != null) rig.obj.rotation.y = cm.face; } }
+      rig.update(dt);
+    }
+    return all;
+  }
+
+  // ---------------------------------------------------------- the mayor
+  spawnMayor() {
+    if (this.mayor) { this.scene.remove(this.mayor.obj); this.mayor = null; }
+    if (!this.models.cashier) return;
+    const rig = new Character(cloneRig(this.models.cashier), this.scene, { tint: 0xcfe8ff, hat: buildCrown() });
+    rig.mask = MASK.CUSTOMER;
+    rig.obj.position.set(-13, 0, 10);
+    rig.obj.rotation.y = Math.PI / 2;
+    const tag = makeNameTag('MAYOR (you)');
+    tag.position.y = 2.5; rig.obj.add(tag);
+    this.mayor = rig;
+  }
+  setWalkMode(on, quiet = false) {
+    if (!this.mayor) return;
+    this.walkMode = on;
+    if (on) { this.currentView = 'walk'; this.camTween = null; if (!quiet) this.toast('Walking as the mayor: WASD or arrows to walk, Shift to run, E to talk to the nearest citizen.', 'info', 4500); }
+    this.updateHud();
+  }
+  mayorCanStand(x, z) {
+    const n = this.nav;
+    if (n.inBounds(n.col(x), n.row(z))) return n.walkable(x, z, MASK.CUSTOMER);
+    const lim = this.city.span() / 2 + 8;
+    if (Math.abs(x) > lim || Math.abs(z) > lim) return false;
+    for (const b of this.city.buildings.values()) if (Math.abs(x - b.i * PITCH) < BLOCK / 2 + 0.3 && Math.abs(z - b.j * PITCH) < BLOCK / 2 + 0.3) return false;
+    return true;
+  }
+  updateMayor(real) {
+    const m = this.mayor;
+    if (!m || !this.running) return;
+    const k = this.keys;
+    let fx = 0, fz = 0;
+    if (k.has('KeyW') || k.has('ArrowUp')) fz += 1;
+    if (k.has('KeyS') || k.has('ArrowDown')) fz -= 1;
+    if (k.has('KeyA') || k.has('ArrowLeft')) fx -= 1;
+    if (k.has('KeyD') || k.has('ArrowRight')) fx += 1;
+    const moving = (fx || fz) && !this.paused;
+    if (moving) {
+      // relative to where the camera looks
+      const fwd = new THREE.Vector3(); this.camera.getWorldDirection(fwd); fwd.y = 0; fwd.normalize();
+      const right = new THREE.Vector3(fwd.z, 0, -fwd.x);
+      const dir = fwd.multiplyScalar(fz).add(right.multiplyScalar(fx)).normalize();
+      const speed = (k.has('ShiftLeft') || k.has('ShiftRight') ? 6.5 : 3.6) * real;
+      const p = m.obj.position;
+      const nx = p.x + dir.x * speed, nz = p.z + dir.z * speed;
+      if (this.mayorCanStand(nx, nz)) { p.x = nx; p.z = nz; }
+      else if (this.mayorCanStand(nx, p.z)) p.x = nx;
+      else if (this.mayorCanStand(p.x, nz)) p.z = nz;
+      m.obj.rotation.y = lerpAngle(m.obj.rotation.y, Math.atan2(dir.x, dir.z), Math.min(1, real * 12));
+      m.play('walk');
+      if (k.has('ShiftLeft') || k.has('ShiftRight')) m.mixer.timeScale = 1.6; else m.mixer.timeScale = 1;
+    } else m.play('idle');
+    m.update(real);
+    if (this.walkMode) {
+      const target = m.obj.position.clone().add(new THREE.Vector3(0, 1.3, 0));
+      this.controls.target.lerp(target, Math.min(1, real * 6));
+      const off = this.camera.position.clone().sub(this.controls.target); off.y = 0;
+      if (off.lengthSq() < 0.01) off.set(0, 0, 1);
+      off.setLength(9); off.y = 5.2;
+      this.camera.position.lerp(target.clone().add(off), Math.min(1, real * 4));
+    }
+    // who is close enough to talk to
+    const near = this.nearestCitizen(3.5);
+    $('hud-talk').hidden = !near || !this.walkMode;
+    if (near) $('hud-talk').textContent = `E · talk to ${near.name}`;
+  }
+  nearestCitizen(maxDist) {
+    if (!this.mayor) return null;
+    let best = null, bestD = maxDist;
+    const p = this.mayor.obj.position;
+    for (const c of this.city.citizens) { if (c.dead || !c.rig.obj.visible) continue; const d = c.rig.obj.position.distanceTo(p); if (d < bestD) { bestD = d; best = c; } }
+    for (const c of this.customers) { if (c.dead || !c.rig) continue; const d = c.obj.position.distanceTo(p); if (d < bestD) { bestD = d; best = this.guestRecord(c); } }
+    return best;
+  }
+  guestRecord(c) {
+    c.name = c.name ?? cityName();
+    const act = { enter: 'walking into your diner', queue: 'queueing at the register', ordering: 'ordering', toWait: 'waiting for food', waitFood: 'waiting for food', toPickup: 'picking up a plate', toSeat: 'finding a table', eating: `eating a ${c.item?.name ?? 'meal'}`, leave: 'leaving your diner' }[c.state] ?? 'visiting';
+    return { name: c.name, rig: c.rig, guest: c, home: 'a visitor', work: c.vip ? 'food critic' : 'unknown', activity: act, mood: c.patience < (c.patienceMax ?? 1) * 0.3 ? 'losing patience' : 'content' };
+  }
+  judgeNearby() {
+    const who = this.nearestCitizen(3.5);
+    if (!who) { this.toast('Nobody close enough to talk to. Walk up to someone (WASD).', 'info', 2000); return; }
+    this.openJudge(who);
+  }
+  openJudge(who) {
+    this.judging = who;
+    $('judge').hidden = !who;
+    if (!who) return;
+    const homeName = who.home?.type ? `${BUILDING_BY_ID[who.home.type].name} at block ${who.home.i},${who.home.j}` : who.home ?? 'unknown';
+    const workName = who.work?.type ? BUILDING_BY_ID[who.work.type].name : who.working?.type ? BUILDING_BY_ID[who.working.type].name : who.work ?? 'no job yet';
+    $('judge-name').textContent = who.name;
+    $('judge-body').innerHTML = `<li><span>Lives in</span><b>${homeName}</b></li><li><span>Works at</span><b>${workName}</b></li><li><span>Right now</span><b>${who.activity ?? 'about town'}</b></li><li><span>Mood</span><b>${who.mood ?? 'content'}</b></li>`;
+    if (this.mayor) this.mayor.play('jump', 0.15);
+    this.sfx.pop();
+  }
+  judge(verdict) {
+    const who = this.judging;
+    if (!who) return;
+    const pos = (who.rig?.obj ?? who.guest?.obj)?.position ?? this.controls.target;
+    if (verdict === 'praise') {
+      this.city.mood = Math.min(10, (this.city.mood ?? 0) + 1);
+      who.mood = 'delighted';
+      this.fx.hearts(pos, 3);
+      this.float(pos, `${who.name.split(' ')[0]} is delighted`, 'good');
+      this.s.stats.praised = (this.s.stats.praised ?? 0) + 1;
+      this.sfx.bell();
+    } else {
+      this.city.mood = Math.max(-10, (this.city.mood ?? 0) - 0.7);
+      this.s.cash += 10;
+      who.mood = 'grumbling about the mayor';
+      this.fx.grumble(pos);
+      this.float(pos, 'fined $10', 'bad');
+      this.s.stats.fines = (this.s.stats.fines ?? 0) + 1;
+      this.sfx.buzz();
+    }
+    this.openJudge(who);
+    this.updateHud();
+  }
+
   // ---------------------------------------------------------- frame
   frame() {
     const real = Math.min(this.clock.getDelta(), 0.1);
@@ -58684,13 +59151,13 @@ class Game {
       // arrivals
       this.spawnTimer -= dt;
       if (this.spawnTimer <= 0) {
-        if (this.customers.length < 26) this.spawnCustomer();
+        if (this.dinerOpen() && this.customers.length < 26) this.spawnCustomer();
         this.spawnTimer = (60 / this.arrivalsPerMinute()) * rand(0.6, 1.4);
       }
+      this.updateOpeningHours(dt);
       this.updateCustomers(dt);
-      this.updateCashier(dt);
-      this.updateKitchen(dt);
-      this.updateRunners(dt);
+      if (this.dinerPhase === 'open' || this.dinerPhase === 'closing') { this.updateCashier(dt); this.updateKitchen(dt); this.updateRunners(dt); }
+      else this.updateStaffOffHours(dt);
       if (this.lvl('auto') > 0) { this.autoTimer += dt; if (this.autoTimer >= 6 && this.s.till > 0) { this.autoTimer = 0; this.collect(false); } }
       this.updateDay(dt);
       this.city.update(dt);
@@ -58706,11 +59173,12 @@ class Game {
       this.displayCash += (this.s.cash - this.displayCash) * Math.min(1, real * 6);
       if (Math.abs(this.s.cash - this.displayCash) < 0.6) this.displayCash = this.s.cash;
       if ((this.hudTimer = (this.hudTimer ?? 0) + real) > 0.12) { this.hudTimer = 0; this.updateHud(); }
-    } else {
+    } else if (this.dinerPhase !== 'closed') {
       for (const r of this.registers) r.cashier?.update(real);
       for (const r of this.runners) r.update(real);
       for (const c of this.chefs ?? []) c.rig.update(real);
     }
+    this.updateMayor(real);
     this.updateFloaters(real);
     this.renderer.render(this.scene, this.camera);
   }
@@ -58724,6 +59192,18 @@ const LAMP_SPOTS = [
   new THREE.Vector3(5.6, LAMP_Y, 5.4), new THREE.Vector3(-5.6, LAMP_Y, 5.4),
   new THREE.Vector3(0.3, LAMP_Y, -0.7), new THREE.Vector3(0.3, LAMP_Y, 4.2),
 ];
+
+/** A floating name tag. */
+function makeNameTag(text) {
+  const c = document.createElement('canvas'); c.width = 256; c.height = 64;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = 'rgba(43,47,56,0.85)'; roundRect(ctx, 8, 8, 240, 48, 14); ctx.fill();
+  ctx.fillStyle = '#ffd54f'; ctx.font = 'bold 28px "Nunito", sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(text, 128, 33);
+  const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace;
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false }));
+  s.scale.set(1.6, 0.4, 1); s.renderOrder = 12;
+  return s;
+}
 
 // speech bubble + patience bar drawn on a canvas sprite
 function makeBubble() {

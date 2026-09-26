@@ -1,6 +1,7 @@
 // Balance sheet for Short Order Tycoon. Everything tunable lives here.
 
-export const DAY_LENGTH = 120;          // game seconds per business day
+export const DAY_LENGTH = 150;          // game seconds per day (06:00 to 06:00)
+export const DAY_SPLIT = 115;           // seconds of daytime (06:00-18:00); the night takes the rest
 export const START_CASH = 400;
 export const START_REPUTATION = 50;     // 0..100 -> 0..5 stars
 export const QUEUE_PATIENCE = 32;       // seconds a customer waits in line

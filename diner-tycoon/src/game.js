@@ -8,9 +8,9 @@ import { loadModelFitted, parseGLTF, fitModel, applyClipPose } from './glb-loade
 import { Sfx, Music, Ambience } from './audio.js';
 import { Fx } from './fx.js';
 import { NavGrid, MASK, separate } from './nav.js';
-import { City, BUILDINGS, BUILDING_BY_ID, CITY_CATEGORIES, RANKS, LEVEL_MULT, MAX_LEVEL, levelUpCost, PITCH, RADIUS } from './city.js';
+import { City, BUILDINGS, BUILDING_BY_ID, CITY_CATEGORIES, RANKS, LEVEL_MULT, MAX_LEVEL, levelUpCost, PITCH, RADIUS, BLOCK, OPEN_HOUR, CLOSE_HOUR, CLEAN_SECONDS, cityName } from './city.js';
 import { L, COUNTER_TOP, buildWorld, buildTable, buildCustomer, buildChefPlaceholder, buildFood, buildCoin, buildBill, buildToque, buildCrown, buildHustleRing } from './world.js';
-import { DAY_LENGTH, START_CASH, START_REPUTATION, QUEUE_PATIENCE, FOOD_PATIENCE, EAT_TIME, SAVE_KEY, MENU, UPGRADES, MILESTONES, QUESTS, CATEGORIES, upgradeCost } from './config.js';
+import { DAY_LENGTH, DAY_SPLIT, START_CASH, START_REPUTATION, QUEUE_PATIENCE, FOOD_PATIENCE, EAT_TIME, SAVE_KEY, MENU, UPGRADES, MILESTONES, QUESTS, CATEGORIES, upgradeCost } from './config.js';
 
 const $ = (id) => document.getElementById(id);
 const money = (n) => `$${Math.floor(n).toLocaleString()}`;
@@ -416,6 +416,10 @@ export class Game {
     this.renderQuest();
     this.paused = false;
     this.spawnTimer = 1.5;
+    this.setupOpeningHours();
+    this.spawnMayor();
+    this.walkMode = false;
+    this.openJudge(null);
     $('overlay-title').classList.remove('show');
     $('hud').classList.add('show');
     this.renderShop();
@@ -587,9 +591,9 @@ export class Game {
   collectAgents() {
     const list = [];
     for (const c of this.customers) if (!c.dead) list.push(c);
-    for (const r of this.runners) list.push(r);
-    for (const c of this.chefs ?? []) list.push(c.rig);
-    for (const r of this.registers) if (r.cashier) list.push(r.cashier);
+    for (const r of this.runners) if (r.obj.visible) list.push(r);
+    for (const c of this.chefs ?? []) if (c.rig.obj.visible) list.push(c.rig);
+    for (const r of this.registers) if (r.cashier?.obj.visible) list.push(r.cashier);
     return list;
   }
 
@@ -713,7 +717,8 @@ export class Game {
           break;
         }
         case 'leave': {
-          const moving = !this.walkTo(c, c.exit, c.speed * 1.15, dt);
+          const close = Math.hypot(o.position.x - c.exit.x, o.position.z - c.exit.z) < 0.4;
+          const moving = !close && !this.walkTo(c, c.exit, c.speed * 1.15, dt);
           this.bob(c, moving, dt);
           if (!moving) { this.scene.remove(o); c.dead = true; }
           break;
@@ -838,8 +843,10 @@ export class Game {
     this.updateHud();
   }
 
-  abandon(c) {
-    // gave up waiting for food: cancel the order wherever it is
+  abandon(c) { this.cancelOrder(c); this.leave(c, false, 'waited too long'); }
+
+  /** Cancel a guest's order wherever it is in the kitchen. */
+  cancelOrder(c) {
     const o = c.order;
     if (o) {
       o.cancelled = true;
@@ -848,8 +855,22 @@ export class Game {
       this.orders = this.orders.filter((x) => x !== o);
       if (o.state === 'carrying' && o.runner) { o.runner.carry.clear(); o.runner.order = null; o.runner.state = 'return'; }
       if (o.chef) { if (o.plate) o.chef.rig.carry.remove(o.plate); o.chef.order = null; o.chef.state = 'idle'; o.chef = null; }
+      c.order = null;
     }
-    this.leave(c, false, 'waited too long');
+  }
+
+  /** Closing time: the guest leaves without a fuss and without a penalty. */
+  dismiss(c) {
+    if (c.state === 'leave' || c.dead) return;
+    this.cancelOrder(c);
+    if (c.plate) { const hand = c.obj.getObjectByName('hand'); hand?.remove(c.plate); c.plate = null; }
+    if (c.seat) { c.seat.table.userData.taken[c.seat.index] = null; c.seat = null; }
+    if (c.waitSpot) { c.waitSpot.taken = false; c.waitSpot = null; }
+    if (c.register && c.register.busy === c) { c.register.busy = null; c.register.cashier?.play('idle'); }
+    if (c.rig) { c.rig.carryBlend = 0; c.rig.carryTarget = null; }
+    c.state = 'leave';
+    c.exit = L.spawn.clone().add(new THREE.Vector3(rand(-0.6, 0.6), 0, rand(-0.6, 0.6)));
+    this.float(c.obj.position, 'closing time', 'good');
   }
 
   // ---------------------------------------------------------- cashier
@@ -1177,27 +1198,29 @@ export class Game {
 
   updateLighting() {
     const f = this.dayFraction();
-    // daylight peaks mid-day and fades to evening in the last third
-    const daylight = f < 0.55 ? 1 : Math.max(0.12, 1 - (f - 0.55) / 0.4);
+    // the day runs 06:00-18:00 over the first 75% of the clock; dusk from 16:00, night after 19:00, dawn in the last moments
+    const daylight = f < 0.62 ? Math.min(1, 0.55 + f * 4) : f < 0.8 ? Math.max(0.12, 1 - (f - 0.62) / 0.2) : f > 0.97 ? 0.12 + (f - 0.97) / 0.03 * 0.4 : 0.12;
     const evening = 1 - daylight;
     this.sun.intensity = 0.35 + 1.75 * daylight;
-    this.sun.color.setHex(f > 0.7 ? 0xffb07a : 0xfff1dc);
+    this.sun.color.setHex(f > 0.7 && f < 0.97 ? 0xffb07a : 0xfff1dc);
     this.hemi.intensity = 0.35 + 0.55 * daylight;
     const sky = new THREE.Color();
-    if (f < 0.55) sky.copy(this.skyDay);
-    else if (f < 0.8) sky.lerpColors(this.skyDay, this.skyDusk, (f - 0.55) / 0.25);
-    else sky.lerpColors(this.skyDusk, this.skyNight, (f - 0.8) / 0.2);
+    if (f < 0.62) sky.copy(this.skyDay);
+    else if (f < 0.8) sky.lerpColors(this.skyDay, this.skyDusk, (f - 0.62) / 0.18);
+    else if (f < 0.97) sky.lerpColors(this.skyDusk, this.skyNight, Math.min(1, (f - 0.8) / 0.1));
+    else sky.lerpColors(this.skyNight, this.skyDusk, (f - 0.97) / 0.03);
     this.scene.background.copy(sky);
     this.scene.fog.color.copy(sky);
     const glow = 0.25 + 0.75 * evening;
+    const dinerOn = this.dinerLit();
     for (const lamp of this.lamps) {
-      lamp.light.intensity = lamp.baseIntensity * (lamp.outdoor ? evening * 1.4 : 0.35 + 0.9 * evening);
-      for (const m of lamp.bulbMats) m.emissiveIntensity = 0.6 + 2.4 * glow;
+      lamp.light.intensity = lamp.baseIntensity * (lamp.outdoor ? evening * 1.4 : dinerOn ? 0.35 + 0.9 * evening : 0.02);
+      for (const m of lamp.bulbMats) m.emissiveIntensity = lamp.outdoor || dinerOn ? 0.6 + 2.4 * glow : 0.05;
     }
     this.renderer.toneMappingExposure = 1.0 + 0.15 * evening;
     if (this.world) {
       this.world.nightSky.opacity = Math.max(0, (f - 0.78) / 0.22) * 0.9;
-      this.world.neon.emissiveIntensity = 0.8 + 2.2 * evening + Math.sin(this.time * 7) * 0.15 * evening;
+      this.world.neon.emissiveIntensity = dinerOn ? 0.8 + 2.2 * evening + Math.sin(this.time * 7) * 0.15 * evening : 0.15;
       const lit = this.s ? this.stars() : 0;
       this.world.signStars.forEach((st, i) => { const on = lit >= i + 0.5; st.material.color.setHex(on ? 0xffd54f : 0x4a4f58); st.material.opacity = on ? 1 : 0.6; });
     }
@@ -1326,7 +1349,9 @@ export class Game {
     const st = this.stars();
     $('hud-stars').textContent = '★'.repeat(Math.round(st)) + '☆'.repeat(5 - Math.round(st));
     $('hud-rep').textContent = `${st.toFixed(1)} stars · ${this.arrivalsPerMinute().toFixed(1)}/min`;
-    $('hud-day').textContent = `Day ${this.s.day}`;
+    $('hud-day').textContent = `Day ${this.s.day} · ${this.clockText()}`;
+    $('hud-open').textContent = { closed: 'CLOSED · opens 08:00', arriving: 'staff arriving', open: 'OPEN', closing: 'CLOSING', cleaning: 'cleaning up', leaving: 'staff going home' }[this.dinerPhase] ?? '';
+    $('btn-walk').classList.toggle('on', Boolean(this.walkMode));
     const cs = this.city.stats();
     $('hud-pop').textContent = cs.population.toLocaleString();
     const nr = this.city.nextRank();
@@ -1344,7 +1369,7 @@ export class Game {
     const near = this.camera.position.distanceTo(new THREE.Vector3(0, 0, 1)) < 34;
     $('hud').classList.toggle('near-diner', near);
     for (const b of document.querySelectorAll('[data-view]')) b.classList.toggle('on', b.dataset.view === this.currentView);
-    $('hud-clock').style.width = `${(this.s.dayTime / DAY_LENGTH) * 100}%`;
+    $('hud-clock').style.width = `${((this.clockHour() - 6) / 24) * 100}%`;
     $('hud-served').textContent = this.s.stats.servedToday;
     $('hud-queue').textContent = this.customers.filter((c) => c.state === 'queue' || c.state === 'enter').length;
     $('hud-kitchen').textContent = `${this.orders.filter((o) => o.state === 'cooking' || o.state === 'prepping').length}/${this.stoves()}`;
@@ -1373,6 +1398,13 @@ export class Game {
     $('btn-upgrade').addEventListener('click', () => this.upgradeSelected());
     $('btn-demolish').addEventListener('click', () => this.demolishSelected());
     $('btn-info-close').addEventListener('click', () => this.selectBuilding(null));
+    $('btn-walk').addEventListener('click', () => this.setWalkMode(!this.walkMode));
+    $('btn-praise').addEventListener('click', () => this.judge('praise'));
+    $('btn-fine').addEventListener('click', () => this.judge('fine'));
+    $('btn-judge-close').addEventListener('click', () => this.openJudge(null));
+    this.keys = new Set();
+    addEventListener('keyup', (e) => this.keys.delete(e.code));
+    addEventListener('blur', () => this.keys.clear());
     this.canvas.addEventListener('pointermove', (e) => { if (this.city.placing) this.hoverTile(e); });
     $('btn-shop-close').addEventListener('click', () => $('shop').classList.remove('open'));
     $('btn-reset').addEventListener('click', () => {
@@ -1391,7 +1423,10 @@ export class Game {
       else if (e.key === 'b' || e.key === 'B') { $('shop').classList.toggle('open'); }
       else if (e.key === 'c' || e.key === 'C') this.viewPreset('city');
       else if (e.key === 'x' || e.key === 'X') this.setPlacing(this.city.placing === 'bulldoze' ? null : 'bulldoze');
-      else if (e.key === 'Escape') { this.setPlacing(null); this.selectBuilding(null); }
+      else if (e.key === 'Escape') { this.setPlacing(null); this.selectBuilding(null); this.openJudge(null); }
+      else if (e.key === 'm' || e.key === 'M') this.setWalkMode(!this.walkMode);
+      else if (e.key === 'e' || e.key === 'E') this.judgeNearby();
+      else if (['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ShiftLeft', 'ShiftRight'].includes(e.code)) { this.keys.add(e.code); if (e.code.startsWith('Arrow')) e.preventDefault(); if (!this.walkMode && this.mayor) this.setWalkMode(true); }
       else if (e.key === '1' || e.key === '2' || e.key === '3') { this.speed = Number(e.key); this.updateHud(); }
       else if (e.key === 'v' || e.key === 'V') { const order = ['city', 'overview', 'register', 'kitchen']; this.viewIdx = ((this.viewIdx ?? 0) + 1) % order.length; this.viewPreset(order[this.viewIdx]); }
     });
@@ -1408,6 +1443,10 @@ export class Game {
       this.raycaster.setFromCamera(this.pointer, this.camera);
       if (this.city.placing === 'bulldoze') { this.tryBulldoze(); return; }
       if (this.city.placing) { this.tryBuild(); return; }
+      // a citizen on the street: the mayor has a word with them
+      const cit = this.city.citizens.filter((c) => !c.dead && c.rig.obj.visible);
+      const cHits = this.raycaster.intersectObjects(cit.map((c) => c.rig.obj), true);
+      if (cHits.length) { const who = cit.find((c) => c.rig === this.ownerOf(cHits[0].object)); if (who) { this.openJudge(who); return; } }
       // a city building: select it
       const bHits = this.raycaster.intersectObjects([...this.city.buildings.values()].map((b) => b.obj), true);
       if (bHits.length) { this.selectBuilding(this.buildingOf(bHits[0].object)); return; }
@@ -1435,6 +1474,7 @@ export class Game {
     const p = presets[name];
     if (!p) return;
     this.currentView = name;
+    if (this.walkMode) this.setWalkMode(false, true);
     if (name === 'city' && this.city.rings > 1) { const k = 0.6 + this.city.rings * 0.35; p.pos = [40 * k, 60 * k, 70 * k]; }
     this.camTween = { from: this.camera.position.clone(), to: new THREE.Vector3(...p.pos), tFrom: this.controls.target.clone(), tTo: new THREE.Vector3(...p.target), t: 0 };
   }
@@ -1615,7 +1655,7 @@ export class Game {
   /** What the diner itself makes per minute, roughly, for the income readout. */
   dinerRate() { const st = this.s.stats; const f = this.s.dayTime > 20 ? this.s.dayTime / 60 : 0; return f > 0 ? (st.earnedToday ?? 0) / f : 0; }
   fmt(n) { return money(n); }
-  cityFloat(text, kind) { this.float(this.controls.target.clone().add(new THREE.Vector3(0, 6, 0)), text, `city ${kind}`); }
+  cityFloat(text, kind, pos = null) { this.float((pos ?? this.controls.target).clone().add(new THREE.Vector3(0, 6, 0)), text, `city ${kind}`); }
   onRankUp(rank) {
     if (rank.id === 0) return;
     this.sfx.levelUp();
@@ -1661,6 +1701,253 @@ export class Game {
     $('paused').hidden = !this.paused;
   }
 
+  // ---------------------------------------------------------- opening hours
+  /** Game clock: 06:00-18:00 over the first DAY_SPLIT seconds, 18:00-06:00 over the rest. */
+  clockHour() { const t = this.s ? this.s.dayTime : 0; return t < DAY_SPLIT ? 6 + (t / DAY_SPLIT) * 12 : 18 + ((t - DAY_SPLIT) / (DAY_LENGTH - DAY_SPLIT)) * 12; }
+  clockText() { const h = this.clockHour() % 24; const hh = Math.floor(h), mm = Math.floor((h - hh) * 60); return `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`; }
+  dinerOpen() { return this.dinerPhase === 'open'; }
+  dinerLit() { return ['open', 'closing', 'cleaning', 'arriving'].includes(this.dinerPhase); }
+  staff() {
+    const list = [];
+    for (const r of this.registers) if (r.cashier) list.push({ rig: r.cashier, post: r.stand, kind: 'staff', face: 0 });
+    for (const r of this.runners) list.push({ rig: r, post: r.idleSpot, kind: 'staff', face: null });
+    for (const c of this.chefs ?? []) list.push({ rig: c.rig, post: c.stove, kind: 'chef', face: Math.PI });
+    return list;
+  }
+  /** Called from begin(): put the diner in the right state for the saved time of day. */
+  setupOpeningHours() {
+    const h = this.clockHour();
+    const open = h >= OPEN_HOUR && h < CLOSE_HOUR;
+    this.dinerPhase = open ? 'open' : 'closed';
+    for (const st of this.staff()) { st.rig.commute = null; st.rig.obj.visible = open; st.rig.obj.position.copy(st.post); if (st.face != null) st.rig.obj.rotation.y = st.face; }
+  }
+  updateOpeningHours(dt) {
+    const h = this.clockHour();
+    switch (this.dinerPhase) {
+      case 'closed':
+        if (h >= OPEN_HOUR - 1 && h < CLOSE_HOUR) { this.dinerPhase = 'arriving'; this.startCommute(false); this.log('The diner staff are on their way in.'); }
+        break;
+      case 'arriving':
+        if (this.runCommutes(dt)) { this.dinerPhase = 'open'; this.toast('🍽️ The diner is open for the day.', 'good', 3000); this.sfx.bell(); }
+        break;
+      case 'open':
+        if (h >= CLOSE_HOUR) {
+          this.dinerPhase = 'closing'; this.closingTimer = 0;
+          for (const c of this.customers) if (['enter', 'queue', 'ordering'].includes(c.state)) this.dismiss(c);
+          this.toast('🌆 18:00: shops and the diner are closing. Everyone heads home.', 'warn', 4000);
+          this.log('Closing time. Guests still waiting for food get served first.');
+        }
+        break;
+      case 'closing':
+        this.closingTimer += dt;
+        if (!this.customers.some((c) => c.state !== 'leave') || h >= CLOSE_HOUR + 1) {
+          for (const c of this.customers) this.dismiss(c);
+          this.resetKitchen();
+          this.dinerPhase = 'cleaning'; this.cleanTimer = CLEAN_SECONDS;
+          for (const st of this.staff()) { st.rig.cleanBase = st.rig.obj.position.clone(); st.rig.cleanPhase = Math.random() * 6; }
+          this.log('The staff are cleaning the diner for tomorrow.');
+        }
+        break;
+      case 'cleaning':
+        this.cleanTimer -= dt;
+        if (h >= CLOSE_HOUR + 1.75 || h < OPEN_HOUR - 1) { this.dinerPhase = 'leaving'; this.startCommute(true); this.log('The diner is spotless. Staff heading home.'); }
+        break;
+      case 'leaving':
+        if (this.runCommutes(dt)) { this.dinerPhase = 'closed'; for (const st of this.staff()) st.rig.obj.visible = false; }
+        break;
+    }
+    if (this.dinerPhase !== 'open' && this.dinerPhase !== 'closing') { this.s.till = this.s.till; }
+  }
+  /** Staff cleaning (wiping, sweeping) or walking to/from their posts. */
+  updateStaffOffHours(dt) {
+    for (const st of this.staff()) {
+      const rig = st.rig;
+      rig.tickBoost(dt, this.time);
+      if (this.dinerPhase === 'cleaning' && rig.cleanBase) {
+        const t = this.time * 2 + rig.cleanPhase;
+        rig.obj.position.x = rig.cleanBase.x + Math.sin(t) * 0.35;
+        rig.obj.position.z = rig.cleanBase.z + Math.cos(t * 0.7) * 0.2;
+        rig.obj.rotation.y = Math.atan2(Math.cos(t) * 0.35, -Math.sin(t * 0.7) * 0.14);
+        rig.play('walk');
+        if (Math.random() < dt * 5) this.fx.sparkle(rig.obj.position.clone().add(new THREE.Vector3(Math.sin(t) * 0.3, 0.3, 0.3)), 1);
+      }
+      rig.update(dt);
+    }
+    if (this.dinerPhase === 'cleaning') this.dismissStragglers();
+  }
+  /** Closing time: clear the pass, the pickup counter and everyone's hands. */
+  resetKitchen() {
+    for (const o of this.orders) { if (o.plate) { o.plate.parent?.remove(o.plate); this.scene.remove(o.plate); } if (o.chef) { o.chef.order = null; o.chef.state = 'idle'; } if (o.runner) { o.runner.order = null; o.runner.state = 'idle'; } }
+    this.orders = [];
+    for (const p of this.passPlates) if (p) this.scene.remove(p);
+    for (const p of this.pickupPlates) if (p) this.scene.remove(p);
+    this.passPlates = [null, null, null, null];
+    this.pickupPlates = [null, null, null];
+    for (const c of this.chefs ?? []) { c.rig.carry.clear(); c.order = null; c.state = 'idle'; }
+    for (const r of this.runners) { r.carry.clear(); r.order = null; r.state = 'idle'; }
+    for (const r of this.registers) { r.busy = null; r.timer = 0; }
+  }
+  dismissStragglers() { for (const c of this.customers) if (c.state !== 'leave') this.dismiss(c); }
+  /** Build every staff member's walk in or out through the door, around the counter ends. */
+  startCommute(leaving) {
+    const side = new THREE.Vector3(5.9, 0, 1.3), cross = new THREE.Vector3(5.9, 0, 2.2), kitchenGate = new THREE.Vector3(5.5, 0, -2.0);
+    for (const st of this.staff()) {
+      const rig = st.rig;
+      rig.obj.visible = true;
+      const out = L.spawn.clone().add(new THREE.Vector3(rand(-1.2, 0.6), 0, rand(-0.4, 0.8)));
+      let segs;
+      if (leaving) {
+        segs = [];
+        if (st.kind === 'chef') segs.push({ t: kitchenGate.clone(), mask: MASK.CHEF });
+        segs.push({ t: side.clone(), mask: MASK.STAFF }, { t: cross.clone() }, { t: L.door.clone(), mask: MASK.CUSTOMER }, { t: out });
+      } else {
+        rig.obj.position.copy(out);
+        segs = [{ t: L.door.clone() }, { t: cross.clone(), mask: MASK.CUSTOMER }, { t: side.clone() }];
+        if (st.kind === 'chef') segs.push({ t: kitchenGate.clone(), mask: MASK.STAFF }, { t: st.post.clone(), mask: MASK.CHEF });
+        else segs.push({ t: st.post.clone(), mask: MASK.STAFF });
+      }
+      rig.commute = { segs, i: 0, done: false, delay: Math.random() * 1.5, homeMask: st.kind === 'chef' ? MASK.CHEF : MASK.STAFF, face: st.face };
+      rig.nav = null;
+    }
+  }
+  /** Advance every commute; true when all have arrived. */
+  runCommutes(dt) {
+    let all = true;
+    for (const st of this.staff()) {
+      const rig = st.rig, cm = rig.commute;
+      rig.tickBoost(dt, this.time);
+      if (!cm || cm.done) { rig.update(dt); continue; }
+      all = false;
+      if (cm.delay > 0) { cm.delay -= dt; rig.play('idle'); rig.update(dt); continue; }
+      const seg = cm.segs[cm.i];
+      let arrived;
+      if (seg.mask) { rig.mask = seg.mask; arrived = this.walkTo(rig, seg.t, 3.2, dt); }
+      else arrived = stepToward(rig.obj, seg.t, 3.2, dt, true, 0.12);
+      rig.play('walk');
+      if (arrived) { cm.i += 1; rig.nav = null; if (cm.i >= cm.segs.length) { cm.done = true; rig.mask = cm.homeMask; rig.moving = false; rig.play('idle'); if (cm.face != null) rig.obj.rotation.y = cm.face; } }
+      rig.update(dt);
+    }
+    return all;
+  }
+
+  // ---------------------------------------------------------- the mayor
+  spawnMayor() {
+    if (this.mayor) { this.scene.remove(this.mayor.obj); this.mayor = null; }
+    if (!this.models.cashier) return;
+    const rig = new Character(cloneRig(this.models.cashier), this.scene, { tint: 0xcfe8ff, hat: buildCrown() });
+    rig.mask = MASK.CUSTOMER;
+    rig.obj.position.set(-13, 0, 10);
+    rig.obj.rotation.y = Math.PI / 2;
+    const tag = makeNameTag('MAYOR (you)');
+    tag.position.y = 2.5; rig.obj.add(tag);
+    this.mayor = rig;
+  }
+  setWalkMode(on, quiet = false) {
+    if (!this.mayor) return;
+    this.walkMode = on;
+    if (on) { this.currentView = 'walk'; this.camTween = null; if (!quiet) this.toast('Walking as the mayor: WASD or arrows to walk, Shift to run, E to talk to the nearest citizen.', 'info', 4500); }
+    this.updateHud();
+  }
+  mayorCanStand(x, z) {
+    const n = this.nav;
+    if (n.inBounds(n.col(x), n.row(z))) return n.walkable(x, z, MASK.CUSTOMER);
+    const lim = this.city.span() / 2 + 8;
+    if (Math.abs(x) > lim || Math.abs(z) > lim) return false;
+    for (const b of this.city.buildings.values()) if (Math.abs(x - b.i * PITCH) < BLOCK / 2 + 0.3 && Math.abs(z - b.j * PITCH) < BLOCK / 2 + 0.3) return false;
+    return true;
+  }
+  updateMayor(real) {
+    const m = this.mayor;
+    if (!m || !this.running) return;
+    const k = this.keys;
+    let fx = 0, fz = 0;
+    if (k.has('KeyW') || k.has('ArrowUp')) fz += 1;
+    if (k.has('KeyS') || k.has('ArrowDown')) fz -= 1;
+    if (k.has('KeyA') || k.has('ArrowLeft')) fx -= 1;
+    if (k.has('KeyD') || k.has('ArrowRight')) fx += 1;
+    const moving = (fx || fz) && !this.paused;
+    if (moving) {
+      // relative to where the camera looks
+      const fwd = new THREE.Vector3(); this.camera.getWorldDirection(fwd); fwd.y = 0; fwd.normalize();
+      const right = new THREE.Vector3(fwd.z, 0, -fwd.x);
+      const dir = fwd.multiplyScalar(fz).add(right.multiplyScalar(fx)).normalize();
+      const speed = (k.has('ShiftLeft') || k.has('ShiftRight') ? 6.5 : 3.6) * real;
+      const p = m.obj.position;
+      const nx = p.x + dir.x * speed, nz = p.z + dir.z * speed;
+      if (this.mayorCanStand(nx, nz)) { p.x = nx; p.z = nz; }
+      else if (this.mayorCanStand(nx, p.z)) p.x = nx;
+      else if (this.mayorCanStand(p.x, nz)) p.z = nz;
+      m.obj.rotation.y = lerpAngle(m.obj.rotation.y, Math.atan2(dir.x, dir.z), Math.min(1, real * 12));
+      m.play('walk');
+      if (k.has('ShiftLeft') || k.has('ShiftRight')) m.mixer.timeScale = 1.6; else m.mixer.timeScale = 1;
+    } else m.play('idle');
+    m.update(real);
+    if (this.walkMode) {
+      const target = m.obj.position.clone().add(new THREE.Vector3(0, 1.3, 0));
+      this.controls.target.lerp(target, Math.min(1, real * 6));
+      const off = this.camera.position.clone().sub(this.controls.target); off.y = 0;
+      if (off.lengthSq() < 0.01) off.set(0, 0, 1);
+      off.setLength(9); off.y = 5.2;
+      this.camera.position.lerp(target.clone().add(off), Math.min(1, real * 4));
+    }
+    // who is close enough to talk to
+    const near = this.nearestCitizen(3.5);
+    $('hud-talk').hidden = !near || !this.walkMode;
+    if (near) $('hud-talk').textContent = `E · talk to ${near.name}`;
+  }
+  nearestCitizen(maxDist) {
+    if (!this.mayor) return null;
+    let best = null, bestD = maxDist;
+    const p = this.mayor.obj.position;
+    for (const c of this.city.citizens) { if (c.dead || !c.rig.obj.visible) continue; const d = c.rig.obj.position.distanceTo(p); if (d < bestD) { bestD = d; best = c; } }
+    for (const c of this.customers) { if (c.dead || !c.rig) continue; const d = c.obj.position.distanceTo(p); if (d < bestD) { bestD = d; best = this.guestRecord(c); } }
+    return best;
+  }
+  guestRecord(c) {
+    c.name = c.name ?? cityName();
+    const act = { enter: 'walking into your diner', queue: 'queueing at the register', ordering: 'ordering', toWait: 'waiting for food', waitFood: 'waiting for food', toPickup: 'picking up a plate', toSeat: 'finding a table', eating: `eating a ${c.item?.name ?? 'meal'}`, leave: 'leaving your diner' }[c.state] ?? 'visiting';
+    return { name: c.name, rig: c.rig, guest: c, home: 'a visitor', work: c.vip ? 'food critic' : 'unknown', activity: act, mood: c.patience < (c.patienceMax ?? 1) * 0.3 ? 'losing patience' : 'content' };
+  }
+  judgeNearby() {
+    const who = this.nearestCitizen(3.5);
+    if (!who) { this.toast('Nobody close enough to talk to. Walk up to someone (WASD).', 'info', 2000); return; }
+    this.openJudge(who);
+  }
+  openJudge(who) {
+    this.judging = who;
+    $('judge').hidden = !who;
+    if (!who) return;
+    const homeName = who.home?.type ? `${BUILDING_BY_ID[who.home.type].name} at block ${who.home.i},${who.home.j}` : who.home ?? 'unknown';
+    const workName = who.work?.type ? BUILDING_BY_ID[who.work.type].name : who.working?.type ? BUILDING_BY_ID[who.working.type].name : who.work ?? 'no job yet';
+    $('judge-name').textContent = who.name;
+    $('judge-body').innerHTML = `<li><span>Lives in</span><b>${homeName}</b></li><li><span>Works at</span><b>${workName}</b></li><li><span>Right now</span><b>${who.activity ?? 'about town'}</b></li><li><span>Mood</span><b>${who.mood ?? 'content'}</b></li>`;
+    if (this.mayor) this.mayor.play('jump', 0.15);
+    this.sfx.pop();
+  }
+  judge(verdict) {
+    const who = this.judging;
+    if (!who) return;
+    const pos = (who.rig?.obj ?? who.guest?.obj)?.position ?? this.controls.target;
+    if (verdict === 'praise') {
+      this.city.mood = Math.min(10, (this.city.mood ?? 0) + 1);
+      who.mood = 'delighted';
+      this.fx.hearts(pos, 3);
+      this.float(pos, `${who.name.split(' ')[0]} is delighted`, 'good');
+      this.s.stats.praised = (this.s.stats.praised ?? 0) + 1;
+      this.sfx.bell();
+    } else {
+      this.city.mood = Math.max(-10, (this.city.mood ?? 0) - 0.7);
+      this.s.cash += 10;
+      who.mood = 'grumbling about the mayor';
+      this.fx.grumble(pos);
+      this.float(pos, 'fined $10', 'bad');
+      this.s.stats.fines = (this.s.stats.fines ?? 0) + 1;
+      this.sfx.buzz();
+    }
+    this.openJudge(who);
+    this.updateHud();
+  }
+
   // ---------------------------------------------------------- frame
   frame() {
     const real = Math.min(this.clock.getDelta(), 0.1);
@@ -1672,13 +1959,13 @@ export class Game {
       // arrivals
       this.spawnTimer -= dt;
       if (this.spawnTimer <= 0) {
-        if (this.customers.length < 26) this.spawnCustomer();
+        if (this.dinerOpen() && this.customers.length < 26) this.spawnCustomer();
         this.spawnTimer = (60 / this.arrivalsPerMinute()) * rand(0.6, 1.4);
       }
+      this.updateOpeningHours(dt);
       this.updateCustomers(dt);
-      this.updateCashier(dt);
-      this.updateKitchen(dt);
-      this.updateRunners(dt);
+      if (this.dinerPhase === 'open' || this.dinerPhase === 'closing') { this.updateCashier(dt); this.updateKitchen(dt); this.updateRunners(dt); }
+      else this.updateStaffOffHours(dt);
       if (this.lvl('auto') > 0) { this.autoTimer += dt; if (this.autoTimer >= 6 && this.s.till > 0) { this.autoTimer = 0; this.collect(false); } }
       this.updateDay(dt);
       this.city.update(dt);
@@ -1694,11 +1981,12 @@ export class Game {
       this.displayCash += (this.s.cash - this.displayCash) * Math.min(1, real * 6);
       if (Math.abs(this.s.cash - this.displayCash) < 0.6) this.displayCash = this.s.cash;
       if ((this.hudTimer = (this.hudTimer ?? 0) + real) > 0.12) { this.hudTimer = 0; this.updateHud(); }
-    } else {
+    } else if (this.dinerPhase !== 'closed') {
       for (const r of this.registers) r.cashier?.update(real);
       for (const r of this.runners) r.update(real);
       for (const c of this.chefs ?? []) c.rig.update(real);
     }
+    this.updateMayor(real);
     this.updateFloaters(real);
     this.renderer.render(this.scene, this.camera);
   }
@@ -1712,6 +2000,18 @@ const LAMP_SPOTS = [
   new THREE.Vector3(5.6, LAMP_Y, 5.4), new THREE.Vector3(-5.6, LAMP_Y, 5.4),
   new THREE.Vector3(0.3, LAMP_Y, -0.7), new THREE.Vector3(0.3, LAMP_Y, 4.2),
 ];
+
+/** A floating name tag. */
+function makeNameTag(text) {
+  const c = document.createElement('canvas'); c.width = 256; c.height = 64;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = 'rgba(43,47,56,0.85)'; roundRect(ctx, 8, 8, 240, 48, 14); ctx.fill();
+  ctx.fillStyle = '#ffd54f'; ctx.font = 'bold 28px "Nunito", sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(text, 128, 33);
+  const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace;
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false }));
+  s.scale.set(1.6, 0.4, 1); s.renderOrder = 12;
+  return s;
+}
 
 // speech bubble + patience bar drawn on a canvas sprite
 function makeBubble() {

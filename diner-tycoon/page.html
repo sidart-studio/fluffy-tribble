@@ -79,6 +79,17 @@
   .card-b.locked .pr { color: var(--ink-soft); font-family: var(--font-body); font-size: 11px; font-weight: 800; }
   .card-b .ct { font-size: 10px; color: var(--ink-soft); font-weight: 800; }
 
+  #hud-talk { position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(150px + env(safe-area-inset-bottom, 0px)); background: var(--ink); color: var(--gold); font-weight: 800; padding: 6px 12px; border-radius: 10px; font-size: 13px; pointer-events: none; }
+  #judge { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 300px; background: var(--panel); border-radius: 16px; box-shadow: var(--shadow); padding: 12px 14px; border-left: 6px solid var(--gold); }
+  #judge small { font-size: 10px; letter-spacing: .8px; text-transform: uppercase; color: var(--ink-soft); font-weight: 800; }
+  #judge h3 { margin: 2px 0 6px; font-family: var(--font-display); font-size: 22px; }
+  #judge ul { list-style: none; margin: 0 0 8px; padding: 0; font-size: 13px; }
+  #judge li { display: flex; justify-content: space-between; gap: 8px; padding: 3px 0; border-bottom: 1px dashed var(--chrome); }
+  #judge li b { text-align: right; }
+  #judge .row { display: flex; gap: 6px; flex-wrap: wrap; }
+  #judge .btn { padding: 7px 10px; font-size: 12px; box-shadow: none; border: 1px solid var(--chrome); }
+  #judge .hint { font-size: 11px; color: var(--ink-soft); margin-top: 8px; line-height: 1.35; }
+
   /* building info */
   #info { position: absolute; right: 14px; bottom: calc(120px + env(safe-area-inset-bottom, 0px)); width: 280px; background: var(--panel); border-radius: 16px; box-shadow: var(--shadow); padding: 12px 14px; border-left: 6px solid var(--sky); }
   #info h3 { margin: 0; font-family: var(--font-display); font-size: 20px; }
@@ -219,7 +230,7 @@
     <div id="demand-tip"></div>
   </div>
     <div class="register-strip">
-      <small class="title">Your diner</small>
+      <small class="title">Your diner · <span id="hud-open">OPEN</span></small>
       <div class="till">
         <div class="stat"><b id="hud-till">$0.00</b><small>On the register</small></div>
         <button id="btn-collect" class="btn gold" disabled>Collect (Space)</button>
@@ -240,7 +251,9 @@
     <button class="btn small" data-view="overview">Diner</button>
     <button class="btn small" data-view="register">Register</button>
     <button class="btn small" data-view="kitchen">Kitchen</button>
+    <button class="btn small" id="btn-walk" title="Walk around as the mayor (M)">🚶 Walk (M)</button>
   </div>
+  <div id="hud-talk" hidden>E · talk</div>
   <div id="summary" hidden>
     <h3 id="summary-title">Day closed</h3>
     <ul id="summary-body"></ul>
@@ -256,6 +269,18 @@
       <button id="btn-demolish" class="btn">Demolish</button>
       <button id="btn-info-close" class="btn">Close</button>
     </div>
+  </aside>
+
+  <aside id="judge" hidden>
+    <small>The mayor has a word with</small>
+    <h3 id="judge-name">Citizen</h3>
+    <ul id="judge-body"></ul>
+    <div class="row">
+      <button id="btn-praise" class="btn gold">👏 Praise</button>
+      <button id="btn-fine" class="btn">⚖️ Fine $10</button>
+      <button id="btn-judge-close" class="btn">Close</button>
+    </div>
+    <div class="hint">Praise lifts the whole city's happiness a little. Fines fill the treasury but sour the mood.</div>
   </aside>
 
   <div id="build">
@@ -286,7 +311,10 @@
       <li><b>Keep them happy</b> with parks, schools and hospitals. Hunger, unemployment and factory smoke make people leave.</li>
       <li><b>Power:</b> the street grid powers 8 buildings. After that, build power plants or the newest buildings go dark.</li>
       <li><b>Grow:</b> buy more land, level buildings up (click one), and unlock towers, malls and a stadium as your population rises.</li>
-      <li><b>Your diner</b> at the centre still runs: zoom in to collect its cash, hustle staff and buy upgrades. Citizens walk over to eat there.</li>
+      <li><b>A day</b> runs 06:00 to 06:00. Shops and the diner open at 08:00 and close at 18:00: customers head home, workers sweep up and go home too, and come back in the morning to open up.</li>
+      <li><b>People live here.</b> Citizens step out of their own homes, walk to work, shop, eat at your diner, and go back inside at night. Click anyone to see who they are.</li>
+      <li><b>You are the mayor.</b> Press WASD to walk around as yourself, and E next to a citizen to praise or fine them.</li>
+      <li><b>Your diner</b> at the centre still runs: zoom in to collect its cash, hustle staff and buy upgrades.</li>
     </ul>
     <div class="row">
       <button id="btn-continue" class="btn" hidden>Continue</button>

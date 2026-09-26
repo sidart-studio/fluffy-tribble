@@ -48,6 +48,8 @@ on the title screen.
 | Pause | P |
 | Look around | Drag to orbit, wheel to zoom, right-drag to pan |
 | Camera views | City / Diner / Register / Kitchen buttons, or V to cycle |
+| Walk as the mayor | WASD or arrows (Shift to run), Walk button or M for the follow camera |
+| Talk to a citizen | E next to them, or click them |
 
 ## The city
 
@@ -69,6 +71,23 @@ Every building can be upgraded to level 3 (1.5x and 2x its numbers).
 Ranks unlock buildings: Village at 25 people, Town at 100, City at 300,
 Metropolis at 800. Income per minute is tax (per citizen, scaled by
 happiness) plus wages plus sales, and the day report shows the split.
+
+## A day in the city
+
+The clock runs from 06:00 to 06:00 (daytime is slower than the night).
+Shops and the diner open at 08:00 and close at 18:00. Citizens live in the
+homes you build: they step out of their front doors in the morning, walk to
+work or go shopping, eat at your diner, and go back inside at night. Every
+shop has a worker who opens up, serves at the counter, sweeps the shop front
+at closing time and then walks home. The diner staff do the same: they walk
+in through the door in the morning, and at 18:00 they serve the last guests,
+clean the diner and walk home while the lights go off.
+
+You are the mayor. Press WASD (or the Walk button, M) to walk around the city
+as yourself. Walk up to a citizen and press E, or click anyone, to see where
+they live and work and what they are doing, then praise them (the whole
+city gets a little happier) or fine them ($10 for the treasury, and a
+grumble).
 
 ## Diner upgrades
 
