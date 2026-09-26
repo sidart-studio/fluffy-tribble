@@ -56225,18 +56225,22 @@ function buildCar() {
 
 // ---------------------------------------------------------------- ground
 /**
- * Meadow under everything; per block a "cell" (pavement + the half streets
- * around it) that is hidden until its ring of land is bought.
+ * One slab of land exactly the size of the city, nothing beyond its edge.
+ * Per block a "cell" (pavement + the half streets around it) that stays bare
+ * earth until its ring of land is bought.
  */
 function buildCityGround(scene) {
   const span = (RADIUS * 2 + 1) * PITCH;
-  const meadow = new THREE.Mesh(new THREE.PlaneGeometry(span + 160, span + 160), cmat(0x86b95c, { roughness: 1 }));
-  meadow.rotation.x = -Math.PI / 2; meadow.position.y = -0.06; meadow.receiveShadow = true; scene.add(meadow);
+  const slab = new THREE.Mesh(new THREE.BoxGeometry(span, 2.4, span), cmat(0x8a6a4a, { roughness: 1 }));
+  slab.position.y = -1.26; slab.receiveShadow = true; scene.add(slab);
+  const rim = new THREE.Mesh(new THREE.BoxGeometry(span + 0.4, 0.3, span + 0.4), cmat(0x5d4433, { roughness: 1 }));
+  rim.position.y = -0.21; scene.add(rim);
+  const plotMat = cmat(0xb59a72, { roughness: 1 });
   const asphaltMat = cmat(0x3a3f47, { roughness: 1 });
   const pavementMat = cmat(0x9aa0a6, { roughness: 1 });
   const outlineMat = cmat(0xb9c0c6, { roughness: 1 });
   const dashMat = cmat(0xf5f1e8);
-  const lots = new Map(), cells = new Map(), wild = new Map();
+  const lots = new Map(), cells = new Map(), plots = new Map();
   const half = PITCH / 2, inner = BLOCK / 2 + 2;
   for (let i = -RADIUS; i <= RADIUS; i++) for (let j = -RADIUS; j <= RADIUS; j++) {
     const cx = i * PITCH, cz = j * PITCH;
@@ -56263,22 +56267,19 @@ function buildCityGround(scene) {
     const lot = new THREE.Mesh(new THREE.PlaneGeometry(BLOCK, BLOCK), outlineMat);
     lot.rotation.x = -Math.PI / 2; lot.position.set(cx, -0.01, cz); lot.receiveShadow = true; lot.visible = cell.visible; scene.add(lot);
     lots.set(`${i},${j}`, lot);
-    // wild land: a few trees until the ring is bought
+    // land you don't own yet: a bare plot outline on the earth
     if (ring > 1) {
-      const w = new THREE.Group();
-      for (let k = 0; k < 3; k++) w.add(tree(cx + (Math.random() - 0.5) * 14, cz + (Math.random() - 0.5) * 14, 1.8 + Math.random() * 1.6));
-      scene.add(w); wild.set(`${i},${j}`, w);
+      const plot = new THREE.Mesh(new THREE.PlaneGeometry(BLOCK + 2, BLOCK + 2), plotMat);
+      plot.rotation.x = -Math.PI / 2; plot.position.set(cx, -0.04, cz); plot.receiveShadow = true; scene.add(plot); plots.set(`${i},${j}`, plot);
     }
   }
-  // distant tree line so the horizon isn't bare
-  for (let k = 0; k < 90; k++) { const a = Math.random() * Math.PI * 2, r = span / 2 + 12 + Math.random() * 40; scene.add(tree(Math.cos(a) * r, Math.sin(a) * r, 3 + Math.random() * 3)); }
   // highlight square for placement
   const hl = new THREE.Mesh(new THREE.PlaneGeometry(BLOCK + 0.6, BLOCK + 0.6), new THREE.MeshBasicMaterial({ color: 0xffd54f, transparent: true, opacity: 0.35, depthWrite: false }));
   hl.rotation.x = -Math.PI / 2; hl.position.y = 0.02; hl.visible = false; scene.add(hl);
   // selection ring for a clicked building
   const sel = new THREE.Mesh(new THREE.RingGeometry(BLOCK / 2 + 0.6, BLOCK / 2 + 1.2, 40), new THREE.MeshBasicMaterial({ color: 0xffd54f, transparent: true, opacity: 0.8, depthWrite: false }));
   sel.rotation.x = -Math.PI / 2; sel.position.y = 0.04; sel.visible = false; scene.add(sel);
-  return { lots, cells, wild, highlight: hl, select: sel };
+  return { lots, cells, plots, highlight: hl, select: sel };
 }
 
 // ---------------------------------------------------------------- city sim
@@ -56356,7 +56357,7 @@ class City {
       if (this.ring(i, j) === this.rings) {
         cell.visible = true;
         const lot = this.ground.lots.get(k); if (lot) lot.visible = !this.buildings.has(k);
-        const w = this.ground.wild.get(k); if (w) { this.game.scene.remove(w); this.ground.wild.delete(k); }
+        const plot = this.ground.plots.get(k); if (plot) plot.visible = false;
       }
     }
     this.cache = null;
@@ -56374,7 +56375,7 @@ class City {
     while (this.rings > 1) {
       for (const [k, cell] of this.ground.cells) {
         const [i, j] = k.split(',').map(Number);
-        if (this.ring(i, j) === this.rings) { cell.visible = false; const lot = this.ground.lots.get(k); if (lot) lot.visible = false; }
+        if (this.ring(i, j) === this.rings) { cell.visible = false; const lot = this.ground.lots.get(k); if (lot) lot.visible = false; const plot = this.ground.plots.get(k); if (plot) plot.visible = true; }
       }
       this.rings -= 1;
     }
@@ -57368,7 +57369,7 @@ class Game {
     this.renderer = renderer;
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0xf6e7d2);
-    scene.fog = new THREE.Fog(0xf6e7d2, 150, 380);
+    scene.fog = new THREE.Fog(0xf6e7d2, 220, 520);
     this.scene = scene;
     this.camera = new THREE.PerspectiveCamera(38, 1, 0.1, 600);
     this.camera.position.set(40, 60, 70);

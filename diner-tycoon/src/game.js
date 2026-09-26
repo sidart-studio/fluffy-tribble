@@ -176,7 +176,7 @@ export class Game {
     this.renderer = renderer;
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0xf6e7d2);
-    scene.fog = new THREE.Fog(0xf6e7d2, 150, 380);
+    scene.fog = new THREE.Fog(0xf6e7d2, 220, 520);
     this.scene = scene;
     this.camera = new THREE.PerspectiveCamera(38, 1, 0.1, 600);
     this.camera.position.set(40, 60, 70);
