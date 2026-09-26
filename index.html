@@ -65,6 +65,16 @@
     body.touch #hit-btn.ready { display: flex; }
     #hit-btn:active { transform: scale(.9); }
 
+    #jump-btn {
+      position: fixed; right: 100px; bottom: 24px; z-index: 120;
+      width: 64px; height: 64px; border-radius: 50%;
+      background: rgba(0,0,0,.45); border: 3px solid rgba(255,255,255,.55);
+      font-size: 26px; display: none; align-items: center; justify-content: center;
+      box-shadow: 0 6px 14px rgba(0,0,0,.35); cursor: pointer;
+    }
+    body.touch #jump-btn.show { display: flex; }
+    #jump-btn:active { transform: scale(.9); }
+
     #hammer-btn {
       position: fixed; right: 18px; top: 50%; transform: translateY(-132px); z-index: 120;
       width: 76px; height: 76px; border-radius: 50%;
@@ -210,6 +220,7 @@
   <div id="hit-prompt"><span class="k">E</span> Hit</div>
   <div id="joy-zone"><div id="joy-knob"></div></div>
   <div id="hit-btn">🥊</div>
+  <div id="jump-btn">⬆️</div>
   <div id="hammer-btn" title="Hold / put away your hammer (Q)"><svg viewBox="0 0 48 48" width="36" height="36"><defs><linearGradient id="hmHead" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ECEFF1"/><stop offset=".5" stop-color="#90A4AE"/><stop offset="1" stop-color="#455A64"/></linearGradient><linearGradient id="hmWood" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#A1887F"/><stop offset="1" stop-color="#4E342E"/></linearGradient></defs><g transform="rotate(40 24 24)"><rect x="9" y="7" width="30" height="13" rx="3.5" fill="url(#hmHead)"/><rect x="11" y="8.5" width="26" height="4" rx="2" fill="#fff" opacity=".4"/><rect x="20.5" y="19" width="7" height="24" rx="3" fill="url(#hmWood)"/><rect x="22" y="20" width="1.8" height="21" rx="0.9" fill="#fff" opacity=".22"/></g></svg><span class="lbl">HAMMER</span></div>
   <div id="home-btn" title="Go back to the shop (H)"><svg viewBox="0 0 48 48" width="36" height="36"><defs><linearGradient id="hbRoof" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#EF5350"/><stop offset="1" stop-color="#B71C1C"/></linearGradient><linearGradient id="hbWall" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFF8E1"/><stop offset="1" stop-color="#D7CCC8"/></linearGradient></defs><rect x="31" y="9" width="5" height="10" rx="1" fill="#8D6E63"/><rect x="10" y="24" width="28" height="18" rx="1" fill="url(#hbWall)"/><polygon points="24,5 45,25 41,25 24,9.5 7,25 3,25" fill="url(#hbRoof)"/><rect x="20" y="30" width="8" height="12" rx="1.2" fill="#6D4C41"/><circle cx="26.3" cy="36.4" r="1" fill="#FFD54F"/><rect x="12.5" y="28.5" width="6.5" height="6.5" rx="0.8" fill="#81D4FA" stroke="#fff" stroke-width="1.2"/><rect x="29.5" y="28.5" width="6.5" height="6.5" rx="0.8" fill="#81D4FA" stroke="#fff" stroke-width="1.2"/><rect x="12.5" y="28.5" width="6.5" height="2.6" fill="#fff" opacity=".35"/><rect x="29.5" y="28.5" width="6.5" height="2.6" fill="#fff" opacity=".35"/></svg><span class="lbl">HOME</span></div>
   <div id="store-btn" title="Open the store"><svg viewBox="0 0 48 48" width="36" height="36"><defs><linearGradient id="sbBag" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#A1887F"/><stop offset="1" stop-color="#4E342E"/></linearGradient><radialGradient id="sbCoin" cx=".35" cy=".3" r="1"><stop offset="0" stop-color="#FFF59D"/><stop offset=".6" stop-color="#FBC02D"/><stop offset="1" stop-color="#F57F17"/></radialGradient></defs><circle cx="36" cy="13" r="8.5" fill="url(#sbCoin)" stroke="#E65100" stroke-width="1"/><text x="36" y="17.2" font-size="11" font-weight="bold" text-anchor="middle" fill="#8D5A00">$</text><path d="M18 15 L27 15 L29 20 C37 25 39 33 37 38.5 C34 45 11 45 8 38.5 C6 33 8 25 16 20 Z" fill="url(#sbBag)"/><path d="M17.5 14.5 C19 10.5 26 10.5 27.5 14.5 L26.5 17.5 L18.5 17.5 Z" fill="#6D4C41"/><ellipse cx="16.5" cy="28" rx="4.5" ry="7.5" fill="#fff" opacity=".14"/><text x="22.5" y="37.5" font-size="14" font-weight="bold" text-anchor="middle" fill="#FFD54F">$</text></svg><span class="lbl">STORE</span></div>
@@ -263,6 +274,8 @@
   const ISLAND_R   = 5;   // island radius in cells — small, just enough for this scene
   const LAND_Y     = CELL;
   const PLAYER_SPEED = 5.6;
+  const JUMP_SPEED = 6.0;    // upward speed when jumping
+  const GRAVITY_P  = 14;     // how hard the jump gets pulled back down
   const EYE_HEIGHT   = 0.66;
   const HIT_RANGE    = 2.8;   // how close CUBEY needs to be to the tree to hit it
   const SHOP_RANGE   = 3.2;   // how close, and in front of, the shop CUBEY needs to be
@@ -1548,8 +1561,13 @@
     tree: 0.4, bamboo: 0.55, corn: 0.45, berry: 0.6, pumpkin: 0.4,
     hive: 0.4, rock: 0.6, ice: 0.55, iron: 0.55, flower: 0,
   };
-  function resolveCollisions(x, z, pr, exemptHome) {
-    const push = (ox, oz, or) => {
+  const OBSTACLE_H = { // how tall each solid is — a good jump clears the low ones
+    tree: 9, bamboo: 9, corn: 1.1, berry: 0.8, pumpkin: 0.5,
+    hive: 1.5, rock: 0.65, ice: 0.6, iron: 0.65,
+  };
+  function resolveCollisions(x, z, pr, exemptHome, feetY = 0) {
+    const push = (ox, oz, or, oh = 9) => {
+      if (feetY > oh) return; // airborne above it — sails right over
       let dx = x - ox, dz = z - oz;
       let d2 = dx * dx + dz * dz;
       const min = or + pr;
@@ -1564,7 +1582,7 @@
     for (const h of harvestables) {
       const r = OBSTACLE_R[h.kind];
       if (!r || !h.group.visible) continue; // harvested-away nodes don't block
-      push(h.x, h.z, r);
+      push(h.x, h.z, r, OBSTACLE_H[h.kind]);
     }
     for (const v of villagers) {
       if (exemptHome === v.home) continue; // a worker can always reach their own door
@@ -2000,6 +2018,7 @@
       else if (kind === 'deny')   { mk('sawtooth', 200, 130, 0.16, 0.1); }
       else if (kind === 'click')  { mk('sine', 700, 480, 0.05, 0.12); }
       else if (kind === 'hatch')  { mk('sine', 700, 1100, 0.12, 0.16); mk('sine', 900, 1400, 0.14, 0.16, 0.1); }
+      else if (kind === 'jump')   { mk('sine', 280, 560, 0.14, 0.14); }
     } catch (e) { /* no audio available — stay silent */ }
   }
 
@@ -2611,6 +2630,7 @@
       hammerBtnEl.classList.add('show');
       homeBtnEl.classList.add('show');
       storeBtnEl.classList.add('show');
+      jumpBtnEl.classList.add('show');
       refreshFastUI();
       setTimeout(() => toast('🔨 You have a hammer! Press the HAMMER button on the right to hold it', true), 900);
 
@@ -2646,13 +2666,17 @@
   //  INPUT — keyboard + touch joystick/look + Hit
   // ═══════════════════════════════════════════════
   const keys = new Set();
+  let vy = 0, jumpQueued = false;
   window.addEventListener('keydown', e => {
     keys.add(e.key.toLowerCase());
+    if (e.code === 'Space') { e.preventDefault(); if (phase === 'fps') jumpQueued = true; }
     if (e.key.toLowerCase() === 'e') hitTree();
     if (e.key.toLowerCase() === 'q') toggleHammer();
     if (e.key.toLowerCase() === 'h') goHome();
     if (e.key.toLowerCase() === 'b') goBack();
   });
+  const jumpBtnEl = document.getElementById('jump-btn');
+  jumpBtnEl.addEventListener('pointerdown', e => { e.preventDefault(); jumpQueued = true; });
   window.addEventListener('keyup', e => keys.delete(e.key.toLowerCase()));
 
   function readKeyboardVector() {
@@ -2774,11 +2798,22 @@
       const nz = player.position.z + dir.z * step;
       if (isLand(nx, player.position.z)) player.position.x = nx;
       if (isLand(player.position.x, nz)) player.position.z = nz;
-      const solid = resolveCollisions(player.position.x, player.position.z, 0.35);
+      const solid = resolveCollisions(player.position.x, player.position.z, 0.35, undefined, player.position.y - LAND_Y);
       if (isLand(solid.x, solid.z)) { player.position.x = solid.x; player.position.z = solid.z; }
       walkCycle += delta * 9;
     } else {
       walkCycle *= 0.9;
+    }
+
+    // jumping — Space (or the ⬆️ button) hops CUBEY into the air
+    if (jumpQueued) {
+      jumpQueued = false;
+      if (player.position.y <= LAND_Y + 0.001) { vy = JUMP_SPEED; sfx('jump'); }
+    }
+    if (player.position.y > LAND_Y || vy > 0) {
+      vy -= GRAVITY_P * delta;
+      player.position.y = Math.max(LAND_Y, player.position.y + vy * delta);
+      if (player.position.y === LAND_Y && vy < 0) vy = 0;
     }
 
     player.rotation.y = yaw;
