@@ -1513,7 +1513,7 @@ export class Game {
     const [i, j] = this.city.tileAt(p.x, p.z);
     const bull = this.city.placing === 'bulldoze';
     const ok = bull ? this.city.buildings.has(this.city.key(i, j)) : this.city.canBuild(i, j);
-    hl.visible = this.city.inGrid(i, j);
+    hl.visible = this.city.owned(i, j);
     hl.position.copy(this.city.tileCenter(i, j)); hl.position.y = 0.03;
     hl.material.color.setHex(ok ? (bull ? 0xff7043 : 0xffd54f) : 0xe53935);
   }
@@ -1522,7 +1522,6 @@ export class Game {
     if (!p) return;
     const [i, j] = this.city.tileAt(p.x, p.z);
     const def = BUILDING_BY_ID[this.city.placing];
-    if (!this.city.inGrid(i, j)) return;
     if (!this.city.owned(i, j)) { this.sfx.tooEarly(); const c = this.city.nextRingCost(); this.toast(c ? `That land isn't yours yet. Buy the next ring for ${money(c)} (Land button).` : 'That block is outside the city limits.', 'warn', 3500); return; }
     if (!this.city.canBuild(i, j)) { this.sfx.tooEarly(); this.toast('That block is taken. Pick an empty one.', 'warn'); return; }
     if (this.s.cash < def.cost) { this.sfx.tooEarly(); this.toast(`Need ${money(def.cost)} for ${def.name}.`, 'warn'); return; }
@@ -1851,7 +1850,7 @@ export class Game {
   mayorCanStand(x, z) {
     const n = this.nav;
     if (n.inBounds(n.col(x), n.row(z))) return n.walkable(x, z, MASK.CUSTOMER);
-    const lim = this.city.span() / 2 + 8;
+    const lim = this.city.span() / 2 - 0.6; // the edge of the land
     if (Math.abs(x) > lim || Math.abs(z) > lim) return false;
     for (const b of this.city.buildings.values()) if (Math.abs(x - b.i * PITCH) < BLOCK / 2 + 0.3 && Math.abs(z - b.j * PITCH) < BLOCK / 2 + 0.3) return false;
     return true;
