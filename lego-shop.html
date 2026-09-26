@@ -1,0 +1,843 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Brick Shop Tycoon</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #1d3b6b;
+    --panel: #ffffff;
+    --ink: #1b1b1b;
+    --muted: #6b6b6b;
+    --yellow: #ffcf00;
+    --red: #e3000b;
+    --blue: #0055bf;
+    --green: #00852b;
+    --line: #e2e2e2;
+    --locked: #f1f1f1;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    font-family: 'Fredoka', 'Segoe UI', system-ui, sans-serif;
+    color: var(--ink);
+    min-height: 100vh;
+  }
+  header {
+    background: var(--yellow);
+    border-bottom: 5px solid #d9a800;
+    padding: 10px 16px;
+    display: flex; flex-wrap: wrap; gap: 10px 22px; align-items: center; justify-content: space-between;
+  }
+  header h1 { font-size: 24px; font-weight: 700; letter-spacing: .5px; display: flex; align-items: center; gap: 8px; }
+  .logo-brick { width: 34px; height: 24px; background: var(--red); border-radius: 4px; position: relative; box-shadow: inset 0 -4px 0 rgba(0,0,0,.25); }
+  .logo-brick::before, .logo-brick::after { content: ''; position: absolute; top: -5px; width: 10px; height: 6px; background: var(--red); border-radius: 3px 3px 0 0; }
+  .logo-brick::before { left: 5px; } .logo-brick::after { right: 5px; }
+  .stats { display: flex; flex-wrap: wrap; gap: 8px; }
+  .stat { background: #fff; border-radius: 10px; padding: 4px 12px; box-shadow: 0 3px 0 rgba(0,0,0,.18); min-width: 92px; }
+  .stat .label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
+  .stat .value { font-size: 20px; font-weight: 700; }
+  #money { color: var(--green); }
+
+  main { display: flex; gap: 16px; padding: 16px; align-items: flex-start; max-width: 1280px; margin: 0 auto; }
+  #stage { flex: 1 1 auto; min-width: 0; }
+  #canvasWrap { background: #0e2447; border-radius: 14px; padding: 10px; box-shadow: 0 6px 0 rgba(0,0,0,.3); }
+  canvas { display: block; width: 100%; height: auto; border-radius: 8px; touch-action: none; cursor: crosshair; }
+  #hint { margin-top: 10px; background: rgba(255,255,255,.12); color: #fff; border-radius: 10px; padding: 8px 12px; font-size: 15px; min-height: 38px; }
+
+  aside { flex: 0 0 330px; background: var(--panel); border-radius: 14px; box-shadow: 0 6px 0 rgba(0,0,0,.3); overflow: hidden; }
+  .tabs { display: flex; flex-wrap: wrap; background: #f5f5f5; border-bottom: 2px solid var(--line); }
+  .tab { flex: 1 1 auto; border: 0; background: none; font: inherit; font-weight: 600; font-size: 13px; padding: 10px 4px; cursor: pointer; color: var(--muted); border-bottom: 3px solid transparent; }
+  .tab.active { color: var(--ink); border-bottom-color: var(--red); background: #fff; }
+  #items { padding: 10px; display: grid; gap: 8px; max-height: 560px; overflow-y: auto; }
+  .item { display: flex; gap: 10px; align-items: center; border: 2px solid var(--line); border-radius: 10px; padding: 8px; cursor: pointer; background: #fff; text-align: left; font: inherit; width: 100%; }
+  .item:hover { border-color: #bbb; }
+  .item.selected { border-color: var(--blue); background: #eef4ff; }
+  .item.cant .cost { color: var(--red); }
+  .item.locked { background: var(--locked); cursor: not-allowed; opacity: .75; }
+  .swatch { width: 42px; height: 42px; border-radius: 8px; flex: 0 0 42px; display: grid; place-items: center; font-size: 22px; box-shadow: inset 0 -5px 0 rgba(0,0,0,.22); }
+  .info { flex: 1; min-width: 0; }
+  .name { font-weight: 600; font-size: 15px; }
+  .desc { font-size: 12px; color: var(--muted); }
+  .cost { font-weight: 700; color: var(--green); font-size: 15px; white-space: nowrap; }
+  .tools { display: flex; gap: 8px; padding: 10px; border-top: 2px solid var(--line); }
+  .btn { flex: 1; border: 0; border-radius: 10px; padding: 9px; font: inherit; font-weight: 600; cursor: pointer; box-shadow: 0 3px 0 rgba(0,0,0,.2); }
+  .btn:active { transform: translateY(2px); box-shadow: 0 1px 0 rgba(0,0,0,.2); }
+  .btn.sell { background: #ffe0e0; color: #9b0008; }
+  .btn.sell.selected { background: var(--red); color: #fff; }
+  .btn.plain { background: #eee; }
+
+  #overlay { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: grid; place-items: center; z-index: 10; padding: 16px; }
+  #overlay.hidden { display: none; }
+  .card { background: #fff; border-radius: 16px; max-width: 480px; padding: 22px; box-shadow: 0 8px 0 rgba(0,0,0,.3); }
+  .card h2 { font-size: 26px; margin-bottom: 8px; }
+  .card ol { margin: 10px 0 16px 20px; line-height: 1.55; }
+  .card .btn { background: var(--yellow); font-size: 18px; width: 100%; }
+
+  @media (max-width: 860px) {
+    main { flex-direction: column; padding: 16px; }
+    aside { flex: 1 1 auto; width: 100%; }
+    #items { max-height: none; }
+    header h1 { font-size: 20px; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1><span class="logo-brick"></span> Brick Shop Tycoon</h1>
+  <div class="stats">
+    <div class="stat"><div class="label">Money</div><div class="value" id="money">$0</div></div>
+    <div class="stat"><div class="label">Total earned</div><div class="value" id="earned">$0</div></div>
+    <div class="stat"><div class="label">Customers</div><div class="value" id="served">0</div></div>
+    <div class="stat"><div class="label">Shop rating</div><div class="value" id="rating">★</div></div>
+  </div>
+</header>
+
+<main>
+  <section id="stage">
+    <div id="canvasWrap"><canvas id="game"></canvas></div>
+    <div id="hint"></div>
+  </section>
+  <aside>
+    <div class="tabs" id="tabs"></div>
+    <div id="items"></div>
+    <div class="tools">
+      <button class="btn sell" id="sellBtn">🔨 Sell tool (50% back)</button>
+      <button class="btn plain" id="resetBtn">New game</button>
+    </div>
+  </aside>
+</main>
+
+<div id="overlay">
+  <div class="card">
+    <h2>🧱 Welcome to Brick Shop Tycoon!</h2>
+    <p>You just opened a tiny toy shop built out of bricks. Make it the biggest brick shop in town!</p>
+    <ol>
+      <li>Build a <b>Cash Register</b> so customers can pay.</li>
+      <li>Build <b>Product shelves</b> — customers walk to them and buy stuff.</li>
+      <li>Add <b>Decorations</b> and <b>Floor tiles</b> to make your shop nicer. Nicer shops get more customers and bigger tips!</li>
+      <li>Earn money to unlock new bricks and <b>expand</b> your shop in the Upgrades tab.</li>
+    </ol>
+    <p style="margin-bottom:14px;color:#6b6b6b;font-size:14px">Tip: click and drag to place lots of bricks. Right-click (or use the Sell tool) to remove one.</p>
+    <button class="btn" id="startBtn">Open the shop!</button>
+  </div>
+</div>
+
+<script>
+(() => {
+'use strict';
+
+// ─── Config ────────────────────────────────────────────────
+const W = 16, H = 11, CELL = 48;
+const DOOR = { x: 8, y: H - 1 };
+const EXPANSIONS = [ // shop area per level
+  { w: 8,  h: 5,  cost: 0 },
+  { w: 10, h: 7,  cost: 250 },
+  { w: 12, h: 8,  cost: 1000 },
+  { w: 14, h: 10, cost: 3500 },
+  { w: 16, h: 11, cost: 10000 },
+];
+
+const ITEMS = {
+  // Products — customers visit these and buy
+  bin:     { cat: 'Products', name: 'Brick Bin',       icon: '🧱', color: '#e3000b', cost: 20,   sell: 5,   unlock: 0,     desc: 'Loose bricks by the scoop' },
+  car:     { cat: 'Products', name: 'Race Car Sets',   icon: '🏎️', color: '#0055bf', cost: 75,   sell: 10,  unlock: 100,   desc: 'Zoom zoom! Speedy car kits' },
+  minifig: { cat: 'Products', name: 'Minifig Stand',   icon: '🧑‍🚀', color: '#f2cd37', cost: 180,  sell: 22,  unlock: 400,   desc: 'Collect all the little people' },
+  house:   { cat: 'Products', name: 'City House Sets', icon: '🏠', color: '#00852b', cost: 320,  sell: 34,  unlock: 800,   desc: 'Build your own little town' },
+  castle:  { cat: 'Products', name: 'Castle Display',  icon: '🏰', color: '#8a8a8a', cost: 550,  sell: 55,  unlock: 1600,  desc: 'Knights, towers and drawbridges' },
+  pirate:  { cat: 'Products', name: 'Pirate Ship',     icon: '🏴‍☠️', color: '#5c3a1e', cost: 900,  sell: 85,  unlock: 3000,  desc: 'Arr! Big ship sets' },
+  rocket:  { cat: 'Products', name: 'Space Rocket',    icon: '🚀', color: '#ffffff', cost: 1500, sell: 130, unlock: 5500,  desc: 'Blast off to the stars' },
+  dragon:  { cat: 'Products', name: 'Mega Dragon',     icon: '🐉', color: '#7b2fbe', cost: 3500, sell: 280, unlock: 12000, desc: 'The rarest, coolest set' },
+
+  // Counters
+  register: { cat: 'Counters', name: 'Cash Register', icon: '💰', color: '#ffcf00', cost: 30,  unlock: 0,    register: 1.4, desc: 'Customers pay here' },
+  fastreg:  { cat: 'Counters', name: 'Super Register', icon: '💳', color: '#00a3da', cost: 400, unlock: 2000, register: 0.6, desc: 'Takes payments super fast' },
+
+  // Decorations — raise appeal
+  flower:   { cat: 'Decor', name: 'Flower Pot',     icon: '🌸', color: '#ff9ecd', cost: 15,   appeal: 1,  unlock: 0,     desc: '+1 appeal' },
+  tree:     { cat: 'Decor', name: 'Brick Tree',     icon: '🌳', color: '#00852b', cost: 45,   appeal: 3,  unlock: 150,   desc: '+3 appeal' },
+  lamp:     { cat: 'Decor', name: 'Lamp Post',      icon: '💡', color: '#3c3c3c', cost: 100,  appeal: 6,  unlock: 500,   desc: '+6 appeal' },
+  teddy:    { cat: 'Decor', name: 'Giant Teddy',    icon: '🧸', color: '#c4813b', cost: 220,  appeal: 11, unlock: 1100,  desc: '+11 appeal' },
+  arcade:   { cat: 'Decor', name: 'Arcade Machine', icon: '🕹️', color: '#e3000b', cost: 450,  appeal: 18, unlock: 2200,  desc: '+18 appeal' },
+  fountain: { cat: 'Decor', name: 'Fountain',       icon: '⛲', color: '#7fc6f0', cost: 900,  appeal: 30, unlock: 4500,  desc: '+30 appeal' },
+  statue:   { cat: 'Decor', name: 'Golden Statue',  icon: '🏆', color: '#d4a017', cost: 2500, appeal: 70, unlock: 10000, desc: '+70 appeal' },
+
+  // Building
+  wall:   { cat: 'Build', name: 'Wall Brick',  color: '#b40000', cost: 5, unlock: 0, desc: 'Blocks the way. Shape your shop!' },
+  wallw:  { cat: 'Build', name: 'White Wall',  color: '#f4f4f4', cost: 5, unlock: 0, desc: 'Blocks the way' },
+  wallb:  { cat: 'Build', name: 'Blue Wall',   color: '#0055bf', cost: 5, unlock: 0, desc: 'Blocks the way' },
+  fred:   { cat: 'Build', name: 'Red Tile',    color: '#f04f4f', cost: 2, unlock: 0,  floor: true, desc: 'Smooth floor tile, +0.25 appeal' },
+  fblue:  { cat: 'Build', name: 'Blue Tile',   color: '#4f8ff0', cost: 2, unlock: 0,  floor: true, desc: 'Smooth floor tile, +0.25 appeal' },
+  fyel:   { cat: 'Build', name: 'Yellow Tile', color: '#ffe066', cost: 2, unlock: 0,  floor: true, desc: 'Smooth floor tile, +0.25 appeal' },
+  fwhite: { cat: 'Build', name: 'White Tile',  color: '#f7f7f7', cost: 2, unlock: 0,  floor: true, desc: 'Smooth floor tile, +0.25 appeal' },
+  fblack: { cat: 'Build', name: 'Black Tile',  color: '#3a3a3a', cost: 3, unlock: 300, floor: true, desc: 'Smooth floor tile, +0.25 appeal' },
+  fpink:  { cat: 'Build', name: 'Pink Tile',   color: '#ff9ecd', cost: 3, unlock: 300, floor: true, desc: 'Smooth floor tile, +0.25 appeal' },
+};
+const TABS = ['Products', 'Counters', 'Decor', 'Build', 'Upgrades'];
+
+const SHIRTS = ['#e3000b', '#0055bf', '#00852b', '#ffcf00', '#7b2fbe', '#ff7f00', '#00a3da', '#ffffff', '#1b1b1b'];
+const PANTS  = ['#1b1b1b', '#0055bf', '#5c3a1e', '#8a8a8a', '#00852b'];
+const HAIR   = ['#5c3a1e', '#1b1b1b', '#ffcf00', '#c4813b', '#e3000b', null];
+
+// ─── State ─────────────────────────────────────────────────
+let S;
+function freshState() {
+  return {
+    money: 100, total: 0, served: 0,
+    expand: 0, priceLvl: 0, adUntil: 0,
+    floor: new Array(W * H).fill(null),
+    obj: new Array(W * H).fill(null),
+  };
+}
+function load() {
+  try {
+    const raw = localStorage.getItem('brickShopTycoon');
+    if (raw) {
+      const d = JSON.parse(raw);
+      if (d && Array.isArray(d.obj) && d.obj.length === W * H) return Object.assign(freshState(), d, { adUntil: 0 });
+    }
+  } catch (e) { /* storage unavailable */ }
+  return null;
+}
+function save() {
+  try { localStorage.setItem('brickShopTycoon', JSON.stringify(S)); } catch (e) { /* ignore */ }
+}
+
+let customers = [];
+let popups = [];
+let spawnTimer = 2;
+let sadCount = 0;
+let gridVersion = 0;
+let clock = 0;
+
+// ─── Grid helpers ──────────────────────────────────────────
+const idx = (x, y) => y * W + x;
+function region() {
+  const e = EXPANSIONS[S.expand];
+  const x0 = Math.floor((W - e.w) / 2);
+  return { x0, y0: H - e.h, x1: x0 + e.w - 1, y1: H - 1 };
+}
+function inRegion(x, y) {
+  const r = region();
+  return x >= r.x0 && x <= r.x1 && y >= r.y0 && y <= r.y1;
+}
+const isDoor = (x, y) => x === DOOR.x && y === DOOR.y;
+function walkable(x, y) {
+  if (x < 0 || y < 0 || x >= W || y >= H || !inRegion(x, y)) return false;
+  return !S.obj[idx(x, y)];
+}
+const NB = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+
+// BFS from start to any cell where goal(x,y) is true. Returns list of cells (excluding start) or null.
+function bfs(sx, sy, goal) {
+  if (goal(sx, sy)) return [];
+  const prev = new Int16Array(W * H).fill(-1);
+  const start = idx(sx, sy);
+  prev[start] = start;
+  const q = [start];
+  for (let qi = 0; qi < q.length; qi++) {
+    const c = q[qi], cx = c % W, cy = (c / W) | 0;
+    for (const [dx, dy] of NB) {
+      const nx = cx + dx, ny = cy + dy;
+      if (!walkable(nx, ny)) continue;
+      const n = idx(nx, ny);
+      if (prev[n] !== -1) continue;
+      prev[n] = c;
+      if (goal(nx, ny)) {
+        const path = [];
+        for (let p = n; p !== start; p = prev[p]) path.push({ x: p % W, y: (p / W) | 0 });
+        return path.reverse();
+      }
+      q.push(n);
+    }
+  }
+  return null;
+}
+function adjacentTo(pred) {
+  return (x, y) => NB.some(([dx, dy]) => {
+    const nx = x + dx, ny = y + dy;
+    if (nx < 0 || ny < 0 || nx >= W || ny >= H) return false;
+    return pred(nx, ny, S.obj[idx(nx, ny)]);
+  });
+}
+
+// ─── Economy ───────────────────────────────────────────────
+function appeal() {
+  let a = 0;
+  for (let i = 0; i < W * H; i++) {
+    const o = S.obj[i];
+    if (o && ITEMS[o].appeal) a += ITEMS[o].appeal;
+    if (S.floor[i]) a += 0.25;
+  }
+  return a;
+}
+let cachedAppeal = 0;
+function stars(a) {
+  const n = Math.min(5, 1 + Math.floor(Math.log2(1 + a / 5)));
+  return '★'.repeat(n) + '☆'.repeat(5 - n);
+}
+const priceMult = () => (1 + S.priceLvl * 0.15) * (1 + cachedAppeal * 0.01);
+const priceUpgradeCost = () => Math.round(150 * Math.pow(2.2, S.priceLvl));
+const adCost = () => 40 + S.expand * 60;
+function productCells() {
+  const out = [];
+  for (let i = 0; i < W * H; i++) if (S.obj[i] && ITEMS[S.obj[i]].sell) out.push(i);
+  return out;
+}
+function countWhere(fn) { let n = 0; for (const o of S.obj) if (o && fn(ITEMS[o])) n++; return n; }
+
+function addMoney(n) { S.money += n; if (n > 0) S.total += n; updateStats(); }
+const fmt = n => '$' + Math.floor(n).toLocaleString();
+
+// ─── Customers ─────────────────────────────────────────────
+const pick = a => a[(Math.random() * a.length) | 0];
+function spawnCustomer() {
+  if (walkable(DOOR.x, DOOR.y) === false) return;
+  const shelves = productCells();
+  // shuffle and pick 1-3 shelves to visit
+  for (let i = shelves.length - 1; i > 0; i--) { const j = (Math.random() * (i + 1)) | 0; [shelves[i], shelves[j]] = [shelves[j], shelves[i]]; }
+  const wants = shelves.slice(0, 1 + ((Math.random() * Math.min(3, shelves.length)) | 0));
+  customers.push({
+    x: DOOR.x, y: DOOR.y + 0.9, path: [{ x: DOOR.x, y: DOOR.y }],
+    state: 'toShelf', wants, basket: 0, items: 0, timer: 0, ver: -1,
+    speed: 2.2 + Math.random() * 1.2,
+    shirt: pick(SHIRTS), pants: pick(PANTS), hair: pick(HAIR),
+    bubble: null, bubbleT: 0, alpha: 1, entering: true,
+  });
+}
+function say(c, emoji, t = 1.6) { c.bubble = emoji; c.bubbleT = t; }
+
+function planPath(c) {
+  const cx = Math.round(c.x), cy = Math.min(H - 1, Math.round(c.y));
+  c.ver = gridVersion;
+  if (c.state === 'toShelf') {
+    while (c.wants.length) {
+      const target = c.wants[0];
+      if (!S.obj[target] || !ITEMS[S.obj[target]].sell) { c.wants.shift(); continue; }
+      const tx = target % W, ty = (target / W) | 0;
+      const p = bfs(cx, cy, (x, y) => Math.abs(x - tx) + Math.abs(y - ty) === 1);
+      if (p) { c.path = p; c.face = { x: tx, y: ty }; return; }
+      c.wants.shift();
+    }
+    // nothing (left) to browse
+    if (c.items > 0) { c.state = 'toRegister'; return planPath(c); }
+    say(c, '🤷'); sadCount++;
+    c.state = 'leave'; return planPath(c);
+  }
+  if (c.state === 'toRegister') {
+    const p = bfs(cx, cy, adjacentTo((x, y, o) => o && ITEMS[o].register));
+    if (p) { c.path = p; return; }
+    say(c, countWhere(i => i.register) ? '😕' : '😞', 2); sadCount++;
+    c.items = 0; c.basket = 0;
+    c.state = 'leave'; return planPath(c);
+  }
+  if (c.state === 'leave') {
+    const p = bfs(cx, cy, isDoor);
+    c.path = p ? p.concat([{ x: DOOR.x, y: DOOR.y + 1 }]) : [];
+    if (!p) c.fade = true;
+  }
+}
+
+function updateCustomer(c, dt) {
+  if (c.bubbleT > 0 && (c.bubbleT -= dt) <= 0) c.bubble = null;
+  if (c.fade) { c.alpha -= dt * 1.5; if (c.alpha <= 0) c.gone = true; return; }
+  if (c.entering) {
+    // walk in from outside the door before pathing
+  } else if (c.ver !== gridVersion && (c.state === 'toShelf' || c.state === 'toRegister' || c.state === 'leave')) {
+    planPath(c);
+  }
+
+  if (c.state === 'browse' || c.state === 'pay') {
+    c.timer -= dt;
+    if (c.timer > 0) return;
+    if (c.state === 'browse') {
+      const o = S.obj[c.target];
+      if (o && ITEMS[o].sell) {
+        c.basket += ITEMS[o].sell;
+        c.items++;
+        say(c, ITEMS[o].icon, 1.2);
+      }
+      c.wants.shift();
+      c.state = c.wants.length ? 'toShelf' : (c.items ? 'toRegister' : 'toShelf');
+      planPath(c);
+    } else {
+      const tip = Math.random() < Math.min(0.6, cachedAppeal / 200) ? 1.25 : 1;
+      const earned = Math.max(1, Math.round(c.basket * priceMult() * tip));
+      addMoney(earned);
+      S.served++;
+      popups.push({ x: c.x, y: c.y - 0.6, text: '+' + fmt(earned) + (tip > 1 ? ' tip!' : ''), t: 0, color: tip > 1 ? '#ffcf00' : '#3cff6e' });
+      say(c, pick(['😀', '😍', '🤩', '👍', '❤️']), 1.8);
+      c.state = 'leave';
+      planPath(c);
+    }
+    return;
+  }
+
+  if (c.path.length) {
+    const t = c.path[0];
+    const dx = t.x - c.x, dy = t.y - c.y;
+    const d = Math.hypot(dx, dy);
+    const step = c.speed * dt;
+    c.walk = (c.walk || 0) + dt * 10;
+    if (d <= step) {
+      c.x = t.x; c.y = t.y; c.path.shift();
+      if (c.entering && !c.path.length) { c.entering = false; planPath(c); }
+    } else {
+      c.x += dx / d * step; c.y += dy / d * step;
+    }
+    return;
+  }
+  if (c.entering) { c.entering = false; planPath(c); return; }
+
+  // arrived
+  if (c.state === 'toShelf' && c.wants.length) {
+    const target = c.wants[0];
+    const tx = target % W, ty = (target / W) | 0;
+    if (Math.abs(Math.round(c.x) - tx) + Math.abs(Math.round(c.y) - ty) === 1 && S.obj[target]) {
+      c.state = 'browse'; c.target = target; c.timer = 1.2 + Math.random(); say(c, '🤔', 1);
+    } else planPath(c);
+  } else if (c.state === 'toRegister') {
+    const cx = Math.round(c.x), cy = Math.round(c.y);
+    let speed = 99;
+    for (const [dx, dy] of NB) {
+      const nx = cx + dx, ny = cy + dy;
+      if (nx < 0 || ny < 0 || nx >= W || ny >= H) continue;
+      const o = S.obj[idx(nx, ny)];
+      if (o && ITEMS[o].register) speed = Math.min(speed, ITEMS[o].register);
+    }
+    if (speed === 99) { planPath(c); return; }
+    c.state = 'pay'; c.timer = speed; say(c, '💵', speed);
+  } else if (c.state === 'leave') {
+    c.gone = true;
+  } else {
+    planPath(c);
+  }
+}
+
+// ─── Game loop ─────────────────────────────────────────────
+function update(dt) {
+  clock += dt;
+  const shelves = productCells().length;
+  const maxC = Math.min(40, 2 + shelves * 2);
+  const ad = Date.now() < S.adUntil ? 2 : 1;
+  const interval = Math.max(0.5, 6 / (1 + cachedAppeal * 0.04) / ad / (1 + shelves * 0.08));
+  spawnTimer -= dt;
+  if (spawnTimer <= 0) {
+    spawnTimer = interval * (0.6 + Math.random() * 0.8);
+    if (customers.length < maxC) spawnCustomer();
+  }
+  for (const c of customers) updateCustomer(c, dt);
+  customers = customers.filter(c => !c.gone);
+  for (const p of popups) p.t += dt;
+  popups = popups.filter(p => p.t < 1.4);
+}
+
+// ─── Rendering ─────────────────────────────────────────────
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+const DPR = Math.min(2, window.devicePixelRatio || 1);
+canvas.width = W * CELL * DPR;
+canvas.height = (H + 1) * CELL * DPR; // extra row for the sidewalk outside
+ctx.scale(DPR, DPR);
+
+function shade(hex, amt) {
+  const n = parseInt(hex.slice(1), 16);
+  const f = v => Math.max(0, Math.min(255, v + amt));
+  return `rgb(${f(n >> 16)},${f((n >> 8) & 255)},${f(n & 255)})`;
+}
+function roundRect(x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+function stud(cx, cy, r, color) {
+  ctx.fillStyle = shade(color, -45);
+  ctx.beginPath(); ctx.arc(cx, cy + 1.5, r, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = color;
+  ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,.35)';
+  ctx.beginPath(); ctx.arc(cx - r * 0.3, cy - r * 0.3, r * 0.35, 0, Math.PI * 2); ctx.fill();
+}
+function drawBrick(px, py, color, withStuds = true, alpha = 1) {
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  roundRect(px + 2, py + 2, CELL - 4, CELL - 4, 6);
+  ctx.fillStyle = shade(color, -60); ctx.fill();
+  roundRect(px + 2, py + 2, CELL - 4, CELL - 9, 6);
+  ctx.fillStyle = color; ctx.fill();
+  if (withStuds) {
+    const q = CELL / 4;
+    for (const [sx, sy] of [[1, 1], [3, 1], [1, 3], [3, 3]]) stud(px + sx * q, py + sy * q - 2, 6, color);
+  }
+  ctx.restore();
+}
+function drawTile(px, py, color) {
+  roundRect(px + 1, py + 1, CELL - 2, CELL - 2, 3);
+  ctx.fillStyle = shade(color, -30); ctx.fill();
+  roundRect(px + 1, py + 1, CELL - 2, CELL - 4, 3);
+  ctx.fillStyle = color; ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,.18)';
+  ctx.fillRect(px + 4, py + 4, CELL - 8, 3);
+}
+function drawItem(key, px, py, alpha = 1) {
+  const it = ITEMS[key];
+  if (it.floor) { ctx.save(); ctx.globalAlpha = alpha; drawTile(px, py, it.color); ctx.restore(); return; }
+  drawBrick(px, py, it.color, !it.icon, alpha);
+  if (it.icon) {
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    // studs in the corners, product on top
+    const s = [[9, 7], [CELL - 9, 7]];
+    for (const [sx, sy] of s) stud(px + sx, py + sy, 4, it.color);
+    ctx.font = '26px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(it.icon, px + CELL / 2, py + CELL / 2 + 1);
+    ctx.restore();
+  }
+}
+
+let baseplate = null, baseplateKey = -1;
+function buildBaseplate() {
+  baseplate = document.createElement('canvas');
+  baseplate.width = canvas.width; baseplate.height = canvas.height;
+  const b = baseplate.getContext('2d');
+  b.scale(DPR, DPR);
+  const r = region();
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const inside = x >= r.x0 && x <= r.x1 && y >= r.y0 && y <= r.y1;
+    const px = x * CELL, py = y * CELL;
+    b.fillStyle = inside ? '#4cae4c' : '#274a2a';
+    b.fillRect(px, py, CELL, CELL);
+    const q = CELL / 4;
+    for (const [sx, sy] of [[1, 1], [3, 1], [1, 3], [3, 3]]) {
+      const cx = px + sx * q, cy = py + sy * q;
+      b.fillStyle = inside ? '#3a8c3a' : '#1f3b21';
+      b.beginPath(); b.arc(cx, cy + 1.5, 5, 0, Math.PI * 2); b.fill();
+      b.fillStyle = inside ? '#5cc45c' : '#2e5532';
+      b.beginPath(); b.arc(cx, cy, 5, 0, Math.PI * 2); b.fill();
+    }
+  }
+  // shop outline
+  b.strokeStyle = '#ffcf00'; b.lineWidth = 3; b.setLineDash([10, 6]);
+  b.strokeRect(r.x0 * CELL + 1.5, r.y0 * CELL + 1.5, (r.x1 - r.x0 + 1) * CELL - 3, (r.y1 - r.y0 + 1) * CELL - 3);
+  b.setLineDash([]);
+  // sidewalk
+  b.fillStyle = '#9a9a9a';
+  b.fillRect(0, H * CELL, W * CELL, CELL);
+  b.fillStyle = '#b5b5b5';
+  for (let x = 0; x < W; x++) b.fillRect(x * CELL + 2, H * CELL + 4, CELL - 4, CELL - 8);
+  baseplateKey = S.expand;
+}
+
+function drawMinifig(c) {
+  const px = c.x * CELL + CELL / 2, py = c.y * CELL + CELL / 2;
+  const moving = c.path.length > 0 && c.state !== 'browse' && c.state !== 'pay';
+  const bob = moving ? Math.sin(c.walk) * 2 : 0;
+  ctx.save();
+  ctx.globalAlpha = Math.max(0, c.alpha);
+  // shadow
+  ctx.fillStyle = 'rgba(0,0,0,.25)';
+  ctx.beginPath(); ctx.ellipse(px, py + 16, 11, 4, 0, 0, Math.PI * 2); ctx.fill();
+  // legs
+  ctx.fillStyle = c.pants;
+  ctx.fillRect(px - 8, py + 4 + bob, 7, 12 - bob);
+  ctx.fillRect(px + 1, py + 4 - bob, 7, 12 + bob);
+  // torso
+  ctx.fillStyle = c.shirt;
+  ctx.beginPath();
+  ctx.moveTo(px - 8, py - 8); ctx.lineTo(px + 8, py - 8); ctx.lineTo(px + 10, py + 5); ctx.lineTo(px - 10, py + 5); ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = 'rgba(0,0,0,.25)'; ctx.lineWidth = 1; ctx.stroke();
+  // arms + hands
+  ctx.fillStyle = shade(c.shirt, -25);
+  ctx.fillRect(px - 13, py - 6 - bob, 4, 9); ctx.fillRect(px + 9, py - 6 + bob, 4, 9);
+  ctx.fillStyle = '#ffd33a';
+  ctx.beginPath(); ctx.arc(px - 11, py + 4 - bob, 2.5, 0, 7); ctx.arc(px + 11, py + 4 + bob, 2.5, 0, 7); ctx.fill();
+  // head
+  ctx.fillStyle = '#ffd33a';
+  roundRect(px - 7, py - 21, 14, 13, 4); ctx.fill();
+  ctx.fillRect(px - 3, py - 24, 6, 4);
+  if (c.hair) { ctx.fillStyle = c.hair; roundRect(px - 8, py - 24, 16, 6, 3); ctx.fill(); }
+  ctx.fillStyle = '#1b1b1b';
+  ctx.fillRect(px - 4, py - 16, 2, 2); ctx.fillRect(px + 2, py - 16, 2, 2);
+  ctx.beginPath(); ctx.arc(px, py - 13, 3, 0.15 * Math.PI, 0.85 * Math.PI); ctx.lineWidth = 1.3; ctx.stroke();
+  // speech bubble
+  if (c.bubble) {
+    const bx = px + 12, by = py - 34;
+    ctx.fillStyle = '#fff';
+    roundRect(bx - 14, by - 13, 28, 24, 8); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(bx - 8, by + 10); ctx.lineTo(bx - 14, by + 17); ctx.lineTo(bx - 2, by + 10); ctx.fill();
+    ctx.font = '16px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(c.bubble, bx, by);
+  }
+  ctx.restore();
+}
+
+let hover = null;
+function render() {
+  if (baseplateKey !== S.expand) buildBaseplate();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.drawImage(baseplate, 0, 0);
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+
+  // floor tiles
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const f = S.floor[idx(x, y)];
+    if (f) drawTile(x * CELL, y * CELL, ITEMS[f].color);
+  }
+  // door mat
+  const dx = DOOR.x * CELL, dy = DOOR.y * CELL;
+  ctx.fillStyle = '#6b3d1e'; roundRect(dx + 3, dy + 6, CELL - 6, CELL - 6, 4); ctx.fill();
+  ctx.fillStyle = '#8b5a2b'; roundRect(dx + 6, dy + 9, CELL - 12, CELL - 14, 3); ctx.fill();
+  ctx.fillStyle = '#ffcf00'; ctx.font = 'bold 12px Fredoka, sans-serif';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText('OPEN', dx + CELL / 2, dy + CELL / 2 + 2);
+
+  // objects & customers sorted by row so things overlap nicely
+  const drawables = [];
+  for (let i = 0; i < W * H; i++) if (S.obj[i]) drawables.push({ y: ((i / W) | 0), fn: () => drawItem(S.obj[i], (i % W) * CELL, ((i / W) | 0) * CELL) });
+  for (const c of customers) drawables.push({ y: c.y + 0.1, fn: () => drawMinifig(c) });
+  drawables.sort((a, b) => a.y - b.y);
+  for (const d of drawables) d.fn();
+
+  // hover preview
+  if (hover && hover.y < H) {
+    const px = hover.x * CELL, py = hover.y * CELL;
+    if (tool === 'sell') {
+      const has = S.obj[idx(hover.x, hover.y)] || S.floor[idx(hover.x, hover.y)];
+      ctx.strokeStyle = has ? '#ff3b3b' : 'rgba(255,255,255,.5)'; ctx.lineWidth = 3;
+      roundRect(px + 2, py + 2, CELL - 4, CELL - 4, 6); ctx.stroke();
+      if (has) { ctx.font = '22px sans-serif'; ctx.textAlign = 'center'; ctx.fillText('🔨', px + CELL / 2, py + CELL / 2); }
+    } else if (tool) {
+      const ok = canPlace(tool, hover.x, hover.y) === true;
+      drawItem(tool, px, py, 0.55);
+      ctx.strokeStyle = ok ? '#ffffff' : '#ff3b3b'; ctx.lineWidth = 3;
+      roundRect(px + 2, py + 2, CELL - 4, CELL - 4, 6); ctx.stroke();
+    }
+  }
+
+  // popups
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.font = 'bold 16px Fredoka, sans-serif';
+  for (const p of popups) {
+    const a = 1 - p.t / 1.4;
+    ctx.globalAlpha = a;
+    ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(0,0,0,.6)';
+    const tx = p.x * CELL + CELL / 2, ty = p.y * CELL - p.t * 30;
+    ctx.strokeText(p.text, tx, ty);
+    ctx.fillStyle = p.color; ctx.fillText(p.text, tx, ty);
+  }
+  ctx.globalAlpha = 1;
+
+  // ad banner
+  if (Date.now() < S.adUntil) {
+    const secs = Math.ceil((S.adUntil - Date.now()) / 1000);
+    ctx.fillStyle = 'rgba(0,0,0,.55)';
+    roundRect(8, 8, 170, 28, 8); ctx.fill();
+    ctx.fillStyle = '#ffcf00'; ctx.font = 'bold 14px Fredoka, sans-serif'; ctx.textAlign = 'left';
+    ctx.fillText('📣 Ad running: ' + secs + 's', 18, 23);
+  }
+}
+
+// ─── Placement ─────────────────────────────────────────────
+let tool = 'register';
+function canPlace(key, x, y) {
+  const it = ITEMS[key];
+  if (!inRegion(x, y)) return 'That spot is outside your shop. Expand it in Upgrades!';
+  if (S.total < it.unlock) return 'Locked!';
+  if (it.floor) {
+    if (S.floor[idx(x, y)] === key) return 'Already that tile.';
+  } else {
+    if (isDoor(x, y)) return 'Keep the door clear so customers can get in!';
+    if (S.obj[idx(x, y)]) return 'Something is already there. Sell it first.';
+  }
+  if (S.money < it.cost) return 'Not enough money!';
+  return true;
+}
+function place(x, y) {
+  if (tool === 'sell') return sellAt(x, y);
+  const res = canPlace(tool, x, y);
+  if (res !== true) { if (res !== 'Already that tile.') flashHint(res); return; }
+  const it = ITEMS[tool];
+  S.money -= it.cost;
+  if (it.floor) S.floor[idx(x, y)] = tool;
+  else S.obj[idx(x, y)] = tool;
+  gridVersion++;
+  onGridChange();
+}
+function sellAt(x, y) {
+  const i = idx(x, y);
+  const key = S.obj[i] || S.floor[i];
+  if (!key) return;
+  if (S.obj[i]) S.obj[i] = null; else S.floor[i] = null;
+  const refund = Math.floor(ITEMS[key].cost / 2);
+  S.money += refund;
+  popups.push({ x, y: y - 0.2, text: '+' + fmt(refund), t: 0, color: '#ffffff' });
+  gridVersion++;
+  onGridChange();
+}
+function onGridChange() {
+  cachedAppeal = appeal();
+  updateStats();
+  refreshItems();
+  save();
+}
+
+function cellFromEvent(e) {
+  const r = canvas.getBoundingClientRect();
+  const x = Math.floor((e.clientX - r.left) / r.width * W);
+  const y = Math.floor((e.clientY - r.top) / r.height * (H + 1));
+  if (x < 0 || x >= W || y < 0 || y >= H) return null;
+  return { x, y };
+}
+let painting = false, lastCell = null;
+canvas.addEventListener('pointerdown', e => {
+  const c = cellFromEvent(e);
+  if (!c) return;
+  if (e.button === 2) { sellAt(c.x, c.y); return; }
+  painting = true; lastCell = c;
+  canvas.setPointerCapture(e.pointerId);
+  place(c.x, c.y);
+});
+canvas.addEventListener('pointermove', e => {
+  hover = cellFromEvent(e);
+  if (painting && hover && (hover.x !== lastCell.x || hover.y !== lastCell.y)) {
+    lastCell = hover;
+    place(hover.x, hover.y);
+  }
+});
+canvas.addEventListener('pointerup', () => { painting = false; });
+canvas.addEventListener('pointercancel', () => { painting = false; });
+canvas.addEventListener('pointerleave', () => { hover = null; });
+canvas.addEventListener('contextmenu', e => e.preventDefault());
+
+// ─── UI ────────────────────────────────────────────────────
+const $ = id => document.getElementById(id);
+let activeTab = 'Counters';
+function updateStats() {
+  $('money').textContent = fmt(S.money);
+  $('earned').textContent = fmt(S.total);
+  $('served').textContent = S.served.toLocaleString();
+  $('rating').textContent = stars(cachedAppeal);
+  $('rating').title = 'Appeal: ' + cachedAppeal.toFixed(1);
+}
+function renderTabs() {
+  $('tabs').innerHTML = '';
+  for (const t of TABS) {
+    const b = document.createElement('button');
+    b.className = 'tab' + (t === activeTab ? ' active' : '');
+    b.textContent = t;
+    b.onclick = () => { activeTab = t; renderTabs(); refreshItems(); };
+    $('tabs').appendChild(b);
+  }
+}
+function itemButton({ swatchColor, icon, name, desc, cost, locked, lockText, cant, selected, onClick }) {
+  const b = document.createElement('button');
+  b.className = 'item' + (locked ? ' locked' : '') + (cant ? ' cant' : '') + (selected ? ' selected' : '');
+  b.innerHTML = `<div class="swatch" style="background:${swatchColor}">${icon || ''}</div>
+    <div class="info"><div class="name">${locked ? '🔒 ' : ''}${name}</div><div class="desc">${locked ? lockText : desc}</div></div>
+    <div class="cost">${cost}</div>`;
+  if (!locked) b.onclick = onClick;
+  return b;
+}
+function refreshItems() {
+  const box = $('items');
+  box.innerHTML = '';
+  if (activeTab === 'Upgrades') {
+    const next = EXPANSIONS[S.expand + 1];
+    box.appendChild(next
+      ? itemButton({ swatchColor: '#ffcf00', icon: '📐', name: `Expand shop (${next.w}×${next.h})`, desc: 'More room for bricks!', cost: fmt(next.cost), cant: S.money < next.cost,
+          onClick: () => { if (S.money < next.cost) return flashHint('Not enough money!'); S.money -= next.cost; S.expand++; gridVersion++; flashHint('🎉 Your shop got bigger!'); onGridChange(); } })
+      : itemButton({ swatchColor: '#ffcf00', icon: '📐', name: 'Shop fully expanded', desc: 'Your shop is as big as it gets!', cost: '✔', onClick: () => {} }));
+    const pc = priceUpgradeCost();
+    box.appendChild(itemButton({ swatchColor: '#00852b', icon: '🏷️', name: `Better Prices (Lv ${S.priceLvl})`, desc: 'Every sale earns +15% more', cost: fmt(pc), cant: S.money < pc,
+      onClick: () => { if (S.money < pc) return flashHint('Not enough money!'); S.money -= pc; S.priceLvl++; flashHint('🏷️ Prices upgraded!'); onGridChange(); } }));
+    const ac = adCost();
+    box.appendChild(itemButton({ swatchColor: '#e3000b', icon: '📣', name: 'Advertise', desc: 'Twice as many customers for 45 seconds', cost: fmt(ac), cant: S.money < ac,
+      onClick: () => { if (S.money < ac) return flashHint('Not enough money!'); S.money -= ac; S.adUntil = Math.max(Date.now(), S.adUntil) + 45000; flashHint('📣 Everyone in town heard about your shop!'); onGridChange(); } }));
+    return;
+  }
+  for (const [key, it] of Object.entries(ITEMS)) {
+    if (it.cat !== activeTab) continue;
+    const locked = S.total < it.unlock;
+    let desc = it.desc;
+    if (it.sell) desc = `${it.desc} · sells for ${fmt(it.sell * priceMult())}`;
+    box.appendChild(itemButton({
+      swatchColor: it.color, icon: it.icon, name: it.name, desc,
+      cost: fmt(it.cost), locked, lockText: `Earn ${fmt(it.unlock)} total to unlock`,
+      cant: S.money < it.cost, selected: tool === key,
+      onClick: () => { tool = key; $('sellBtn').classList.remove('selected'); refreshItems(); flashHint(`Placing ${it.name}. Click or drag on your shop.`); },
+    }));
+  }
+}
+$('sellBtn').onclick = () => {
+  tool = tool === 'sell' ? null : 'sell';
+  $('sellBtn').classList.toggle('selected', tool === 'sell');
+  refreshItems();
+  if (tool === 'sell') flashHint('Sell tool: click a brick to sell it for half price.');
+};
+$('resetBtn').onclick = () => {
+  if (!confirm('Start a brand new shop? Your current shop will be lost.')) return;
+  S = freshState(); customers = []; popups = []; gridVersion++;
+  onGridChange();
+};
+
+let hintOverride = null, hintUntil = 0;
+function flashHint(t) { hintOverride = t; hintUntil = clock + 3; }
+function autoHint() {
+  if (hintOverride && clock < hintUntil) return hintOverride;
+  const regs = countWhere(i => i.register), shelves = productCells().length;
+  if (!regs) return '👉 Build a Cash Register (Counters tab) so customers can pay!';
+  if (!shelves) return '👉 Now build a product shelf (Products tab). Customers come to buy things!';
+  if (sadCount > 3) return '😕 Some customers could not reach a shelf or register. Leave paths open from the OPEN door!';
+  const nextUnlock = Object.values(ITEMS).filter(i => i.unlock > S.total).sort((a, b) => a.unlock - b.unlock)[0];
+  if (nextUnlock) return `⭐ Next unlock: ${nextUnlock.icon || '🧱'} ${nextUnlock.name} at ${fmt(nextUnlock.unlock)} total earned.`;
+  return '🏆 You unlocked every brick! Keep growing your empire.';
+}
+
+// refresh affordability & unlocks periodically
+let lastSig = '';
+function uiSignature() {
+  const flags = Object.values(ITEMS).map(i => (S.total >= i.unlock ? 1 : 0) + (S.money >= i.cost ? 2 : 0)).join('');
+  const up = [priceUpgradeCost(), adCost(), (EXPANSIONS[S.expand + 1] || {}).cost || 0].map(c => S.money >= c ? 1 : 0).join('');
+  return [activeTab, tool, S.expand, S.priceLvl, Math.round(priceMult() * 100), flags, up].join('|');
+}
+setInterval(() => {
+  updateStats();
+  // rebuild the list only when something visible changed, so clicks aren't lost
+  const sig = uiSignature();
+  if (sig !== lastSig) { lastSig = sig; refreshItems(); }
+  $('hint').textContent = autoHint();
+  if (sadCount > 0) sadCount = Math.max(0, sadCount - 0.2);
+}, 400);
+setInterval(save, 5000);
+window.addEventListener('beforeunload', save);
+
+$('startBtn').onclick = () => { $('overlay').classList.add('hidden'); try { localStorage.setItem('brickShopSeenIntro', '1'); } catch (e) {} };
+
+// ─── Boot ──────────────────────────────────────────────────
+S = load() || freshState();
+try { if (localStorage.getItem('brickShopSeenIntro')) $('overlay').classList.add('hidden'); } catch (e) {}
+cachedAppeal = appeal();
+renderTabs(); refreshItems(); updateStats();
+
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min(0.1, (now - last) / 1000);
+  last = now;
+  update(dt);
+  render();
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
