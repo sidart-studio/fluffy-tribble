@@ -53,8 +53,11 @@
   #hint { margin-top: 10px; background: rgba(255,255,255,.12); color: #fff; border-radius: 10px; padding: 8px 12px; font-size: 15px; min-height: 38px; }
 
   aside { flex: 0 0 330px; background: var(--panel); border-radius: 14px; box-shadow: 0 6px 0 rgba(0,0,0,.3); overflow: hidden; }
-  .tabs { display: flex; flex-wrap: wrap; background: #f5f5f5; border-bottom: 2px solid var(--line); }
-  .tab { flex: 1 1 auto; border: 0; background: none; font: inherit; font-weight: 600; font-size: 13px; padding: 10px 4px; cursor: pointer; color: var(--muted); border-bottom: 3px solid transparent; }
+  .tabs { display: grid; grid-template-columns: repeat(3, 1fr); background: #f5f5f5; border-bottom: 2px solid var(--line); }
+  .tab { border: 0; background: none; font: inherit; font-weight: 600; font-size: 13px; padding: 10px 4px; cursor: pointer; color: var(--muted); border-bottom: 3px solid transparent; }
+  .payroll { font-size: 13px; color: var(--muted); background: #fff8d6; border-radius: 10px; padding: 8px 10px; }
+  .payroll b { color: var(--ink); font-variant-numeric: tabular-nums; }
+  .letgo { display: inline-block; margin-top: 4px; font-size: 12px; font-weight: 600; color: #9b0008; text-decoration: underline; cursor: pointer; }
   .tab.active { color: var(--ink); border-bottom-color: var(--red); background: #fff; }
   #items { padding: 10px; display: grid; gap: 8px; max-height: 560px; overflow-y: auto; }
   .item { display: flex; gap: 10px; align-items: center; border: 2px solid var(--line); border-radius: 10px; padding: 8px; cursor: pointer; background: #fff; text-align: left; font: inherit; width: 100%; }
@@ -132,6 +135,7 @@
       <li>Build a <b>Cash Register</b> so customers can pay.</li>
       <li>Build <b>Product shelves</b> — customers walk to them and buy stuff.</li>
       <li>Add <b>Decorations</b> and <b>Floor tiles</b> to make your shop nicer. Nicer shops get more customers and bigger tips!</li>
+      <li>Hire <b>workers</b> in the Staff tab. They help you earn more, but you pay them every minute.</li>
       <li>Earn money to unlock new bricks and <b>expand</b> your shop in the Upgrades tab.</li>
     </ol>
     <p style="margin-bottom:14px;color:#6b6b6b;font-size:14px">Tip: click and drag to place lots of bricks. Right-click (or use the Sell tool) to remove one. Right-drag (or two fingers) spins the camera, scroll zooms.</p>
@@ -195,7 +199,20 @@ const ITEMS = {
   fblack: { cat: 'Build', name: 'Black Tile',  color: '#3a3a3a', cost: 3, unlock: 300, floor: true, desc: 'Smooth floor tile, +0.25 appeal' },
   fpink:  { cat: 'Build', name: 'Pink Tile',   color: '#ff9ecd', cost: 3, unlock: 300, floor: true, desc: 'Smooth floor tile, +0.25 appeal' },
 };
-const TABS = ['Products', 'Counters', 'Decor', 'Build', 'Upgrades'];
+const TABS = ['Products', 'Counters', 'Decor', 'Build', 'Staff', 'Upgrades'];
+
+// Workers you can hire. Wages are paid once a minute.
+const STAFF = {
+  cashier:   { name: 'Cashier',        icon: '💁', color: '#e3000b', hire: 120,  wage: 8,   unlock: 200,  shirt: '#e3000b', pants: '#1b1b1b', hair: '#5c3a1e',
+               desc: 'Works a register: customers pay 2.5× faster and spend 10% more there', max: () => countWhere(i => i.register) },
+  assistant: { name: 'Shop Assistant', icon: '🙋', color: '#0055bf', hire: 250,  wage: 15,  unlock: 700,  shirt: '#0055bf', pants: '#1b1b1b', hair: '#ffcf00',
+               desc: 'Helps customers find toys: +10% on every sale', max: () => 6 },
+  greeter:   { name: 'Door Greeter',   icon: '👋', color: '#ffcf00', hire: 400,  wage: 25,  unlock: 1500, shirt: '#ffcf00', pants: '#e3000b', hair: null,
+               desc: 'Waves people in from the street: +30% more customers', max: () => 2 },
+  manager:   { name: 'Shop Manager',   icon: '🕴️', color: '#3a3a3a', hire: 3000, wage: 120, unlock: 8000, shirt: '#2b2b2b', pants: '#2b2b2b', hair: '#1b1b1b',
+               desc: 'Runs the whole shop: +25% on every sale', max: () => 1 },
+};
+const PAYDAY = 60;
 
 const SHIRTS = ['#e3000b', '#0055bf', '#00852b', '#ffcf00', '#7b2fbe', '#ff7f00', '#00a3da', '#ffffff', '#1b1b1b'];
 const PANTS  = ['#1b1b1b', '#0055bf', '#5c3a1e', '#8a8a8a', '#00852b'];
@@ -207,6 +224,7 @@ function freshState() {
   return {
     money: 100, total: 0, served: 0,
     expand: 0, priceLvl: 0, adUntil: 0,
+    staff: { cashier: 0, assistant: 0, greeter: 0, manager: 0 },
     floor: new Array(W * H).fill(null),
     obj: new Array(W * H).fill(null),
   };
@@ -216,7 +234,10 @@ function load() {
     const raw = localStorage.getItem('brickShopTycoon');
     if (raw) {
       const d = JSON.parse(raw);
-      if (d && Array.isArray(d.obj) && d.obj.length === W * H) return Object.assign(freshState(), d, { adUntil: 0 });
+      if (d && Array.isArray(d.obj) && d.obj.length === W * H) {
+        const st = freshState();
+        return Object.assign(st, d, { adUntil: 0, staff: Object.assign(st.staff, d.staff) });
+      }
     }
   } catch (e) { /* storage unavailable */ }
   return null;
@@ -231,6 +252,9 @@ let spawnTimer = 2;
 let sadCount = 0;
 let gridVersion = 0;
 let clock = 0;
+let workers = [];
+let payTimer = PAYDAY;
+let staffedRegs = new Set();
 
 // ─── Grid helpers ──────────────────────────────────────────
 const idx = (x, y) => y * W + x;
@@ -298,7 +322,8 @@ function stars(a) {
   const n = Math.min(5, 1 + Math.floor(Math.log2(1 + a / 5)));
   return '★'.repeat(n) + '☆'.repeat(5 - n);
 }
-const priceMult = () => (1 + S.priceLvl * 0.15) * (1 + cachedAppeal * 0.01);
+const priceMult = () => (1 + S.priceLvl * 0.15) * (1 + cachedAppeal * 0.01) * (1 + S.staff.assistant * 0.1) * (1 + S.staff.manager * 0.25);
+const payroll = () => Object.keys(STAFF).reduce((t, k) => t + S.staff[k] * STAFF[k].wage, 0);
 const priceUpgradeCost = () => Math.round(150 * Math.pow(2.2, S.priceLvl));
 const adCost = () => 40 + S.expand * 60;
 function productCells() {
@@ -386,7 +411,10 @@ function updateCustomer(c, dt) {
       planPath(c);
     } else {
       const tip = Math.random() < Math.min(0.6, cachedAppeal / 200) ? 1.25 : 1;
-      const earned = Math.max(1, Math.round(c.basket * priceMult() * tip));
+      const staffed = c.faceTo && staffedRegs.has(idx(c.faceTo.x, c.faceTo.y)) ? 1.1 : 1;
+      const earned = Math.max(1, Math.round(c.basket * priceMult() * tip * staffed));
+      const cashier = staffed > 1 && workers.find(w => w.reg === idx(c.faceTo.x, c.faceTo.y));
+      if (cashier) say(cashier, pick(['😊', '🙏', '👍']), 1.2);
       addMoney(earned);
       S.served++;
       popups.push({ x: c.x, y: c.y, text: '+' + fmt(earned) + (tip > 1 ? ' tip!' : ''), t: 0, color: tip > 1 ? '#ffcf00' : '#3cff6e' });
@@ -427,7 +455,8 @@ function updateCustomer(c, dt) {
       const nx = cx + dx, ny = cy + dy;
       if (nx < 0 || ny < 0 || nx >= W || ny >= H) continue;
       const o = S.obj[idx(nx, ny)];
-      if (o && ITEMS[o].register && ITEMS[o].register < speed) { speed = ITEMS[o].register; c.faceTo = { x: nx, y: ny }; }
+      const t = o && ITEMS[o].register ? ITEMS[o].register * (staffedRegs.has(idx(nx, ny)) ? 0.4 : 1) : 99;
+      if (t < speed) { speed = t; c.faceTo = { x: nx, y: ny }; }
     }
     if (speed === 99) { planPath(c); return; }
     c.state = 'pay'; c.timer = speed; say(c, '💵', speed);
@@ -438,19 +467,138 @@ function updateCustomer(c, dt) {
   }
 }
 
+// ─── Workers ───────────────────────────────────────────────
+function newWorker(type) {
+  return { type, x: DOOR.x, y: DOOR.y, path: [], state: 'work', timer: Math.random() * 2, walk: 0,
+           speed: type === 'manager' ? 1.4 : 1.9, bubble: null, bubbleT: 0, alpha: 1, reg: null, spot: null };
+}
+// keep the worker minifigs matching what's been hired, and give each cashier a register
+function syncWorkers() {
+  for (const type of Object.keys(STAFF)) {
+    const have = workers.filter(w => w.type === type);
+    for (let i = have.length; i < S.staff[type]; i++) workers.push(newWorker(type));
+    for (let i = S.staff[type]; i < have.length; i++) have[i].gone = true;
+  }
+  workers = workers.filter(w => !w.gone);
+  // a cashier whose register was sold loses the job (and the wage)
+  const regs = [];
+  for (let i = 0; i < W * H; i++) if (S.obj[i] && ITEMS[S.obj[i]].register) regs.push(i);
+  if (S.staff.cashier > regs.length) { S.staff.cashier = regs.length; return syncWorkers(); }
+  staffedRegs = new Set();
+  let k = 0, g = 0;
+  for (const w of workers) {
+    if (w.type === 'cashier') {
+      const reg = regs[k++];
+      staffedRegs.add(reg);
+      if (w.reg !== reg || w.ver !== gridVersion) { w.reg = reg; w.spot = cashierSpot(reg); w.path = routeTo(w, w.spot); }
+    } else if (w.type === 'greeter') {
+      const spot = { x: DOOR.x + (g++ === 0 ? -1 : 1), y: H - 0.35 };
+      if (!w.spot || w.spot.x !== spot.x) { w.spot = spot; w.path = [{ x: DOOR.x, y: DOOR.y }, spot]; }
+    }
+    w.ver = gridVersion;
+  }
+}
+// cashiers stand beside their register, on the side customers are least likely to use
+function cashierSpot(reg) {
+  const rx = reg % W, ry = (reg / W) | 0;
+  for (const [dx, dy] of [[0, -1], [-1, 0], [1, 0], [0, 1]])
+    if (walkable(rx + dx, ry + dy)) return { x: rx + dx * 0.62, y: ry + dy * 0.62, fx: rx, fy: ry };
+  return { x: rx, y: ry - 0.62, fx: rx, fy: ry };
+}
+function routeTo(w, spot) {
+  const sx = Math.round(Math.max(0, Math.min(W - 1, w.x))), sy = Math.round(Math.max(0, Math.min(H - 1, w.y)));
+  const tx = Math.round(spot.x), ty = Math.round(spot.y);
+  const p = bfs(sx, sy, (x, y) => x === tx && y === ty);
+  if (!p) { w.x = spot.x; w.y = spot.y; return []; } // boxed in: hop straight there
+  return p.concat([spot]);
+}
+function updateWorker(w, dt) {
+  if (w.bubbleT > 0 && (w.bubbleT -= dt) <= 0) w.bubble = null;
+  if (w.path.length) {
+    const t = w.path[0];
+    // a brick was built in the way: stop and pick somewhere else
+    if (Number.isInteger(t.x) && Number.isInteger(t.y) && t.y < H && !walkable(t.x, t.y)) { w.path = []; w.timer = 0; return; }
+    const dx = t.x - w.x, dy = t.y - w.y, d = Math.hypot(dx, dy), step = w.speed * dt;
+    w.walk += dt * 10;
+    if (d <= step) { w.x = t.x; w.y = t.y; w.path.shift(); }
+    else { w.x += dx / d * step; w.y += dy / d * step; }
+    return;
+  }
+  if (w.type === 'cashier') { if (w.spot) w.faceTo = { x: w.spot.fx, y: w.spot.fy }; return; }
+  if (w.type === 'greeter') { w.faceTo = { x: w.x, y: H + 2 }; w.wave = true; return; }
+  // assistants and the manager wander between shelves, helping customers
+  w.timer -= dt;
+  if (w.timer > 0) return;
+  w.timer = 2 + Math.random() * 3;
+  const shelves = productCells();
+  const cx = Math.round(w.x), cy = Math.round(w.y);
+  let p = null;
+  if (shelves.length) {
+    const t = pick(shelves), tx = t % W, ty = (t / W) | 0;
+    p = bfs(cx, cy, (x, y) => Math.abs(x - tx) + Math.abs(y - ty) === 1);
+    if (p) w.faceTo = { x: tx, y: ty };
+  }
+  if (!p) {
+    const r = region();
+    const tx = r.x0 + ((Math.random() * (r.x1 - r.x0 + 1)) | 0), ty = r.y0 + ((Math.random() * (r.y1 - r.y0 + 1)) | 0);
+    p = bfs(cx, cy, (x, y) => x === tx && y === ty);
+  }
+  if (p) w.path = p;
+  if (Math.random() < 0.35) say(w, w.type === 'manager' ? pick(['📋', '📈', '👌']) : pick(['💬', '🙂', '👍', '🧸']), 1.4);
+}
+function payWages() {
+  let bill = payroll();
+  if (!bill) return;
+  // can't pay everyone? the best-paid worker quits until the bill fits
+  const quit = [];
+  while (bill > S.money) {
+    const k = Object.keys(STAFF).filter(k => S.staff[k] > 0).sort((a, b) => STAFF[b].wage - STAFF[a].wage)[0];
+    if (!k) break;
+    S.staff[k]--; quit.push(STAFF[k].name); bill = payroll();
+  }
+  S.money -= bill;
+  if (bill) popups.push({ x: DOOR.x, y: DOOR.y, text: '-' + fmt(bill) + ' wages', t: 0, color: '#ff8080' });
+  if (quit.length) flashHint(`😢 You couldn't pay your staff, so ${quit.length > 1 ? quit.length + ' workers' : 'a ' + quit[0]} quit.`);
+  syncWorkers(); updateStats(); refreshItems(); save();
+}
+function hire(type) {
+  const st = STAFF[type];
+  if (S.staff[type] >= st.max()) {
+    if (type !== 'cashier') return flashHint(`You can't hire more ${st.name}s.`);
+    return flashHint(st.max() ? 'Every register already has a cashier. Build another register first!' : 'Build a Cash Register first, so your cashier has somewhere to work!');
+  }
+  if (S.money < st.hire) return flashHint('Not enough money!');
+  S.money -= st.hire; S.staff[type]++;
+  flashHint(`${st.icon} You hired a ${st.name}! Wage: ${fmt(st.wage)} per minute.`);
+  onGridChange();
+}
+function letGo(type) {
+  if (!S.staff[type]) return;
+  S.staff[type]--;
+  flashHint(`👋 Your ${STAFF[type].name} went home.`);
+  onGridChange();
+}
+
 // ─── Game loop ─────────────────────────────────────────────
 function update(dt) {
   clock += dt;
   const shelves = productCells().length;
-  const maxC = Math.min(40, 2 + shelves * 2);
+  const maxC = Math.min(44, 2 + shelves * 2 + S.staff.greeter * 3);
   const ad = Date.now() < S.adUntil ? 2 : 1;
-  const interval = Math.max(0.5, 6 / (1 + cachedAppeal * 0.04) / ad / (1 + shelves * 0.08));
+  const interval = Math.max(0.4, 6 / (1 + cachedAppeal * 0.04) / ad / (1 + shelves * 0.08) / (1 + S.staff.greeter * 0.3));
   spawnTimer -= dt;
   if (spawnTimer <= 0) {
     spawnTimer = interval * (0.6 + Math.random() * 0.8);
-    if (customers.length < maxC) spawnCustomer();
+    if (customers.length < maxC) {
+      spawnCustomer();
+      const g = workers.find(w => w.type === 'greeter' && !w.bubble);
+      if (g && Math.random() < 0.5) say(g, pick(['👋', '😃', '🎉']), 1.2);
+    }
   }
   for (const c of customers) updateCustomer(c, dt);
+  for (const w of workers) updateWorker(w, dt);
+  payTimer -= dt;
+  if (payTimer <= 0) { payTimer = PAYDAY; payWages(); }
   customers = customers.filter(c => !c.gone);
   for (const p of popups) p.t += dt;
   popups = popups.filter(p => p.t < 1.4);
@@ -616,6 +764,26 @@ function buildMinifig(shirt, pants, hair, o) {
   }
   if (hair) { g.add(cyl(0.113, 0.113, 0.07, hair, 0, 0.87, -0.004)); g.add(box(0.2, 0.12, 0.05, hair, 0, 0.82, -0.085)); }
   g.userData.limbs = { legL, legR, armL, armR };
+  return g;
+}
+
+function buildWorkerFig(type) {
+  const st = STAFF[type];
+  const g = buildMinifig(st.shirt, st.pants, st.hair);
+  g.add(box(0.08, 0.05, 0.01, '#ffffff', 0.08, 0.6, 0.09)); // name badge
+  if (type === 'cashier') {
+    g.add(cyl(0.115, 0.115, 0.08, '#ffcf00', 0, 0.92, 0));
+    g.add(box(0.2, 0.02, 0.12, '#ffcf00', 0, 0.9, 0.14));
+  } else if (type === 'assistant') {
+    g.add(box(0.26, 0.3, 0.01, '#ffcf00', 0, 0.5, 0.09)); // apron
+  } else if (type === 'greeter') {
+    g.add(cyl(0.13, 0.13, 0.02, '#e3000b', 0, 0.89, 0));
+    g.add(cyl(0.09, 0.09, 0.2, '#e3000b', 0, 1.0, 0));
+    g.add(cyl(0.092, 0.092, 0.04, '#ffffff', 0, 0.93, 0));
+  } else if (type === 'manager') {
+    g.add(box(0.05, 0.2, 0.01, '#e3000b', 0, 0.56, 0.09)); // tie
+    g.add(box(0.1, 0.12, 0.03, '#f4f4f4', -0.2, 0.42, 0.08)); // clipboard
+  }
   return g;
 }
 
@@ -811,8 +979,8 @@ function updatePlate() {
 }
 
 // ── keeping the 3D scene in sync with the game state ──
-const itemsGroup = new THREE.Group(), figGroup = new THREE.Group(), popGroup = new THREE.Group();
-scene.add(itemsGroup, figGroup, popGroup);
+const itemsGroup = new THREE.Group(), figGroup = new THREE.Group(), popGroup = new THREE.Group(), staffGroup = new THREE.Group();
+scene.add(itemsGroup, figGroup, popGroup, staffGroup);
 const objNodes = new Array(W * H).fill(null), floorNodes = new Array(W * H).fill(null);
 function syncNode(nodes, i, key) {
   const cur = nodes[i];
@@ -877,38 +1045,42 @@ function angleLerp(a, b, t) {
   let d = ((b - a + Math.PI) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2) - Math.PI;
   return a + d * t;
 }
-function render(dt) {
-  // customers
-  for (const c of customers) {
-    if (!c.mesh) {
-      c.mesh = buildMinifig(c.shirt, c.pants, c.hair);
-      c.mesh.userData.c = c;
-      c.bubbleSprite = sprite(bubbleTex('🙂'), 0.5);
-      c.bubbleSprite.position.y = 1.3;
-      c.mesh.add(c.bubbleSprite);
-      c.mesh.rotation.y = Math.PI;
-      figGroup.add(c.mesh);
-    }
-    const m = c.mesh;
-    m.position.set(wx(c.x), 0, wz(c.y));
-    const moving = c.path.length > 0 && c.state !== 'browse' && c.state !== 'pay';
-    let face = null;
-    if (moving) face = { x: c.path[0].x - c.x, y: c.path[0].y - c.y };
-    else if (c.faceTo) face = { x: c.faceTo.x - c.x, y: c.faceTo.y - c.y };
-    if (face && Math.hypot(face.x, face.y) > 0.01) m.rotation.y = angleLerp(m.rotation.y, Math.atan2(face.x, face.y), Math.min(1, dt * 12));
-    const swing = moving ? Math.sin(c.walk || 0) * 0.7 : 0;
-    const L = m.userData.limbs;
-    L.legL.rotation.x = swing; L.legR.rotation.x = -swing;
-    L.armL.rotation.x = -swing; L.armR.rotation.x = c.state === 'pay' ? -1.2 : swing;
-    m.position.y = moving ? Math.abs(Math.sin(c.walk || 0)) * 0.03 : 0;
-    m.scale.setScalar(Math.max(0.01, c.alpha));
-    c.bubbleSprite.visible = !!c.bubble;
-    if (c.bubble) {
-      const tex = bubbleTex(c.bubble);
-      if (c.bubbleSprite.material.map !== tex) c.bubbleSprite.material.map = tex;
-    }
+function poseFig(c, dt, group, make) {
+  if (!c.mesh) {
+    c.mesh = make();
+    c.mesh.userData.c = c;
+    c.bubbleSprite = sprite(bubbleTex('🙂'), 0.5);
+    c.bubbleSprite.position.y = 1.3;
+    c.mesh.add(c.bubbleSprite);
+    c.mesh.rotation.y = Math.PI;
+    group.add(c.mesh);
   }
+  const m = c.mesh;
+  m.position.set(wx(c.x), 0, wz(c.y));
+  const moving = c.path.length > 0 && c.state !== 'browse' && c.state !== 'pay';
+  let face = null;
+  if (moving) face = { x: c.path[0].x - c.x, y: c.path[0].y - c.y };
+  else if (c.faceTo) face = { x: c.faceTo.x - c.x, y: c.faceTo.y - c.y };
+  if (face && Math.hypot(face.x, face.y) > 0.01) m.rotation.y = angleLerp(m.rotation.y, Math.atan2(face.x, face.y), Math.min(1, dt * 12));
+  const swing = moving ? Math.sin(c.walk || 0) * 0.7 : 0;
+  const L = m.userData.limbs;
+  L.legL.rotation.x = swing; L.legR.rotation.x = -swing;
+  L.armL.rotation.x = -swing;
+  L.armR.rotation.x = c.state === 'pay' ? -1.2 : (c.wave && !moving ? -2.6 + Math.sin(clock * 8) * 0.35 : swing);
+  m.position.y = moving ? Math.abs(Math.sin(c.walk || 0)) * 0.03 : 0;
+  m.scale.setScalar(Math.max(0.01, c.alpha));
+  c.bubbleSprite.visible = !!c.bubble;
+  if (c.bubble) {
+    const tex = bubbleTex(c.bubble);
+    if (c.bubbleSprite.material.map !== tex) c.bubbleSprite.material.map = tex;
+  }
+}
+function render(dt) {
+  // customers and staff
+  for (const c of customers) poseFig(c, dt, figGroup, () => buildMinifig(c.shirt, c.pants, c.hair));
+  for (const w of workers) poseFig(w, dt, staffGroup, () => buildWorkerFig(w.type));
   for (const m of [...figGroup.children]) if (m.userData.c.gone || !customers.includes(m.userData.c)) figGroup.remove(m);
+  for (const m of [...staffGroup.children]) if (!workers.includes(m.userData.c)) staffGroup.remove(m);
 
   // money popups
   for (const p of popups) {
@@ -998,6 +1170,7 @@ function sellAt(x, y) {
 }
 function onGridChange() {
   syncScene();
+  syncWorkers();
   cachedAppeal = appeal();
   updateStats();
   refreshItems();
@@ -1075,18 +1248,41 @@ function renderTabs() {
     $('tabs').appendChild(b);
   }
 }
-function itemButton({ swatchColor, icon, name, desc, cost, locked, lockText, cant, selected, onClick }) {
+function itemButton({ swatchColor, icon, name, desc, cost, locked, lockText, cant, selected, onClick, extra }) {
   const b = document.createElement('button');
   b.className = 'item' + (locked ? ' locked' : '') + (cant ? ' cant' : '') + (selected ? ' selected' : '');
   b.innerHTML = `<div class="swatch" style="background:${swatchColor}">${icon || ''}</div>
     <div class="info"><div class="name">${locked ? '🔒 ' : ''}${name}</div><div class="desc">${locked ? lockText : desc}</div></div>
     <div class="cost">${cost}</div>`;
   if (!locked) b.onclick = onClick;
+  if (extra) b.querySelector('.info').appendChild(extra);
   return b;
 }
 function refreshItems() {
   const box = $('items');
   box.innerHTML = '';
+  if (activeTab === 'Staff') {
+    const info = document.createElement('div');
+    info.className = 'payroll';
+    info.innerHTML = `Wages: <b>${fmt(payroll())}</b> per minute · next payday in <b id="payday">${Math.ceil(payTimer)}s</b>`;
+    box.appendChild(info);
+    for (const [key, st] of Object.entries(STAFF)) {
+      const locked = S.total < st.unlock, have = S.staff[key], max = st.max();
+      let extra = null;
+      if (have) {
+        extra = document.createElement('span');
+        extra.className = 'letgo'; extra.textContent = 'Let one go'; extra.setAttribute('role', 'button');
+        extra.onclick = e => { e.stopPropagation(); letGo(key); };
+      }
+      box.appendChild(itemButton({
+        swatchColor: st.color, icon: st.icon, name: `${st.name} (${have}/${max})`,
+        desc: `${st.desc} · wage ${fmt(st.wage)}/min`, cost: have >= max ? (max ? 'Full' : 'Need register') : fmt(st.hire),
+        locked, lockText: `Earn ${fmt(st.unlock)} total to unlock`, cant: S.money < st.hire || have >= max,
+        onClick: () => hire(key), extra,
+      }));
+    }
+    return;
+  }
   if (activeTab === 'Upgrades') {
     const next = EXPANSIONS[S.expand + 1];
     box.appendChild(next
@@ -1129,7 +1325,7 @@ $('resetBtn').onclick = () => {
     return;
   }
   clearTimeout(resetArmed); resetArmed = null; $('resetBtn').textContent = 'New game';
-  S = freshState(); customers = []; popups = []; gridVersion++;
+  S = freshState(); customers = []; popups = []; workers = []; payTimer = PAYDAY; gridVersion++;
   onGridChange();
 };
 
@@ -1140,6 +1336,7 @@ function autoHint() {
   const regs = countWhere(i => i.register), shelves = productCells().length;
   if (!regs) return '👉 Build a Cash Register (Counters tab) so customers can pay!';
   if (!shelves) return '👉 Now build a product shelf (Products tab). Customers come to buy things!';
+  if (S.total >= STAFF.cashier.unlock && !payroll() && S.total < 3000) return '👷 You can hire workers now! Open the Staff tab to get a Cashier.';
   if (sadCount > 3) return '😕 Some customers could not reach a shelf or register. Leave paths open from the OPEN door!';
   const nextUnlock = Object.values(ITEMS).filter(i => i.unlock > S.total).sort((a, b) => a.unlock - b.unlock)[0];
   if (nextUnlock) return `⭐ Next unlock: ${nextUnlock.icon || '🧱'} ${nextUnlock.name} at ${fmt(nextUnlock.unlock)} total earned.`;
@@ -1151,7 +1348,8 @@ let lastSig = '';
 function uiSignature() {
   const flags = Object.values(ITEMS).map(i => (S.total >= i.unlock ? 1 : 0) + (S.money >= i.cost ? 2 : 0)).join('');
   const up = [priceUpgradeCost(), adCost(), (EXPANSIONS[S.expand + 1] || {}).cost || 0].map(c => S.money >= c ? 1 : 0).join('');
-  return [activeTab, tool, S.expand, S.priceLvl, Math.round(priceMult() * 100), flags, up].join('|');
+  const staff = Object.keys(STAFF).map(k => [S.staff[k], STAFF[k].max(), S.money >= STAFF[k].hire ? 1 : 0].join('')).join(',');
+  return [activeTab, tool, S.expand, S.priceLvl, Math.round(priceMult() * 100), flags, up, staff, payroll()].join('|');
 }
 setInterval(() => {
   updateStats();
@@ -1159,6 +1357,7 @@ setInterval(() => {
   const sig = uiSignature();
   if (sig !== lastSig) { lastSig = sig; refreshItems(); }
   $('hint').textContent = autoHint();
+  if ($('payday')) $('payday').textContent = Math.ceil(payTimer) + 's';
   const adLeft = Math.ceil((S.adUntil - Date.now()) / 1000);
   $('adBanner').hidden = adLeft <= 0;
   if (adLeft > 0) $('adBanner').textContent = '📣 Ad running: ' + adLeft + 's';
@@ -1174,7 +1373,7 @@ S = load() || freshState();
 try { if (localStorage.getItem('brickShopSeenIntro')) $('overlay').classList.add('hidden'); } catch (e) {}
 cachedAppeal = appeal();
 renderTabs(); refreshItems(); updateStats();
-resize(); fitCamera(); syncScene();
+resize(); fitCamera(); syncScene(); syncWorkers();
 
 let last = performance.now();
 function frame(now) {
