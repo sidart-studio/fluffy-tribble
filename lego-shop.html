@@ -1120,8 +1120,15 @@ $('sellBtn').onclick = () => {
   refreshItems();
   if (tool === 'sell') flashHint('Sell tool: click a brick to sell it for half price.');
 };
+let resetArmed = null;
 $('resetBtn').onclick = () => {
-  if (!confirm('Start a brand new shop? Your current shop will be lost.')) return;
+  // ask for a second click instead of a pop-up, so it works everywhere
+  if (!resetArmed) {
+    $('resetBtn').textContent = 'Click again to reset!';
+    resetArmed = setTimeout(() => { resetArmed = null; $('resetBtn').textContent = 'New game'; }, 3000);
+    return;
+  }
+  clearTimeout(resetArmed); resetArmed = null; $('resetBtn').textContent = 'New game';
   S = freshState(); customers = []; popups = []; gridVersion++;
   onGridChange();
 };
