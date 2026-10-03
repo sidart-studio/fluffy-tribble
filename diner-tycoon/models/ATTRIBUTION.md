@@ -19,6 +19,8 @@ Licenses as listed on the original Poly pages; verify before redistributing.
 
 ## Manifest format
 
+- `bag.glb`: Bag by Kenney (CC0), via poly.pizza. Carried by citizens leaving a shop and by diner guests taking food to go.
+
 ```json
 {
   "models": {
@@ -29,5 +31,5 @@ Licenses as listed on the original Poly pages; verify before redistributing.
 
 - `height`: tallest dimension in world units after fitting. People are ~1.75, the counter is 0.95.
 - `rotationY`: degrees, if the model's front faces the wrong way.
-- Keys the game knows: `register`, `cashStack`, `cashier`, `runner`, `kitchen`, `cabinet`, `knife`, `kebab`, `light`, `hotdog`, `hamburger`, `chef`.
+- Keys the game knows: `register`, `cashStack`, `cashier`, `runner`, `kitchen`, `cabinet`, `knife`, `kebab`, `light`, `hotdog`, `hamburger`, `bag`, `chef`.
   Rigged characters may include `Idle`, `Walk`, `Jump` clips; the game plays them when it finds them.

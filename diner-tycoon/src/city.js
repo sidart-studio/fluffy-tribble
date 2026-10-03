@@ -782,6 +782,7 @@ export class City {
     const door = this.door(b);
     c.rig.obj.position.copy(door);
     c.rig.obj.visible = false;
+    if (c.bag && b !== c.home) { c.rig.carry.remove(c.bag); c.bag = null; } // bags stay with you until you get home
     c.inside = { b, t: seconds };
     c.activity = b === c.home ? 'at home' : `inside the ${BUILDING_BY_ID[b.type].name.toLowerCase()}`;
     c.rig.play('idle');
@@ -803,6 +804,8 @@ export class City {
     c.rig.obj.position.copy(this.door(b));
     c.rig.obj.visible = true;
     c.inside = false;
+    // been shopping? carry the bag home
+    if (this.isShop(b) && !c.bag) { const bag = this.game.makeBag(); if (bag) { c.rig.carry.add(bag); c.bag = bag; } }
     c.route = [this.doorstep(b.i, b.j, 3)];
     c.goal = null;
     this.game.fx.sparkle(c.rig.obj.position.clone().add(new THREE.Vector3(0, 1, 0)), 2);

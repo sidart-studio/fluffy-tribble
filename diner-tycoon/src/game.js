@@ -812,6 +812,11 @@ export class Game {
       this.s.stats.earnedTotal += tip; this.s.stats.earnedToday += tip; this.s.stats.tipsToday = (this.s.stats.tipsToday ?? 0) + tip;
       this.float(c.obj.position, `tip ${money2(tip)}`, 'gold');
     }
+    if (!seated && c.plate) {
+      // the food goes into a bag for the walk home
+      const hand = c.obj.getObjectByName('hand');
+      if (hand) { hand.remove(c.plate); c.plate = null; const bag = this.makeBag(); if (bag) { hand.add(bag); c.bag = bag; } }
+    }
     this.leave(c, true, seated ? 'ate in' : 'took it to go');
   }
 
@@ -933,6 +938,14 @@ export class Game {
   }
 
   foodProtos() { return { kebab: this.models.kebab, hotdog: this.models.hotdog, hamburger: this.models.hamburger }; }
+  /** A Kenney shopping bag hanging from a character's hand; null without the model. */
+  makeBag() {
+    if (!this.models.bag) return null;
+    const b = this.models.bag.clone(true);
+    b.position.set(0.42, -0.36, -0.42); // dangles beside the right hip
+    b.rotation.y = Math.PI / 2;
+    return b;
+  }
   prepTime() { return 1.6 * Math.pow(0.8, this.lvl('knife')); }
   stoveTime(item) { return item.cook * Math.pow(0.88, this.lvl('cabinet')); }
 
