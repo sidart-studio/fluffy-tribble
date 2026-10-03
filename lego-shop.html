@@ -58,14 +58,14 @@
   .builder { display: grid; gap: 8px; }
   .blabel { display: flex; justify-content: space-between; align-items: center; font-weight: 600; font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; margin-top: 2px; }
   .turn { border: 0; border-radius: 8px; background: var(--yellow); font: inherit; font-weight: 700; font-size: 13px; padding: 5px 10px; cursor: pointer; box-shadow: 0 2px 0 rgba(0,0,0,.2); text-transform: none; letter-spacing: 0; color: var(--ink); }
-  .shapes { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
-  .shape { display: grid; justify-items: center; align-content: center; gap: 4px; min-height: 62px; border: 2px solid var(--line); border-radius: 10px; background: #fff; font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; padding: 6px 2px; }
+  .shapes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .shape { display: grid; justify-items: center; align-content: center; gap: 4px; min-height: 58px; line-height: 1.1; border: 2px solid var(--line); border-radius: 10px; background: #fff; font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; padding: 6px 2px; }
   .shape.on, .ht.on { border-color: var(--blue); background: #eef4ff; }
   .mini { display: grid; gap: 1px; }
-  .mini i { width: 9px; height: 9px; border-radius: 2px; box-shadow: inset 0 -2px 0 rgba(0,0,0,.25); }
+  .mini i { width: 7px; height: 7px; border-radius: 2px; box-shadow: inset 0 -2px 0 rgba(0,0,0,.25); }
   .mini i.off { background: transparent; box-shadow: none; }
-  .mini.round i { width: 16px; height: 16px; border-radius: 50%; }
-  .mini.slope i:last-child { clip-path: polygon(0 0, 100% 0, 100% 100%, 0 30%); }
+  .mini.round i { border-radius: 50%; }
+  .mini i.wedge { clip-path: polygon(0 0, 100% 0, 100% 35%, 0 100%); }
   .heights { display: grid; grid-template-columns: 2fr repeat(4, 1fr); gap: 6px; }
   .ht { border: 2px solid var(--line); border-radius: 10px; background: #fff; font: inherit; font-weight: 700; padding: 7px 4px; cursor: pointer; }
   .colors { display: grid; grid-template-columns: repeat(8, 1fr); gap: 6px; }
@@ -234,20 +234,37 @@ const STAFF = {
 };
 const PAYDAY = 60;
 
-// Brick builder. One baseplate square is 2×2 studs, so shapes are named in studs like real bricks.
+// Brick builder. Custom bricks snap to single studs; a baseplate square is 2×2 studs.
+// Each shape is a list of [x, y, width, depth] rectangles in studs; `wedge` is the sloped part of a slope.
+const R = (w, d) => [[0, 0, w, d]];
 const BRICK_SHAPES = [
-  { id: '2x2', label: '2×2', cells: [[0, 0]] },
-  { id: '2x4', label: '2×4', cells: [[0, 0], [1, 0]] },
-  { id: '2x6', label: '2×6', cells: [[0, 0], [1, 0], [2, 0]] },
-  { id: '2x8', label: '2×8', cells: [[0, 0], [1, 0], [2, 0], [3, 0]] },
-  { id: '4x4', label: '4×4', cells: [[0, 0], [1, 0], [0, 1], [1, 1]] },
-  { id: '4x6', label: '4×6', cells: [[0, 0], [1, 0], [2, 0], [0, 1], [1, 1], [2, 1]] },
-  { id: '4x8', label: '4×8', cells: [[0, 0], [1, 0], [2, 0], [3, 0], [0, 1], [1, 1], [2, 1], [3, 1]] },
-  { id: '6x6', label: '6×6', cells: [[0, 0], [1, 0], [2, 0], [0, 1], [1, 1], [2, 1], [0, 2], [1, 2], [2, 2]] },
-  { id: 'corner', label: 'Corner', cells: [[0, 0], [1, 0], [0, 1]] },
-  { id: 'round', label: 'Round', cells: [[0, 0]], round: true },
-  { id: 'slope', label: 'Slope', cells: [[0, 0], [0, 1]], slope: true },
+  { id: '1x1', label: '1×1', rects: R(1, 1) },
+  { id: '1x2', label: '1×2', rects: R(2, 1) },
+  { id: '1x3', label: '1×3', rects: R(3, 1) },
+  { id: '1x4', label: '1×4', rects: R(4, 1) },
+  { id: '1x6', label: '1×6', rects: R(6, 1) },
+  { id: '1x8', label: '1×8', rects: R(8, 1) },
+  { id: '2x2', label: '2×2', rects: R(2, 2) },
+  { id: '2x3', label: '2×3', rects: R(3, 2) },
+  { id: '2x4', label: '2×4', rects: R(4, 2) },
+  { id: '2x6', label: '2×6', rects: R(6, 2) },
+  { id: '2x8', label: '2×8', rects: R(8, 2) },
+  { id: '4x4', label: '4×4', rects: R(4, 4) },
+  { id: '4x6', label: '4×6', rects: R(6, 4) },
+  { id: '4x8', label: '4×8', rects: R(8, 4) },
+  { id: '6x6', label: '6×6', rects: R(6, 6) },
+  { id: 'corner2', label: 'Corner 2×2', rects: [[0, 0, 2, 1], [0, 1, 1, 1]] },
+  { id: 'corner', label: 'Corner 4×4', rects: [[0, 0, 4, 2], [0, 2, 2, 2]] },
+  { id: 'round1', label: 'Round 1×1', rects: R(1, 1), round: true },
+  { id: 'round', label: 'Round 2×2', rects: R(2, 2), round: true },
+  { id: 'slope2', label: 'Slope 2×2', rects: [[0, 0, 2, 1]], wedge: [0, 1, 2, 1] },
+  { id: 'slope', label: 'Slope 2×4', rects: [[0, 0, 2, 2]], wedge: [0, 2, 2, 2] },
 ];
+for (const sh of BRICK_SHAPES) {
+  sh.cells = [];
+  for (const [x, y, w, d] of sh.wedge ? [...sh.rects, sh.wedge] : sh.rects)
+    for (let j = 0; j < d; j++) for (let i = 0; i < w; i++) sh.cells.push([x + i, y + j]);
+}
 const SHAPE = Object.fromEntries(BRICK_SHAPES.map(sh => [sh.id, sh]));
 const BRICK_COLORS = [
   ['Bright Red', '#c91a09'], ['Bright Blue', '#0055bf'], ['Bright Yellow', '#f2cd37'], ['Dark Green', '#237841'],
@@ -264,8 +281,37 @@ function rotCells(cells, rot) {
   const mx = Math.min(...c.map(v => v[0])), my = Math.min(...c.map(v => v[1]));
   return { cells: c.map(([x, y]) => [x - mx, y - my]), t: { x: -mx, y: -my } };
 }
-const brickCost = (shape, h) => SHAPE[shape].cells.length * (h === 0 ? 1 : 3 * h);
-const cellsOf = b => rotCells(SHAPE[b.shape].cells, b.rot).cells.map(([dx, dy]) => ({ x: b.x + dx, y: b.y + dy }));
+// a square of tile costs $1 and each brick-height of a square costs $3, so per stud: $0.25 and $0.75
+const brickCost = (shape, h) => Math.max(1, Math.ceil(SHAPE[shape].cells.length * (h === 0 ? 0.25 : 0.75 * h)));
+// the studs a brick covers (stud grid is 2W × 2H)
+const SW = W * 2, SH = H * 2;
+const sidx = (sx, sy) => sy * SW + sx;
+const studsOf = b => rotCells(SHAPE[b.shape].cells, b.rot).cells.map(([dx, dy]) => ({ x: b.sx + dx, y: b.sy + dy }));
+// which brick sits on each stud, rebuilt from S.bricks; squares holding any brick become 'brick' / 'tile'
+let studMap = new Array(SW * SH).fill(null), tileMap = new Array(SW * SH).fill(null);
+function rebuildStuds() {
+  studMap.fill(null); tileMap.fill(null);
+  for (const [id, b] of Object.entries(S.bricks))
+    for (const c of studsOf(b)) {
+      if (c.x < 0 || c.y < 0 || c.x >= SW || c.y >= SH) continue;
+      (b.h === 0 ? tileMap : studMap)[sidx(c.x, c.y)] = id;
+    }
+  for (let i = 0; i < W * H; i++) {
+    const x = i % W, y = (i / W) | 0;
+    const q = [sidx(2 * x, 2 * y), sidx(2 * x + 1, 2 * y), sidx(2 * x, 2 * y + 1), sidx(2 * x + 1, 2 * y + 1)];
+    if (!S.obj[i] || S.obj[i] === 'brick') S.obj[i] = q.some(k => studMap[k] != null) ? 'brick' : null;
+    if (!S.floor[i] || S.floor[i] === 'tile') S.floor[i] = q.some(k => tileMap[k] != null) ? 'tile' : null;
+  }
+}
+// the custom brick on square (x, y), if any (bricks first, then tiles)
+function brickOnSquare(x, y) {
+  for (const arr of [studMap, tileMap])
+    for (const [dx, dy] of [[0, 0], [1, 0], [0, 1], [1, 1]]) {
+      const id = arr[sidx(2 * x + dx, 2 * y + dy)];
+      if (id != null) return id;
+    }
+  return null;
+}
 
 const SHIRTS = ['#e3000b', '#0055bf', '#00852b', '#ffcf00', '#7b2fbe', '#ff7f00', '#00a3da', '#ffffff', '#1b1b1b'];
 const PANTS  = ['#1b1b1b', '#0055bf', '#5c3a1e', '#8a8a8a', '#00852b'];
@@ -279,7 +325,6 @@ function freshState() {
     expand: 0, priceLvl: 0, adUntil: 0,
     staff: { cashier: 0, assistant: 0, greeter: 0, manager: 0 },
     bricks: {}, nextBrick: 1,
-    part: new Array(W * H).fill(null), fpart: new Array(W * H).fill(null), // which custom brick fills each square
     builder: { shape: '2x4', h: 1, color: '#c91a09', rot: 0 },
     floor: new Array(W * H).fill(null),
     obj: new Array(W * H).fill(null),
@@ -292,7 +337,12 @@ function load() {
       const d = JSON.parse(raw);
       if (d && Array.isArray(d.obj) && d.obj.length === W * H) {
         const st = freshState();
-        return Object.assign(st, d, { adUntil: 0, staff: Object.assign(st.staff, d.staff), builder: Object.assign(st.builder, d.builder) });
+        delete d.part; delete d.fpart;
+        // bricks saved before bricks snapped to studs stored a square position
+        for (const b of Object.values(d.bricks || {})) if (b.sx === undefined) { b.sx = 2 * b.x; b.sy = 2 * b.y; }
+        const out = Object.assign(st, d, { adUntil: 0, staff: Object.assign(st.staff, d.staff), builder: Object.assign(st.builder, d.builder) });
+        if (!SHAPE[out.builder.shape]) out.builder.shape = '2x4';
+        return out;
       }
     }
   } catch (e) { /* storage unavailable */ }
@@ -369,9 +419,9 @@ function appeal() {
   for (let i = 0; i < W * H; i++) {
     const o = S.obj[i];
     if (o && ITEMS[o].appeal) a += ITEMS[o].appeal;
-    if (o === 'brick' && S.bricks[S.part[i]]) a += 0.1 * S.bricks[S.part[i]].h;
     if (S.floor[i]) a += 0.25;
   }
+  for (const b of Object.values(S.bricks)) if (b.h) a += 0.025 * SHAPE[b.shape].cells.length * b.h;
   return a;
 }
 let cachedAppeal = 0;
@@ -967,49 +1017,62 @@ function buildModel(key) {
 }
 
 // ── custom bricks from the builder ──
-const slopeGeo = () => cached(geoCache, 'slope', () => {
+const slopeGeo = (w, d) => cached(geoCache, `slope${w},${d}`, () => {
   const sh = new THREE.Shape();
-  sh.moveTo(0, 0); sh.lineTo(0.97, 0); sh.lineTo(0.97, 0.06); sh.lineTo(0, 0.34); sh.closePath();
-  const g = new THREE.ExtrudeGeometry(sh, { depth: 0.94, bevelEnabled: false });
-  g.rotateY(-Math.PI / 2);   // shape depth runs toward the front (+z), extrusion becomes the width
-  g.translate(0.47, 0, 0);
+  sh.moveTo(0, 0); sh.lineTo(d, 0); sh.lineTo(d, 0.06); sh.lineTo(0, 0.34); sh.closePath();
+  const g = new THREE.ExtrudeGeometry(sh, { depth: w, bevelEnabled: false });
+  g.rotateY(-Math.PI / 2);   // the slope runs toward the front (+z); the extrusion becomes the width
+  g.translate(w / 2, 0, 0);
   return g;
 });
-// builds brick `b`; the model's origin sits on square (ncx, ncy)
-function buildCustom(b, ncx, ncy) {
+// world position of the centre of stud (sx, sy)
+const studX = sx => sx * 0.5 - W / 2 + 0.25, studZ = sy => sy * 0.5 - H / 2 + 0.25;
+// builds brick `b`; the model's origin sits on its first stud so it can pop in place
+function buildCustom(b) {
   const sh = SHAPE[b.shape];
   const { t } = rotCells(sh.cells, b.rot);
   const outer = new THREE.Group(), g = new THREE.Group();
   outer.add(g);
+  outer.position.set(studX(b.sx + t.x), 0, studZ(b.sy + t.y));
   g.rotation.y = -b.rot * Math.PI / 2;
-  g.position.set(b.x + t.x - ncx, 0, b.y + t.y - ncy);
   const has = new Set(sh.cells.map(([x, y]) => x + ',' + y));
-  const n = (x, y) => has.has(x + ',' + y);
   const c = b.color, o = c === TRANS ? { transparent: true, opacity: 0.55, roughness: 0.1 } : undefined;
-  const LH = 0.35;
+  const LH = 0.35, S2 = 0.5;
+  // rectangle [x, y, w, d] in studs → its edges in local units, with a small gap only where the brick ends
+  const edges = ([x, y, w, d]) => {
+    const touch = (cx, cy) => has.has(cx + ',' + cy);
+    let l = false, r = false, f = false, k = false;
+    for (let j = 0; j < d; j++) { l ||= touch(x - 1, y + j); r ||= touch(x + w, y + j); }
+    for (let i = 0; i < w; i++) { k ||= touch(x + i, y - 1); f ||= touch(x + i, y + d); }
+    return { x0: (x - 0.5) * S2 + (l ? 0 : 0.03), x1: (x + w - 0.5) * S2 - (r ? 0 : 0.03),
+             z0: (y - 0.5) * S2 + (k ? 0 : 0.03), z1: (y + d - 0.5) * S2 - (f ? 0 : 0.03) };
+  };
   if (sh.round) {
-    if (b.h === 0) { g.add(cyl(0.47, 0.47, 0.1, c, 0, 0.05, 0, o, 28)); return outer; }
-    for (let l = 0; l < b.h; l++) g.add(cyl(0.46, 0.46, 0.34, c, 0, 0.17 + l * LH, 0, o, 28));
-    g.add(cyl(0.2, 0.2, STUD_H, c, 0, b.h * LH + STUD_H / 2, 0, o, 20));
+    const [, , w] = sh.rects[0], cx = (w - 1) / 2 * S2, r = w * 0.25 - 0.02;
+    if (b.h === 0) { g.add(cyl(r, r, 0.1, c, cx, 0.05, cx, o, 28)); return outer; }
+    for (let l = 0; l < b.h; l++) g.add(cyl(r, r, 0.34, c, cx, 0.17 + l * LH, cx, o, 28));
+    const sr = w > 1 ? 0.2 : STUD_R;
+    g.add(cyl(sr, sr, STUD_H, c, cx, b.h * LH + STUD_H / 2, cx, o, 20));
     return outer;
   }
-  for (const [x, y] of sh.cells) {
-    // squares that touch another square of the same brick join up with no gap
-    const x0 = x - 0.5 + (n(x - 1, y) ? 0 : 0.03), x1 = x + 0.5 - (n(x + 1, y) ? 0 : 0.03);
-    const z0 = y - 0.5 + (n(x, y - 1) ? 0 : 0.03), z1 = y + 0.5 - (n(x, y + 1) ? 0 : 0.03);
+  const parts = sh.wedge ? [...sh.rects, sh.wedge] : sh.rects;
+  for (const rc of parts) {
+    const e = edges(rc), w = e.x1 - e.x0, d = e.z1 - e.z0, mx = (e.x0 + e.x1) / 2, mz = (e.z0 + e.z1) / 2;
     if (b.h === 0) {
-      const tl = box(x1 - x0, 0.1, z1 - z0, c, (x0 + x1) / 2, 0.05, (z0 + z1) / 2, { roughness: 0.2, ...o });
+      const tl = box(w, 0.1, d, c, mx, 0.05, mz, { roughness: 0.2, ...o });
       tl.castShadow = false; g.add(tl);
       continue;
     }
-    const front = sh.slope && y === 1;
+    const isWedge = rc === sh.wedge;
     for (let l = 0; l < b.h; l++) {
-      if (front && l === b.h - 1) {
-        const w = mesh(slopeGeo(), c, x, l * LH, y - 0.5, o);
-        g.add(w);
-      } else g.add(box(x1 - x0, 0.34, z1 - z0, c, (x0 + x1) / 2, 0.17 + l * LH, (z0 + z1) / 2, o));
+      if (isWedge && l === b.h - 1) g.add(mesh(slopeGeo(w, d), c, mx, l * LH, e.z0, o));
+      else g.add(box(w, 0.34, d, c, mx, 0.17 + l * LH, mz, o));
     }
-    if (!front) { const sg = new THREE.Group(); sg.position.set(x, 0, y); studs(sg, c, b.h * LH, 2, 0.5, o); g.add(sg); }
+    if (!isWedge) {
+      const [x, y, rw, rd] = rc;
+      for (let j = 0; j < rd; j++) for (let i = 0; i < rw; i++)
+        g.add(cyl(STUD_R, STUD_R, STUD_H, c, (x + i) * S2, b.h * LH + STUD_H / 2, (y + j) * S2, o));
+    }
   }
   return outer;
 }
@@ -1093,9 +1156,7 @@ function syncNode(nodes, i, key) {
   if (cur) itemsGroup.remove(cur);
   nodes[i] = null;
   if (!key) return;
-  let n;
-  if (key.includes('#')) n = buildCustom(S.bricks[key.split('#')[1]], i % W, (i / W) | 0);
-  else n = buildModel(key);
+  const n = buildModel(key);
   n.userData.key = key;
   n.position.set(wx(i % W), 0, wz((i / W) | 0));
   n.userData.cell = { x: i % W, y: (i / W) | 0 };
@@ -1103,28 +1164,38 @@ function syncNode(nodes, i, key) {
   itemsGroup.add(n);
   nodes[i] = n;
 }
-// what model a square shows; a custom brick is drawn once, from the first square it covers
-function layerKey(layer, part, i) {
-  const k = layer[i];
-  if (k !== 'brick' && k !== 'tile') return k;
-  const id = part[i], b = S.bricks[id];
-  if (!b) return null;
-  const c0 = cellsOf(b)[0];
-  return idx(c0.x, c0.y) === i ? [k, id, b.shape, b.rot, b.h, b.color].join('#') : null;
-}
+const brickNodes = new Map();
+const brickKey = (id, b) => [id, b.shape, b.rot, b.h, b.color, b.sx, b.sy].join('#');
 function syncScene() {
   if (plateKey !== S.expand) updatePlate();
   for (let i = 0; i < W * H; i++) {
-    syncNode(floorNodes, i, layerKey(S.floor, S.fpart, i));
-    syncNode(objNodes, i, layerKey(S.obj, S.part, i));
+    const f = S.floor[i], o = S.obj[i];
+    syncNode(floorNodes, i, f === 'tile' ? null : f);
+    syncNode(objNodes, i, o === 'brick' ? null : o);
     if (objNodes[i]) objNodes[i].position.y = S.floor[i] ? 0.1 : 0;
+  }
+  for (const [id, n] of brickNodes) if (!S.bricks[id] || n.userData.key !== brickKey(id, S.bricks[id])) { itemsGroup.remove(n); brickNodes.delete(id); }
+  for (const [id, b] of Object.entries(S.bricks)) {
+    let n = brickNodes.get(id);
+    const cells = studsOf(b);
+    if (!n) {
+      n = buildCustom(b);
+      n.userData.key = brickKey(id, b);
+      n.userData.brickId = id;
+      n.userData.cell = { x: cells[0].x >> 1, y: cells[0].y >> 1 };
+      n.userData.pop = 0;
+      itemsGroup.add(n);
+      brickNodes.set(id, n);
+    }
+    // bricks standing on a floor tile sit on top of it
+    n.position.y = b.h && cells.some(c => tileMap[sidx(c.x, c.y)] != null || (S.floor[idx(c.x >> 1, c.y >> 1)] && S.floor[idx(c.x >> 1, c.y >> 1)] !== 'tile')) ? 0.1 : 0;
   }
 }
 
 // ── hover preview ──
 const hoverMat = new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.35, depthWrite: false });
-const hoverTiles = Array.from({ length: 9 }, () => {
-  const m = new THREE.Mesh(new THREE.PlaneGeometry(0.98, 0.98), hoverMat);
+const hoverTiles = Array.from({ length: 64 }, () => {
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), hoverMat);
   m.rotation.x = -Math.PI / 2; m.renderOrder = 5; m.visible = false;
   scene.add(m); return m;
 });
@@ -1225,31 +1296,41 @@ function render(dt) {
   // hover preview
   const B = S.builder, custom = tool === 'custom';
   const gkey = hover && tool && tool !== 'sell' ? (custom ? ['custom', B.shape, B.rot, B.h, B.color].join('|') : tool) : null;
-  const g = setGhost(gkey, custom ? () => buildCustom({ ...B, x: 0, y: 0 }, 0, 0) : undefined);
-  let cells = [];
+  const g = setGhost(gkey, custom ? () => buildCustom({ ...B, sx: 0, sy: 0 }) : undefined);
+  let marks = []; // { x, z, size } in world units
+  const square = c => ({ x: wx(c.x), z: wz(c.y), size: 0.98 });
+  const stud = c => ({ x: studX(c.x), z: studZ(c.y), size: 0.48 });
   if (hover) {
     const i = idx(hover.x, hover.y);
     let ok;
     if (tool === 'sell') {
-      ok = !(S.obj[i] || S.floor[i]);
-      const id = S.obj[i] === 'brick' ? S.part[i] : (!S.obj[i] && S.floor[i] === 'tile' ? S.fpart[i] : null);
-      cells = id != null && S.bricks[id] ? cellsOf(S.bricks[id]) : [hover];
+      const id = hover.brickId ?? brickOnSquare(hover.x, hover.y);
+      ok = !(S.obj[i] || S.floor[i] || id != null);
+      marks = id != null && S.bricks[id] ? studsOf(S.bricks[id]).map(stud) : [square(hover)];
+    } else if (custom) {
+      const a = brickAnchor(hover);
+      ok = a && canPlaceBrick(a) === true;
+      marks = a ? studsOf({ ...B, ...a }).filter(c => c.x < SW && c.y < SH).map(stud) : [];
+      if (g && a) {
+        const { t } = rotCells(SHAPE[B.shape].cells, B.rot);
+        g.position.set(studX(a.sx + t.x), B.h === 0 ? 0.005 : 0, studZ(a.sy + t.y));
+      }
+      if (g) g.visible = !!a;
     } else {
       ok = !tool || canPlace(tool, hover.x, hover.y) === true;
-      cells = custom ? customCells(hover.x, hover.y).filter(c => c.x < W && c.y < H) : [hover];
+      marks = [square(hover)];
+      if (g) {
+        g.position.set(wx(hover.x), ITEMS[tool].floor ? 0.005 : (S.floor[i] ? 0.1 : 0), wz(hover.y));
+        g.visible = !S.obj[i] || ITEMS[tool].floor;
+      }
     }
     hoverMat.color.set(ok ? '#ffffff' : '#ff3b3b');
     hoverMat.opacity = tool === 'sell' && !ok ? 0.55 : 0.35;
-    if (g) {
-      const lift = custom ? (B.h === 0 ? 0.005 : (S.floor[i] ? 0.1 : 0)) : (ITEMS[tool].floor ? 0.005 : (S.floor[i] ? 0.1 : 0));
-      g.position.set(wx(hover.x), lift, wz(hover.y));
-      g.visible = custom || !S.obj[i] || ITEMS[tool].floor;
-    }
   }
   hoverTiles.forEach((m, k) => {
-    const c = cells[k];
+    const c = marks[k];
     m.visible = !!c;
-    if (c) m.position.set(wx(c.x), S.floor[idx(c.x, c.y)] || S.obj[idx(c.x, c.y)] ? 0.12 : 0.11, wz(c.y));
+    if (c) { m.position.set(c.x, 0.13, c.z); m.scale.set(c.size, c.size, 1); }
   });
 
   // camera
@@ -1265,24 +1346,31 @@ function render(dt) {
 
 // ─── Placement ─────────────────────────────────────────────
 let tool = 'register';
-function customCells(x, y) {
-  return rotCells(SHAPE[S.builder.shape].cells, S.builder.rot).cells.map(([dx, dy]) => ({ x: x + dx, y: y + dy }));
+// where a custom brick would go: centred on the pointer, snapped to studs
+function brickAnchor(h) {
+  if (!h || h.u === undefined) return null;
+  const cells = rotCells(SHAPE[S.builder.shape].cells, S.builder.rot).cells;
+  const fw = Math.max(...cells.map(c => c[0])) + 1, fd = Math.max(...cells.map(c => c[1])) + 1;
+  return { sx: Math.round(h.u - fw / 2), sy: Math.round(h.v - fd / 2) };
+}
+function canPlaceBrick(a) {
+  const B = S.builder;
+  for (const c of studsOf({ ...B, ...a })) {
+    const x = c.x >> 1, y = c.y >> 1;
+    if (c.x < 0 || c.y < 0 || c.x >= SW || c.y >= SH || !inRegion(x, y)) return "That brick doesn't fit there. Turn it, or pick a smaller shape.";
+    const i = idx(x, y), k = sidx(c.x, c.y);
+    if (B.h === 0) {
+      if (tileMap[k] != null) return 'There is already a tile there. Sell it first.';
+      if (S.floor[i] && S.floor[i] !== 'tile') return 'Sell the old floor tile there first.';
+    } else {
+      if (isDoor(x, y)) return 'Keep the door clear so customers can get in!';
+      if (studMap[k] != null || (S.obj[i] && S.obj[i] !== 'brick')) return 'Something is in the way. Sell it first.';
+    }
+  }
+  if (S.money < brickCost(B.shape, B.h)) return 'Not enough money!';
+  return true;
 }
 function canPlace(key, x, y) {
-  if (key === 'custom') {
-    const B = S.builder;
-    for (const c of customCells(x, y)) {
-      if (c.x >= W || c.y >= H || !inRegion(c.x, c.y)) return "That brick doesn't fit there. Turn it, or pick a smaller shape.";
-      const i = idx(c.x, c.y);
-      if (B.h === 0) { if (S.floor[i] === 'tile') return 'There is already a tile there. Sell it first.'; }
-      else {
-        if (isDoor(c.x, c.y)) return 'Keep the door clear so customers can get in!';
-        if (S.obj[i]) return 'Something is in the way. Sell it first.';
-      }
-    }
-    if (S.money < brickCost(B.shape, B.h)) return 'Not enough money!';
-    return true;
-  }
   const it = ITEMS[key];
   if (!inRegion(x, y)) return 'That spot is outside your shop. Expand it in Upgrades!';
   if (S.total < it.unlock) return 'Locked!';
@@ -1295,60 +1383,51 @@ function canPlace(key, x, y) {
   if (S.money < it.cost) return 'Not enough money!';
   return true;
 }
-function place(x, y) {
-  if (tool === 'sell') return sellAt(x, y);
+function place(c) {
+  if (tool === 'sell') return sellAt(c);
   if (tool === 'custom') {
-    const res = canPlace('custom', x, y);
+    const a = brickAnchor(c);
+    if (!a) return;
+    const res = canPlaceBrick(a);
     if (res !== true) return flashHint(res);
     const B = S.builder, id = S.nextBrick++;
-    const b = { x, y, shape: B.shape, rot: SHAPE[B.shape].round ? 0 : B.rot, h: B.h, color: B.color, cost: brickCost(B.shape, B.h) };
-    S.bricks[id] = b;
-    S.money -= b.cost;
-    for (const c of cellsOf(b)) {
-      const i = idx(c.x, c.y);
-      if (b.h === 0) { S.floor[i] = 'tile'; S.fpart[i] = id; }
-      else { S.obj[i] = 'brick'; S.part[i] = id; }
-    }
+    S.bricks[id] = { sx: a.sx, sy: a.sy, shape: B.shape, rot: SHAPE[B.shape].round ? 0 : B.rot, h: B.h, color: B.color, cost: brickCost(B.shape, B.h) };
+    S.money -= S.bricks[id].cost;
     gridVersion++;
     onGridChange();
     return;
   }
+  const { x, y } = c;
   const res = canPlace(tool, x, y);
   if (res !== true) { if (res !== 'Already that tile.') flashHint(res); return; }
   const it = ITEMS[tool];
   S.money -= it.cost;
-  if (it.floor) { S.floor[idx(x, y)] = tool; S.fpart[idx(x, y)] = null; }
+  if (it.floor) S.floor[idx(x, y)] = tool;
   else S.obj[idx(x, y)] = tool;
   gridVersion++;
   onGridChange();
 }
-function sellAt(x, y) {
-  const i = idx(x, y);
-  const key = S.obj[i] || S.floor[i];
-  if (!key) return;
-  if (key === 'brick' || key === 'tile') {
-    // a custom brick comes off in one piece, from every square it covers
-    const id = key === 'brick' ? S.part[i] : S.fpart[i], b = S.bricks[id];
-    for (const c of b ? cellsOf(b) : [{ x, y }]) {
-      const j = idx(c.x, c.y);
-      if (key === 'brick') { S.obj[j] = null; S.part[j] = null; } else { S.floor[j] = null; S.fpart[j] = null; }
-    }
+function sellAt(c) {
+  const { x, y } = c, i = idx(x, y);
+  const id = c.brickId ?? (S.obj[i] === 'brick' || (!S.obj[i] && S.floor[i] === 'tile') ? brickOnSquare(x, y) : null);
+  let refund;
+  if (id != null && S.bricks[id]) {
+    // a custom brick comes off in one piece
+    refund = Math.floor(S.bricks[id].cost / 2);
     delete S.bricks[id];
-    const refund = Math.floor((b ? b.cost : 0) / 2);
-    S.money += refund;
-    popups.push({ x, y, text: '+' + fmt(refund), t: 0, color: '#ffffff' });
-    gridVersion++;
-    onGridChange();
-    return;
+  } else {
+    const key = S.obj[i] || S.floor[i];
+    if (!key || key === 'brick' || key === 'tile') return;
+    if (S.obj[i]) S.obj[i] = null; else S.floor[i] = null;
+    refund = Math.floor(ITEMS[key].cost / 2);
   }
-  if (S.obj[i]) S.obj[i] = null; else S.floor[i] = null;
-  const refund = Math.floor(ITEMS[key].cost / 2);
   S.money += refund;
   popups.push({ x, y, text: '+' + fmt(refund), t: 0, color: '#ffffff' });
   gridVersion++;
   onGridChange();
 }
 function onGridChange() {
+  rebuildStuds();
   syncScene();
   syncWorkers();
   cachedAppeal = appeal();
@@ -1363,17 +1442,28 @@ function cellFromEvent(e) {
   const r = canvas.getBoundingClientRect();
   ndc.set((e.clientX - r.left) / r.width * 2 - 1, -(e.clientY - r.top) / r.height * 2 + 1);
   ray.setFromCamera(ndc, camera);
-  // pointing at a brick picks that brick's cell, otherwise the baseplate square underneath
+  // pointing at something picks it, otherwise the baseplate square underneath
+  let res = null;
   const hit = ray.intersectObjects(itemsGroup.children, true)[0];
   if (hit) {
     let o = hit.object;
     while (o && !o.userData.cell) o = o.parent;
-    if (o) return o.userData.cell;
+    if (o) res = { ...o.userData.cell, brickId: o.userData.brickId };
   }
-  if (!ray.ray.intersectPlane(groundPlane, hitPt)) return null;
-  const x = Math.floor(hitPt.x + W / 2), y = Math.floor(hitPt.z + H / 2);
-  if (x < 0 || x >= W || y < 0 || y >= H) return null;
-  return { x, y };
+  if (!ray.ray.intersectPlane(groundPlane, hitPt)) return res;
+  if (!res) {
+    const x = Math.floor(hitPt.x + W / 2), y = Math.floor(hitPt.z + H / 2);
+    if (x < 0 || x >= W || y < 0 || y >= H) return null;
+    res = { x, y };
+  }
+  res.u = (hitPt.x + W / 2) * 2; // pointer position in studs, for custom bricks
+  res.v = (hitPt.z + H / 2) * 2;
+  return res;
+}
+// dragging places again only after moving to a new spot
+function spotKey(c) {
+  if (tool === 'custom') { const a = brickAnchor(c); return a ? a.sx + ',' + a.sy : ''; }
+  return c.x + ',' + c.y;
 }
 let painting = false, lastCell = null, rightDown = null;
 const activePointers = new Set();
@@ -1384,14 +1474,14 @@ canvas.addEventListener('pointerdown', e => {
   if (e.button !== 0) return;
   const c = cellFromEvent(e);
   if (!c) return;
-  painting = true; lastCell = c;
-  place(c.x, c.y);
+  painting = true; lastCell = spotKey(c);
+  place(c);
 });
 canvas.addEventListener('pointermove', e => {
   hover = cellFromEvent(e);
-  if (painting && hover && (hover.x !== lastCell.x || hover.y !== lastCell.y)) {
-    lastCell = hover;
-    place(hover.x, hover.y);
+  if (painting && hover && spotKey(hover) !== lastCell) {
+    lastCell = spotKey(hover);
+    place(hover);
   }
 });
 window.addEventListener('pointerup', e => {
@@ -1399,7 +1489,7 @@ window.addEventListener('pointerup', e => {
   // a right-click without dragging sells; a right-drag spins the camera
   if (e.button === 2 && rightDown && Math.hypot(e.clientX - rightDown.x, e.clientY - rightDown.y) < 6) {
     const c = cellFromEvent(e);
-    if (c) sellAt(c.x, c.y);
+    if (c) sellAt(c);
   }
   rightDown = null;
   painting = false;
@@ -1464,12 +1554,17 @@ function builderPanel() {
     b.title = s2.label;
     const w = Math.max(...s2.cells.map(c => c[0])) + 1, d = Math.max(...s2.cells.map(c => c[1])) + 1;
     const mini = document.createElement('span');
-    mini.className = 'mini' + (s2.round ? ' round' : '') + (s2.slope ? ' slope' : '');
-    mini.style.gridTemplateColumns = `repeat(${w}, 9px)`;
-    for (let y = 0; y < d; y++) for (let x = 0; x < w; x++) {
+    mini.className = 'mini' + (s2.round ? ' round' : '');
+    mini.style.gridTemplateColumns = `repeat(${s2.round ? 1 : w}, 7px)`;
+    if (s2.round) {
       const q = document.createElement('i');
+      q.style.cssText = `width:${w * 8}px;height:${w * 8}px;background:${B.color}`;
+      mini.appendChild(q);
+    } else for (let y = 0; y < d; y++) for (let x = 0; x < w; x++) {
+      const q = document.createElement('i');
+      const inWedge = s2.wedge && y >= s2.wedge[1];
       if (!s2.cells.some(c => c[0] === x && c[1] === y)) q.className = 'off';
-      q.style.background = q.className ? '' : B.color;
+      else { q.style.background = B.color; if (inWedge) q.className = 'wedge'; }
       mini.appendChild(q);
     }
     b.append(mini, s2.label);
@@ -1622,7 +1717,7 @@ S = load() || freshState();
 try { if (localStorage.getItem('brickShopSeenIntro')) $('overlay').classList.add('hidden'); } catch (e) {}
 cachedAppeal = appeal();
 renderTabs(); refreshItems(); updateStats();
-resize(); fitCamera(); syncScene(); syncWorkers();
+resize(); fitCamera(); rebuildStuds(); syncScene(); syncWorkers();
 
 let last = performance.now();
 function frame(now) {
