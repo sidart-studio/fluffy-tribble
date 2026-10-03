@@ -84,7 +84,10 @@
   .card-b.locked .pr { color: var(--ink-soft); font-family: var(--font-body); font-size: 11px; font-weight: 800; }
   .card-b .ct { font-size: 10px; color: var(--ink-soft); font-weight: 800; }
 
-  #hud-talk { position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(150px + env(safe-area-inset-bottom, 0px)); background: var(--ink); color: var(--gold); font-weight: 800; padding: 6px 12px; border-radius: 10px; font-size: 13px; pointer-events: none; }
+  #hud-talk { position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(150px + env(safe-area-inset-bottom, 0px)); background: var(--ink); color: var(--gold); font-weight: 800; padding: 8px 14px; border-radius: 10px; font-size: 13px; border: 0; }
+  #stick { position: absolute; right: 22px; bottom: calc(150px + env(safe-area-inset-bottom, 0px)); width: 110px; height: 110px; border-radius: 50%; background: rgba(43, 47, 56, .25); border: 2px solid rgba(255, 250, 241, .7); touch-action: none; }
+  #stick-knob { position: absolute; left: 50%; top: 50%; width: 46px; height: 46px; margin: -23px 0 0 -23px; border-radius: 50%; background: var(--gold); box-shadow: var(--shadow); pointer-events: none; }
+  @media (hover: hover) and (pointer: fine) { #stick { opacity: .55; } }
   #judge { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 300px; background: var(--panel); border-radius: 16px; box-shadow: var(--shadow); padding: 12px 14px; border-left: 6px solid var(--gold); }
   #judge small { font-size: 10px; letter-spacing: .8px; text-transform: uppercase; color: var(--ink-soft); font-weight: 800; }
   #judge h3 { margin: 2px 0 6px; font-family: var(--font-display); font-size: 22px; }
@@ -196,6 +199,8 @@
     #demand { display: none; }
     #log { display: none; }
     #info { left: 10px; right: 10px; width: auto; bottom: calc(130px + env(safe-area-inset-bottom, 0px)); }
+    #stick { right: 12px; bottom: calc(310px + env(safe-area-inset-bottom, 0px)); width: 96px; height: 96px; }
+    #hud-talk { bottom: calc(320px + env(safe-area-inset-bottom, 0px)); left: 12px; transform: none; }
     .kpis { display: none; }
     .card-b { width: 128px; }
   }
@@ -259,7 +264,8 @@
     <button class="btn small" data-view="kitchen">Kitchen</button>
     <button class="btn small" id="btn-walk" title="Walk around as the mayor (M)">🚶 Walk (M)</button>
   </div>
-  <div id="hud-talk" hidden>E · talk</div>
+  <button id="hud-talk" hidden>E · talk</button>
+  <div id="stick" hidden><div id="stick-knob"></div></div>
   <div id="summary" hidden>
     <h3 id="summary-title">Day closed</h3>
     <ul id="summary-body"></ul>
@@ -319,7 +325,7 @@
       <li><b>Grow:</b> buy more land, level buildings up (click one), and unlock towers, malls and a stadium as your population rises.</li>
       <li><b>A day</b> runs 06:00 to 06:00. Shops and the diner open at 08:00 and close at 18:00: customers head home, workers sweep up and go home too, and come back in the morning to open up.</li>
       <li><b>People live here.</b> Citizens step out of their own homes, walk to work, shop, eat at your diner, and go back inside at night. Click anyone to see who they are.</li>
-      <li><b>You are the mayor.</b> Press WASD to walk around as yourself, and E next to a citizen to praise or fine them.</li>
+      <li><b>You are the mayor.</b> The game starts with you standing outside your diner. Walk with WASD or the on-screen joystick, press C for the city overview, and E next to a citizen to praise or fine them.</li>
       <li><b>Your diner</b> at the centre still runs: zoom in to collect its cash, hustle staff and buy upgrades.</li>
     </ul>
     <div class="row">

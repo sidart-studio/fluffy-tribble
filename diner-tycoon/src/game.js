@@ -386,7 +386,7 @@ export class Game {
     this.s = this.freshState();
     this.tutorial = { paid: false, shop: false, collected: false, homes: false };
     this.begin();
-    this.toast('Welcome, mayor. Pick Homes in the build bar and click an empty block to start your city.', 'info', 6000);
+    this.toast('This is you, the mayor, outside your diner. Walk with WASD or the joystick. To build, pick Homes in the bar below and click an empty block, or press C to see the whole city.', 'info', 7000);
   }
   continueGame() {
     let s = null;
@@ -418,8 +418,8 @@ export class Game {
     this.spawnTimer = 1.5;
     this.setupOpeningHours();
     this.spawnMayor();
-    this.walkMode = false;
     this.openJudge(null);
+    this.setWalkMode(true, true);
     $('overlay-title').classList.remove('show');
     $('hud').classList.add('show');
     this.renderShop();
@@ -1416,6 +1416,15 @@ export class Game {
     $('btn-fine').addEventListener('click', () => this.judge('fine'));
     $('btn-judge-close').addEventListener('click', () => this.openJudge(null));
     this.keys = new Set();
+    this.stick = null;
+    const stick = $('stick'), knob = $('stick-knob');
+    let stickId = null;
+    const setStick = (e) => { const r = stick.getBoundingClientRect(); const dx = (e.clientX - (r.left + r.width / 2)) / (r.width / 2), dz = -(e.clientY - (r.top + r.height / 2)) / (r.height / 2); const len = Math.hypot(dx, dz) || 1; const k = Math.min(1, len); this.stick = { x: dx / len * k, z: dz / len * k }; knob.style.transform = `translate(${(dx / len) * k * 34}px, ${-(dz / len) * k * 34}px)`; };
+    stick.addEventListener('pointerdown', (e) => { stickId = e.pointerId; stick.setPointerCapture(e.pointerId); setStick(e); if (!this.walkMode) this.setWalkMode(true, true); });
+    stick.addEventListener('pointermove', (e) => { if (e.pointerId === stickId) setStick(e); });
+    const endStick = (e) => { if (e.pointerId !== stickId) return; stickId = null; this.stick = null; knob.style.transform = ''; };
+    stick.addEventListener('pointerup', endStick); stick.addEventListener('pointercancel', endStick);
+    $('hud-talk').addEventListener('click', () => this.judgeNearby());
     addEventListener('keyup', (e) => this.keys.delete(e.code));
     addEventListener('blur', () => this.keys.clear());
     this.canvas.addEventListener('pointermove', (e) => { if (this.city.placing) this.hoverTile(e); });
@@ -1852,12 +1861,25 @@ export class Game {
     rig.obj.rotation.y = Math.PI / 2;
     const tag = makeNameTag('MAYOR (you)');
     tag.position.y = 2.5; rig.obj.add(tag);
+    // a gold ring on the ground so you can spot yourself from the city view
+    const ring = new THREE.Mesh(new THREE.RingGeometry(0.55, 0.8, 32), new THREE.MeshBasicMaterial({ color: 0xffd54f, transparent: true, opacity: 0.85, depthWrite: false, side: THREE.DoubleSide }));
+    ring.rotation.x = -Math.PI / 2; ring.position.y = 0.03; rig.obj.add(ring); rig.marker = ring;
     this.mayor = rig;
+  }
+  /** Put the camera right behind the mayor, no glide. */
+  snapCameraToMayor() {
+    const m = this.mayor; if (!m) return;
+    const fwd = new THREE.Vector3(Math.sin(m.obj.rotation.y), 0, Math.cos(m.obj.rotation.y));
+    this.controls.target.copy(m.obj.position).add(new THREE.Vector3(0, 1.3, 0));
+    this.camera.position.copy(this.controls.target).addScaledVector(fwd, -6.5).add(new THREE.Vector3(0, 3.4, 0));
+    this.camTween = null;
+    this.controls.update();
   }
   setWalkMode(on, quiet = false) {
     if (!this.mayor) return;
     this.walkMode = on;
-    if (on) { this.currentView = 'walk'; this.camTween = null; if (!quiet) this.toast('Walking as the mayor: WASD or arrows to walk, Shift to run, E to talk to the nearest citizen.', 'info', 4500); }
+    if (on) { this.currentView = 'walk'; this.snapCameraToMayor(); if (!quiet) this.toast('You are the mayor. WASD or arrows to walk (drag the joystick on a phone), Shift to run, E to talk to the nearest citizen. C shows the whole city.', 'info', 5000); }
+    $('stick').hidden = !on;
     this.updateHud();
   }
   mayorCanStand(x, z) {
@@ -1877,13 +1899,15 @@ export class Game {
     if (k.has('KeyS') || k.has('ArrowDown')) fz -= 1;
     if (k.has('KeyA') || k.has('ArrowLeft')) fx -= 1;
     if (k.has('KeyD') || k.has('ArrowRight')) fx += 1;
+    if (this.stick) { fx += this.stick.x; fz += this.stick.z; }
     const moving = (fx || fz) && !this.paused;
     if (moving) {
       // relative to where the camera looks
       const fwd = new THREE.Vector3(); this.camera.getWorldDirection(fwd); fwd.y = 0; fwd.normalize();
       const right = new THREE.Vector3(fwd.z, 0, -fwd.x);
+      const mag = Math.min(1, Math.hypot(fx, fz));
       const dir = fwd.multiplyScalar(fz).add(right.multiplyScalar(fx)).normalize();
-      const speed = (k.has('ShiftLeft') || k.has('ShiftRight') ? 6.5 : 3.6) * real;
+      const speed = (k.has('ShiftLeft') || k.has('ShiftRight') ? 6.5 : 3.6) * real * mag;
       const p = m.obj.position;
       const nx = p.x + dir.x * speed, nz = p.z + dir.z * speed;
       if (this.mayorCanStand(nx, nz)) { p.x = nx; p.z = nz; }
@@ -1893,14 +1917,15 @@ export class Game {
       m.play('walk');
       if (k.has('ShiftLeft') || k.has('ShiftRight')) m.mixer.timeScale = 1.6; else m.mixer.timeScale = 1;
     } else m.play('idle');
+    if (m.marker) { const k = 1 + Math.sin(this.time * 3) * 0.12; m.marker.scale.set(k, k, 1); m.marker.visible = !this.walkMode; }
     m.update(real);
     if (this.walkMode) {
       const target = m.obj.position.clone().add(new THREE.Vector3(0, 1.3, 0));
       this.controls.target.lerp(target, Math.min(1, real * 6));
       const off = this.camera.position.clone().sub(this.controls.target); off.y = 0;
       if (off.lengthSq() < 0.01) off.set(0, 0, 1);
-      off.setLength(9); off.y = 5.2;
-      this.camera.position.lerp(target.clone().add(off), Math.min(1, real * 4));
+      off.setLength(6.5); off.y = 3.4;
+      this.camera.position.lerp(target.clone().add(off), Math.min(1, real * 5));
     }
     // who is close enough to talk to
     const near = this.nearestCitizen(3.5);
@@ -2086,6 +2111,7 @@ function placeholderPerson(color) {
 /** Clone a rigged model (SkinnedMesh + bones) so each runner animates independently. */
 function cloneRig(source) {
   const clone = source.clone(true);
+  clone.visible = true; // the source may be hidden (off-duty staff); clones start visible
   clone.animations = source.animations;
   // rebind skinned meshes to the cloned skeleton (three's clone keeps the old bones)
   const srcBones = [], dstBones = [];
