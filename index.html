@@ -155,6 +155,25 @@
   #center-banner h1 { font-size:42px; }
   #center-banner p { font-size:16px; margin-top:6px; }
 
+  /* ---------- game over ---------- */
+  #gameover-overlay {
+    position:fixed; inset:0; background:rgba(0,0,0,.78); z-index:70; display:none;
+    align-items:center; justify-content:center;
+  }
+  #gameover-modal {
+    background:#3a1414; border:3px solid #7a2a2a; border-radius:18px;
+    width:min(380px,90vw); padding:30px 26px; color:#fff; text-align:center;
+    box-shadow:0 20px 50px rgba(0,0,0,.5);
+  }
+  #gameover-modal h1 { font-size:36px; margin-bottom:10px; text-shadow:0 4px 10px rgba(0,0,0,.6); }
+  #gameover-modal p { font-size:14px; color:rgba(255,255,255,.75); margin-bottom:4px; }
+  #gameover-stats { font-weight:700; color:#FFD24C; margin:10px 0 20px; font-size:15px; }
+  #restart-btn {
+    background:#FFD24C; color:#3a2418; border:none; padding:12px 30px;
+    border-radius:10px; font-weight:800; font-size:15px; cursor:pointer;
+  }
+  #restart-btn:hover { background:#ffdc70; }
+
   #loading {
     position:fixed; inset:0; background:#2b6e3f; color:#fff; z-index:100;
     display:flex; align-items:center; justify-content:center; font-size:16px; font-weight:700;
@@ -194,6 +213,15 @@
   <button id="attack-btn">⚔️ ATTACK</button>
 
   <div id="center-banner"><h1 id="banner-title"></h1><p id="banner-sub"></p></div>
+
+  <div id="gameover-overlay">
+    <div id="gameover-modal">
+      <h1>💀 GAME OVER</h1>
+      <p>All your monsters fainted in battle.</p>
+      <div id="gameover-stats"></div>
+      <button id="restart-btn">Restart</button>
+    </div>
+  </div>
 
   <div id="shop-overlay">
     <div id="shop-modal">
@@ -275,6 +303,7 @@ const state = {
   keys: {},
   facing: 'down', // down=+Z, up=-Z, left=-X, right=+X
   shopOpen: false,
+  gameOver: false,
   battle: { active:false, portal:null, enemies:[], phase:'idle', timer:0 },
   particles: [],
   nextId: 1,
@@ -735,6 +764,15 @@ const promptEl = document.getElementById('prompt');
 const centerBanner = document.getElementById('center-banner');
 const bannerTitle = document.getElementById('banner-title');
 const bannerSub = document.getElementById('banner-sub');
+const gameoverOverlay = document.getElementById('gameover-overlay');
+const gameoverStats = document.getElementById('gameover-stats');
+document.getElementById('restart-btn').addEventListener('click', () => location.reload());
+
+function triggerGameOver(){
+  state.gameOver = true;
+  gameoverStats.textContent = `You reached Level ${state.level} with ${fmtCoins(state.coins)} coins.`;
+  gameoverOverlay.style.display = 'flex';
+}
 
 function updateTopUI(){
   coinsVal.textContent = fmtCoins(state.coins);
@@ -836,6 +874,7 @@ function findDirtPlotUnderPlayer(){
 }
 
 function handleInteract(){
+  if (state.gameOver) return;
   if (helpOverlay.style.display !== 'none') return;
   if (state.shopOpen){ closeShop(); return; }
   if (nearNPC()){ openShop(); return; }
@@ -1057,7 +1096,7 @@ function buildPortalObject(){
 }
 
 function startBattle(){
-  if (state.battle.active) return;
+  if (state.battle.active || state.gameOver) return;
   if (state.roster.filter(m=>m.hp>0).length === 0){
     spawnParticle(player.x, 1.2, player.z, "Grow monsters first!", '#FF8080');
     return;
@@ -1231,7 +1270,8 @@ function endBattle(won){
     updateTopUI();
     showBanner('🎉 Level Cleared!', `+${reward} coins — Level ${state.level} unlocked`, 2600);
   } else {
-    showBanner('💀 Your monsters fainted!', 'Grow more monsters and try again', 2600);
+    showBanner('💀 Your monsters fainted!', 'Game over...', 1600);
+    setTimeout(triggerGameOver, 1200);
   }
   renderRoster();
 }
@@ -1240,7 +1280,7 @@ attackBtn.addEventListener('click', startBattle);
 
 // ============================= MOVEMENT =============================
 function updatePlayer(dt){
-  if (state.shopOpen || helpOverlay.style.display !== 'none') return;
+  if (state.shopOpen || state.gameOver || helpOverlay.style.display !== 'none') return;
   let dx=0, dz=0;
   const k = state.keys;
   if (k['w']||k['arrowup']) dz -= 1;
