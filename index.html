@@ -256,6 +256,13 @@
     #back-btn.show { display: flex; }
     #back-btn:active { transform: translateY(56px) scale(.9); }
 
+    body.titling #inventory, body.titling #hammer-btn, body.titling #home-btn,
+    body.titling #store-btn, body.titling #jump-btn, body.titling #rod-btn,
+    body.titling #save-btn, body.titling #invite-btn, body.titling #bag-btn,
+    body.titling #back-btn, body.titling #bag-panel, body.titling #joy-zone,
+    body.titling #hit-btn, body.titling #throw-btn, body.titling #hit-prompt,
+    body.titling #start-prompt { display: none !important; }
+
     #name-panel { /* floats over the live 3D title scene */
       position: fixed; inset: 0; z-index: 270; display: none;
       align-items: center; justify-content: flex-start; flex-direction: column;
@@ -3719,6 +3726,7 @@
 
   function beginFirstPerson() {
     if (phase !== 'intro') return;
+    if (namePanelEl.classList.contains('show')) return; // no address, no island — ever
     phase = 'transitioning';
     startPromptEl.classList.remove('show');
 
@@ -3807,6 +3815,7 @@
     try { localStorage.setItem(NAME_KEY, clean); } catch (e) {}
     applyPlayerName(clean);
     namePanelEl.classList.remove('show');
+    document.body.classList.remove('titling');
     clearTitleCast();
     sfx('click');
     beginFirstPerson(); // START means start — straight into the game
@@ -3859,6 +3868,7 @@
     applyPlayerName(playerName);
   } else {
     namePanelEl.classList.add('show');
+    document.body.classList.add('titling'); // game controls stay off until an address exists
     spawnTitleCast();
     // prefilled so START always works right away — tap the box only to change it
     nameInputEl.value = 'CUBEY';
