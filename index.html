@@ -2119,7 +2119,7 @@
   function placeBuyButton(dir) {
     let btn = buyButtons[dir];
     if (!btn) {
-      btn = buyButtons[dir] = { group: makeBuyButtonGroup(), sprite: null, x: 0, z: 0, wasNear: false };
+      btn = buyButtons[dir] = { group: makeBuyButtonGroup(), sprite: null, x: 0, z: 0, wasNear: false, paid: {} };
       scene.add(btn.group);
     }
     const { gx, gz } = buttonCell(dir);
@@ -2144,7 +2144,11 @@
         btn.sprite.material.map.dispose();
         btn.sprite.material.dispose();
       }
-      btn.sprite = makeTextSprite(`Buy land · ${costText(landCost())}`, { color: '#FF8A80' });
+      const rem = remainingCost(btn);
+      const label = Object.keys(btn.paid || {}).length && Object.keys(rem).length
+        ? `Buy land · still needs ${costText(rem)}`
+        : `Buy land · ${costText(landCost())}`;
+      btn.sprite = makeTextSprite(label, { color: '#FF8A80' });
       btn.sprite.position.y = 1.5;
       btn.group.add(btn.sprite);
     }
@@ -2154,10 +2158,49 @@
   refreshButtonSprites();
   Object.values(buyButtons).forEach(b => (b.group.visible = false)); // shown after the first coconut harvest
 
+  // What a button's land still costs after the deposits already paid into it.
+  function remainingCost(btn) {
+    const rem = {};
+    const paid = btn.paid || {};
+    for (const [k, n] of Object.entries(landCost())) {
+      const r = n - (paid[k] || 0);
+      if (r > 0) rem[k] = r;
+    }
+    return rem;
+  }
+
   function buyLandAt(dir) {
-    const cost = landCost();
-    if (!canAfford(cost)) { toast(`You need ${costText(cost)} to buy this land`, false); sfx('deny'); return; }
-    payCost(cost);
+    const btn = buyButtons[dir];
+    if (!btn.paid) btn.paid = {};
+    const remaining = remainingCost(btn);
+    const have = k => (k === 'coins' ? cubeCoins : inv[k]);
+    const affordAll = Object.entries(remaining).every(([k, n]) => have(k) >= n);
+
+    if (!affordAll) { // pay in what you have now — the button remembers it
+      const gaveParts = [];
+      for (const [k, n] of Object.entries(remaining)) {
+        const give = Math.min(have(k), n);
+        if (give <= 0) continue;
+        if (k === 'coins') cubeCoins -= give; else inv[k] -= give;
+        btn.paid[k] = (btn.paid[k] || 0) + give;
+        gaveParts.push(`${give} ${k === 'coins' ? '🪙' : RESOURCES[k].emoji}`);
+      }
+      refreshInventory();
+      refreshButtonSprites();
+      if (gaveParts.length) {
+        sfx('pickup');
+        toast(`💰 Paid ${gaveParts.join(' + ')} into this land — still needs ${costText(remainingCost(btn))}`, true);
+      } else {
+        toast(`You still need ${costText(remaining)} to finish buying this land`, false);
+        sfx('deny');
+      }
+      return;
+    }
+
+    for (const [k, n] of Object.entries(remaining)) { // pay the rest and it's yours
+      if (k === 'coins') cubeCoins -= n; else inv[k] -= n;
+    }
+    btn.paid = {};
     totalLandPurchases++;
     expansions[dir]++;
 
@@ -2185,7 +2228,7 @@
     refreshButtonSprites();
     refreshInventory();
     sfx('buy');
-    toast(`Land purchased for ${costText(cost)}!`, true);
+    toast('🎉 Land purchased!', true);
   }
 
   function updateBuyButtons() {
@@ -3490,6 +3533,7 @@
         animals: animals.map(a => ({ t: a.type, x: +a.group.position.x.toFixed(2), z: +a.group.position.z.toFixed(2) })),
         homes: villagers.map(v => ({ x: +v.home.x.toFixed(2), z: +v.home.z.toFixed(2) })),
         barns: placedBarns.map(b => ({ x: +b.x.toFixed(2), z: +b.z.toFixed(2) })),
+        paidLedgers: Object.fromEntries(Object.entries(buyButtons).map(([dir, b]) => [dir, b.paid || {}])),
         player: { x: +player.position.x.toFixed(2), z: +player.position.z.toFixed(2) },
       }));
       return true;
@@ -3540,6 +3584,11 @@
         for (const dir of Object.keys(DIR_DEFS)) {
           if (expansions[dir] >= MAX_EXPANSIONS_PER_DIR) removeBuyButton(dir);
           else placeBuyButton(dir);
+        }
+        if (d.paidLedgers) {
+          for (const [dir, paid] of Object.entries(d.paidLedgers)) {
+            if (buyButtons[dir]) buyButtons[dir].paid = paid;
+          }
         }
         refreshButtonSprites();
         // the buttons appear once first-person begins, so the intro stays tidy
