@@ -191,6 +191,35 @@
     #invite-btn.show { display: flex; }
     #invite-btn:active { transform: translateY(-132px) scale(.9); }
 
+    #bag-btn {
+      position: fixed; left: 18px; top: 50%; transform: translateY(-38px); z-index: 120;
+      width: 76px; height: 76px; border-radius: 50%;
+      background: radial-gradient(circle at 34% 26%, #78909C, #37474F 62%, #21272b);
+      border: 3px solid #BCAAA4;
+      font-size: 30px; display: none; flex-direction: column;
+      align-items: center; justify-content: center;
+      box-shadow: 0 6px 14px rgba(0,0,0,.4), inset 0 2px 4px rgba(255,255,255,.3), inset 0 -4px 6px rgba(0,0,0,.45);
+      cursor: pointer;
+    }
+    #bag-btn .lbl {
+      font-size: 9px; font-weight: 800; color: #fff; letter-spacing: .5px; margin-top: -2px;
+    }
+    #bag-btn.show { display: flex; }
+    #bag-btn.open { background: linear-gradient(180deg,#A1887F,#5D4037); border-color: #fff; }
+    #bag-btn:active { transform: translateY(-38px) scale(.9); }
+
+    #bag-panel {
+      position: fixed; left: 108px; top: 50%; transform: translateY(-50%); z-index: 150;
+      background: rgba(20,20,26,.82); border: 2px solid rgba(255,255,255,.3); border-radius: 18px;
+      padding: 14px 16px; color: #fff; display: none;
+      max-width: min(56vw, 420px); max-height: 70vh; overflow-y: auto;
+      backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+    }
+    #bag-panel.show { display: block; }
+    #bag-head { font-weight: 900; font-size: 15px; margin-bottom: 10px; }
+    #inv-items { display: flex; flex-wrap: wrap; gap: 8px 14px; font-weight: 800; font-size: 17px; }
+    #bag-panel .n { color: #FFD54F; }
+
     #invite-panel {
       position: fixed; inset: 0; z-index: 265; display: none;
       align-items: center; justify-content: center; background: rgba(0,0,0,.45);
@@ -212,7 +241,7 @@
     #invite-yes:active, #invite-no:active { transform: scale(.97); }
 
     #back-btn {
-      position: fixed; left: 18px; top: 50%; transform: translateY(-38px); z-index: 120;
+      position: fixed; left: 18px; top: 50%; transform: translateY(56px); z-index: 120;
       width: 76px; height: 76px; border-radius: 50%;
       background: radial-gradient(circle at 34% 26%, #78909C, #37474F 62%, #21272b);
       border: 3px solid #FF8A80;
@@ -225,7 +254,7 @@
       font-size: 9px; font-weight: 800; color: #fff; letter-spacing: .5px; margin-top: -2px;
     }
     #back-btn.show { display: flex; }
-    #back-btn:active { transform: translateY(-38px) scale(.9); }
+    #back-btn:active { transform: translateY(56px) scale(.9); }
 
     #name-panel { /* floats over the live 3D title scene */
       position: fixed; inset: 0; z-index: 270; display: none;
@@ -340,7 +369,9 @@
 
   <div id="fade"></div>
   <div id="start-prompt">Click to begin — drag or arrow keys to turn</div>
-  <div id="inventory"><span id="inv-items"></span>🪙 <span class="n2" id="coin-count">0</span></div>
+  <div id="inventory">🪙 <span class="n2" id="coin-count">0</span></div>
+  <div id="bag-btn" title="Your backpack"><span>🎒</span><span class="lbl">BAG</span></div>
+  <div id="bag-panel"><div id="bag-head">🎒 Your backpack</div><span id="inv-items"></span></div>
   <div id="hit-prompt"><span class="k">E</span> Hit</div>
   <div id="joy-zone"><div id="joy-knob"></div></div>
   <div id="hit-btn">🥊</div>
@@ -553,7 +584,7 @@
   ];
   const PATCH_DEPTH = 3;       // how many cells deep each purchased patch extends outward
   const PATCH_HALFW = 2;       // patches are (2*PATCH_HALFW + 1) cells wide
-  const MAX_RING_PURCHASES = 40; // the island can grow outward this many times — a very long game
+  const MAX_RING_PURCHASES = 100; // the island can grow outward this many times — a very long game
   const BUTTON_RANGE = 1.4;    // how close CUBEY must get to a red button to buy its land
 
   function cellWorld(gx, gz) { return { x: gx * CELL, z: gz * CELL }; }
@@ -1392,8 +1423,14 @@
         stalk.rotation.z = (Math.random() - 0.5) * 0.2;
         g.add(stalk);
       }
-    } else { // carrot, potato, strawberry — low rows with colored bits
-      const cols = { carrot: 0xFB8C00, potato: 0xA1887F, strawberry: 0xE91E63 };
+    } else { // low rows with colored bits — one color per crop
+      const cols = {
+        carrot: 0xFB8C00, potato: 0xA1887F, strawberry: 0xE91E63,
+        tomato: 0xE53935, onion: 0xD7CCC8, garlic: 0xF5F5F5, pepper: 0x43A047,
+        cucumber: 0x2E7D32, cabbage: 0x7CB342, broccoli: 0x388E3C, eggplant: 0x6A1B9A,
+        chili: 0xD84315, sweetpotato: 0xBF360C, peanut: 0xBCAAA4, rice: 0xFAFAFA,
+        bean: 0x795548, lettuce: 0x9CCC65, spinach: 0x2E7D32,
+      };
       const mat = new THREE.MeshStandardMaterial({ color: cols[kind], flatShading: true, roughness: 0.6 });
       for (let i = 0; i < 4; i++) {
         const px = (Math.random() - 0.5) * 1.0, pz = (Math.random() - 0.5) * 1.0;
@@ -1411,11 +1448,23 @@
     return g;
   }
 
-  function makeOreVariant(kind) { // gold, crystal, coal
+  const GEM_COLORS = { // these grow as tall glassy crystal clusters
+    crystal: 0xBA68C8, ruby: 0xE53935, emerald: 0x2E7D32, sapphire: 0x1E88E5,
+    amethyst: 0x8E24AA, quartz: 0xECEFF1, icegem: 0x81D4FA, jade: 0x26A69A,
+  };
+  const ORE_FLECKS = { // these are rocks studded with colored flecks
+    gold:     { base: 0x8D6E63, fleck: 0xFFD54F, metal: 0.9,  rough: 0.25 },
+    coal:     { base: 0x37474F, fleck: 0x121212, metal: 0.2,  rough: 0.6 },
+    copper:   { base: 0x6D4C41, fleck: 0xD84315, metal: 0.8,  rough: 0.35 },
+    silver:   { base: 0x78909C, fleck: 0xE0E0E0, metal: 0.95, rough: 0.2 },
+    topaz:    { base: 0x795548, fleck: 0xFFB300, metal: 0.5,  rough: 0.3 },
+    obsidian: { base: 0x263238, fleck: 0x4A148C, metal: 0.4,  rough: 0.25 },
+  };
+  function makeOreVariant(kind) {
     const g = new THREE.Group();
-    if (kind === 'crystal') {
+    if (GEM_COLORS[kind]) {
       const mat = new THREE.MeshStandardMaterial({
-        color: 0xBA68C8, roughness: 0.15, metalness: 0.3, transparent: true, opacity: 0.85, flatShading: true,
+        color: GEM_COLORS[kind], roughness: 0.15, metalness: 0.3, transparent: true, opacity: 0.85, flatShading: true,
       });
       for (let i = 0; i < 3; i++) {
         const c = new THREE.Mesh(new THREE.OctahedronGeometry(0.22 + Math.random() * 0.12, 0), mat);
@@ -1426,12 +1475,10 @@
         g.add(c);
       }
     } else {
-      const base = new THREE.MeshStandardMaterial({
-        color: kind === 'gold' ? 0x8D6E63 : 0x37474F, flatShading: true, roughness: 0.9,
-      });
+      const st = ORE_FLECKS[kind];
+      const base = new THREE.MeshStandardMaterial({ color: st.base, flatShading: true, roughness: 0.9 });
       const fleck = new THREE.MeshStandardMaterial({
-        color: kind === 'gold' ? 0xFFD54F : 0x121212, metalness: kind === 'gold' ? 0.9 : 0.2,
-        roughness: kind === 'gold' ? 0.25 : 0.6, flatShading: true,
+        color: st.fleck, metalness: st.metal, roughness: st.rough, flatShading: true,
       });
       const rockM = new THREE.Mesh(new THREE.DodecahedronGeometry(0.45, 0), base);
       rockM.position.y = 0.32; rockM.castShadow = true;
@@ -2176,7 +2223,7 @@
   const PATCH_THEMES = [
     // the set progression (matched to the land costs)…
     'chicken', 'bamboo', 'rock', 'corn', 'flower', 'ice', 'hive', 'iron', 'berry', 'pumpkin', 'cow', 'sheep', 'tree',
-    // …then 27 more, so all 40 possible purchases are a different land — no repeats, ever
+    // …then 27 more…
     'sunflower', 'apple', 'duck', 'melon', 'pine', 'carrot', 'goat', 'rose', 'peach', 'wheat',
     'bunny', 'grape', 'mushroom', 'lemon', 'strawberry', 'turkey', 'cactus', 'lavender', 'banana',
     'potato', 'boulder', 'jungle', 'clover', 'coal', 'iceberg', 'crystal', 'gold',
@@ -2197,6 +2244,132 @@
     crystal: '💎 A crystal cavern', gold: '🥇 A gold mine',
     duck: '🦆 A duck pond', goat: '🐐 A goat pen', bunny: '🐰 A bunny meadow', turkey: '🦃 A turkey farm',
   };
+  // ── …and 60 MORE themes, registered table-style — 100 unique lands in all,
+  // exactly one for every land the island can ever grow. No land repeats.
+  const EXTRA_RES = { // kind: [emoji, sell price, drop color, plural]
+    cherry:      ['🍒', 14, 0xD32F2F, 'cherries'],
+    orange:      ['🍊', 11, 0xFB8C00, 'oranges'],
+    pear:        ['🍐', 10, 0xC0CA33, 'pears'],
+    mango:       ['🥭', 15, 0xFFB300, 'mangoes'],
+    kiwi:        ['🥝', 12, 0x9CCC65, 'kiwis'],
+    olive:       ['🫒', 12, 0x827717, 'olives'],
+    avocado:     ['🥑', 16, 0x558B2F, 'avocados'],
+    tomato:      ['🍅', 7,  0xE53935, 'tomatoes'],
+    onion:       ['🧅', 6,  0xD7CCC8, 'onions'],
+    garlic:      ['🧄', 8,  0xF5F5F5, 'garlic'],
+    pepper:      ['🫑', 8,  0x43A047, 'peppers'],
+    cucumber:    ['🥒', 6,  0x2E7D32, 'cucumbers'],
+    cabbage:     ['🥬', 7,  0x7CB342, 'cabbages'],
+    broccoli:    ['🥦', 9,  0x388E3C, 'broccoli'],
+    eggplant:    ['🍆', 8,  0x6A1B9A, 'eggplants'],
+    chili:       ['🌶️', 10, 0xD84315, 'chilis'],
+    sweetpotato: ['🍠', 9,  0xBF360C, 'sweet potatoes'],
+    peanut:      ['🥜', 8,  0xBCAAA4, 'peanuts'],
+    rice:        ['🍚', 7,  0xFAFAFA, 'rice'],
+    bean:        ['🫘', 7,  0x795548, 'beans'],
+    lettuce:     ['🥗', 6,  0x9CCC65, 'lettuce'],
+    spinach:     ['🌿', 7,  0x2E7D32, 'spinach'],
+    copper:      ['🟤', 15, 0xD84315, 'copper'],
+    silver:      ['⚪', 30, 0xE0E0E0, 'silver'],
+    topaz:       ['🟠', 24, 0xFFB300, 'topaz'],
+    obsidian:    ['⬛', 20, 0x37474F, 'obsidian'],
+    ruby:        ['🔴', 28, 0xE53935, 'rubies'],
+    emerald:     ['🟢', 28, 0x2E7D32, 'emeralds'],
+    sapphire:    ['🔵', 28, 0x1E88E5, 'sapphires'],
+    amethyst:    ['🟣', 26, 0x8E24AA, 'amethysts'],
+    quartz:      ['🤍', 18, 0xECEFF1, 'quartz'],
+    jade:        ['🟩', 26, 0x26A69A, 'jade'],
+  };
+  for (const [k, [emoji, price, , plural]] of Object.entries(EXTRA_RES)) {
+    RESOURCES[k] = { emoji, price, plural };
+    inv[k] = 0;
+  }
+  const FARM = kind => () => makeFarmRow(kind);
+  const EXTRA_THEMES = [
+    // kind, display name, resource, builder, obstacle radius, obstacle height, extras
+    ['tulip',      '🌷 A tulip field',        'flower', () => makeFlowerPatch([0xFF5252, 0xFFEB3B], 1.2, 0.1), 0, 0, { flower: true }],
+    ['daisy',      '🌼 A daisy meadow',       'flower', () => makeFlowerPatch([0xFFFFFF, 0xFFF176], 0.9, 0.08), 0, 0, { flower: true }],
+    ['poppy',      '🌺 A poppy field',        'flower', () => makeFlowerPatch([0xE53935], 1.1, 0.1), 0, 0, { flower: true }],
+    ['orchid',     '🌸 An orchid garden',     'flower', () => makeFlowerPatch([0xBA68C8, 0xF8BBD0], 1.1, 0.1), 0, 0, { flower: true }],
+    ['bluebell',   '🔔 A bluebell dell',      'flower', () => makeFlowerPatch([0x5C6BC0], 1, 0.08), 0, 0, { flower: true }],
+    ['marigold',   '🌼 A marigold patch',     'flower', () => makeFlowerPatch([0xFFA726, 0xFF7043], 0.9, 0.09), 0, 0, { flower: true }],
+    ['peony',      '🌸 A peony garden',       'flower', () => makeFlowerPatch([0xF48FB1, 0xFCE4EC], 1.1, 0.12), 0, 0, { flower: true }],
+    ['iris',       '💐 An iris bed',          'flower', () => makeFlowerPatch([0x7E57C2], 1.2, 0.09), 0, 0, { flower: true }],
+    ['lily',       '🌷 A lily garden',        'flower', () => makeFlowerPatch([0xFFF9C4, 0xFFFFFF], 1.3, 0.11), 0, 0, { flower: true }],
+    ['carnation',  '💮 A carnation bed',      'flower', () => makeFlowerPatch([0xF06292], 1, 0.09), 0, 0, { flower: true }],
+    ['buttercup',  '🌼 A buttercup meadow',   'flower', () => makeFlowerPatch([0xFFEE58], 0.8, 0.07), 0, 0, { flower: true }],
+    ['wildflower', '💐 A wildflower prairie', 'flower', () => makeFlowerPatch([0xEF5350, 0xFFEE58, 0x42A5F5, 0xAB47BC], 1.3, 0.1), 0, 0, { flower: true }],
+    ['oak',     '🌳 An oak forest',          'wood', () => makeFruitTree(0x8D6E63), 0.4, 9, {}],
+    ['spruce',  '🌲 A spruce forest',        'wood', () => { const t = makePine(); t.scale.setScalar(1.2); return t; }, 0.4, 9, {}],
+    ['fir',     '🎄 A fir grove',            'wood', () => { const t = makePine(); t.scale.setScalar(0.85); return t; }, 0.4, 9, {}],
+    ['redwood', '🌲 A giant redwood stand',  'wood', () => { const t = makePine(); t.scale.setScalar(1.6); return t; }, 0.5, 9, {}],
+    ['cherry',        '🍒 A cherry orchard',        'cherry',  () => makeFruitTree(0xD32F2F), 0.4, 9, {}],
+    ['orange',        '🍊 An orange grove',         'orange',  () => makeFruitTree(0xFB8C00), 0.4, 9, {}],
+    ['pear',          '🍐 A pear orchard',          'pear',    () => makeFruitTree(0xC0CA33), 0.4, 9, {}],
+    ['mango',         '🥭 A mango grove',           'mango',   () => makeFruitTree(0xFFB300), 0.4, 9, {}],
+    ['kiwi',          '🥝 A kiwi orchard',          'kiwi',    () => makeFruitTree(0x9CCC65), 0.4, 9, {}],
+    ['olive',         '🫒 An olive grove',          'olive',   () => makeFruitTree(0x827717), 0.4, 9, {}],
+    ['avocado',       '🥑 An avocado orchard',      'avocado', () => makeFruitTree(0x558B2F), 0.4, 9, {}],
+    ['cherryblossom', '🌸 A cherry-blossom grove',  'flower',  () => makeFruitTree(0xF8BBD0), 0.4, 9, {}],
+    ['tomato',      '🍅 A tomato farm',        'tomato',      FARM('tomato'), 0.45, 0.45, {}],
+    ['onion',       '🧅 An onion field',       'onion',       FARM('onion'), 0.45, 0.45, {}],
+    ['garlic',      '🧄 A garlic patch',       'garlic',      FARM('garlic'), 0.45, 0.45, {}],
+    ['pepper',      '🫑 A pepper farm',        'pepper',      FARM('pepper'), 0.45, 0.45, {}],
+    ['cucumber',    '🥒 A cucumber patch',     'cucumber',    FARM('cucumber'), 0.45, 0.45, {}],
+    ['cabbage',     '🥬 A cabbage field',      'cabbage',     FARM('cabbage'), 0.45, 0.45, {}],
+    ['broccoli',    '🥦 A broccoli farm',      'broccoli',    FARM('broccoli'), 0.45, 0.45, {}],
+    ['eggplant',    '🍆 An eggplant patch',    'eggplant',    FARM('eggplant'), 0.45, 0.45, {}],
+    ['chili',       '🌶️ A chili farm',         'chili',       FARM('chili'), 0.45, 0.45, {}],
+    ['sweetpotato', '🍠 A sweet-potato field', 'sweetpotato', FARM('sweetpotato'), 0.45, 0.45, {}],
+    ['peanut',      '🥜 A peanut farm',        'peanut',      FARM('peanut'), 0.45, 0.45, {}],
+    ['rice',        '🍚 A rice paddy',         'rice',        FARM('rice'), 0.45, 0.45, {}],
+    ['bean',        '🫘 A bean field',         'bean',        FARM('bean'), 0.45, 0.45, {}],
+    ['lettuce',     '🥗 A lettuce patch',      'lettuce',     FARM('lettuce'), 0.45, 0.45, {}],
+    ['spinach',     '🌿 A spinach field',      'spinach',     FARM('spinach'), 0.45, 0.45, {}],
+    ['copper',   '🟤 A copper mine',       'copper',   () => makeOreVariant('copper'), 0.55, 0.75, { tool: 1, regrow: 20000 }],
+    ['silver',   '⚪ A silver mine',       'silver',   () => makeOreVariant('silver'), 0.55, 0.75, { tool: 1, yield: 1, regrow: 28000 }],
+    ['topaz',    '🟠 A topaz deposit',     'topaz',    () => makeOreVariant('topaz'), 0.55, 0.75, { tool: 1, regrow: 24000 }],
+    ['obsidian', '⬛ An obsidian flow',    'obsidian', () => makeOreVariant('obsidian'), 0.55, 0.75, { tool: 1, regrow: 22000 }],
+    ['ruby',     '🔴 A ruby cavern',       'ruby',     () => makeOreVariant('ruby'), 0.55, 0.75, { tool: 1, yield: 1, regrow: 30000 }],
+    ['emerald',  '🟢 An emerald cavern',   'emerald',  () => makeOreVariant('emerald'), 0.55, 0.75, { tool: 1, yield: 1, regrow: 30000 }],
+    ['sapphire', '🔵 A sapphire cavern',   'sapphire', () => makeOreVariant('sapphire'), 0.55, 0.75, { tool: 1, yield: 1, regrow: 30000 }],
+    ['amethyst', '🟣 An amethyst geode',   'amethyst', () => makeOreVariant('amethyst'), 0.55, 0.75, { tool: 1, yield: 1, regrow: 28000 }],
+    ['quartz',   '🤍 A quartz outcrop',    'quartz',   () => makeOreVariant('quartz'), 0.55, 0.75, { tool: 1, regrow: 22000 }],
+    ['jade',     '🟩 A jade quarry',       'jade',     () => makeOreVariant('jade'), 0.55, 0.75, { tool: 1, yield: 1, regrow: 28000 }],
+    ['glacier',   '🧊 A glacier',             'ice',      () => { const b = makeIceBlock(); b.scale.setScalar(1.25); return b; }, 0.6, 0.8, { tool: 1, yield: 3, regrow: 22000 }],
+    ['shiitake',  '🍄 A shiitake hollow',     'mushroom', () => makeMushroomPatch(), 0.35, 0.8, {}],
+    ['granite',   '🪨 A granite ridge',       'rock',     () => { const r = makeRockPile(); r.scale.setScalar(1.3); return r; }, 0.65, 0.85, { tool: 1, yield: 3, regrow: 20000 }],
+    ['mossyrock', '🪨 A mossy rock garden',   'rock',     () => { const r = makeRockPile(); r.scale.setScalar(0.85); return r; }, 0.5, 0.6, { tool: 1, regrow: 16000 }],
+    ['icegem',    '❄️ An ice-crystal garden', 'ice',      () => makeOreVariant('icegem'), 0.55, 0.75, { tool: 1, regrow: 20000 }],
+    ['saguaro',   '🌵 A saguaro desert',      'cactus',   () => { const c = makeCactusPatch(); c.scale.setScalar(1.3); return c; }, 0.5, 1.8, {}],
+  ];
+  for (const [kind, name, res, make, obR, obH, opt = {}] of EXTRA_THEMES) {
+    HARVEST_DEFS[kind] = {
+      resource: res, yield: opt.yield ?? 2, regrowMs: opt.regrow ?? 12000,
+      hide: true, dropHeight: opt.dh ?? (obH >= 9 ? 1.8 : 0.6),
+      ...(opt.tool ? { tool: 'hammer' } : {}),
+    };
+    HARVEST_MAKERS[kind] = make;
+    if (obR) { OBSTACLE_R[kind] = obR; OBSTACLE_H[kind] = obH; }
+    THEME_NAMES[kind] = name;
+    PATCH_THEMES.push(kind);
+    if (opt.flower) FLOWER_KINDS.push(kind); // bees visit these; workers leave them be
+    else WORKER_NODES.push(kind);
+  }
+  const EXTRA_ANIMALS = [ // kind, display name, product, builder
+    ['blacksheep', '🐑 A black-sheep pasture', 'wool',    () => makeSheep(0x424242)],
+    ['alpaca',     '🦙 An alpaca pen',         'wool',    () => makeSheep(0xFFE0B2)],
+    ['goose',      '🦢 A goose pond',          'feather', () => makeChicken(0xECEFF1, 1.15)],
+    ['rooster',    '🐓 A rooster yard',        'egg',     () => makeChicken(0xFF7043, 0.95)],
+    ['chick',      '🐣 A chick nursery',       'egg',     () => makeChicken(0xFFEB3B, 0.6)],
+  ];
+  for (const [kind, name, product, make] of EXTRA_ANIMALS) {
+    ANIMAL_DEFS[kind] = { product, minMs: 20000, maxMs: 40000, speed: 0.9 };
+    ANIMAL_MAKERS[kind] = make;
+    THEME_NAMES[kind] = name;
+    PATCH_THEMES.push(kind);
+  }
+
   let patchCounter = 0;
   function spawnPatchProps(newCells) {
     const theme = patchCounter < PATCH_THEMES.length
@@ -2231,7 +2404,7 @@
       pine: 3, apple: 2, peach: 2, lemon: 2, banana: 2,
       boulder: 3, iceberg: 3,
     };
-    const count = counts[theme] ?? 4;
+    const count = counts[theme] ?? (ANIMAL_DEFS[theme] ? 2 : (OBSTACLE_H[theme] >= 9 ? 2 : 4));
     for (let n = 0; n < count; n++) {
       const spot = takeSpot();
       if (!spot) break;
@@ -2627,6 +2800,14 @@
 
   const inventoryEl = document.getElementById('inventory');
   const invItemsEl = document.getElementById('inv-items');
+  const bagBtnEl = document.getElementById('bag-btn');
+  const bagPanelEl = document.getElementById('bag-panel');
+  bagBtnEl.addEventListener('pointerdown', e => {
+    e.preventDefault();
+    sfx('click');
+    const open = bagPanelEl.classList.toggle('show');
+    bagBtnEl.classList.toggle('open', open);
+  });
   const coinCountEl = document.getElementById('coin-count');
   const hitPromptEl = document.getElementById('hit-prompt');
   const hitBtnEl = document.getElementById('hit-btn');
@@ -3178,6 +3359,9 @@
     crystal: new THREE.MeshStandardMaterial({ color: 0x80DEEA, flatShading: true, roughness: 0.2, metalness: 0.3 }),
     gold:    new THREE.MeshStandardMaterial({ color: 0xFFD54F, flatShading: true, roughness: 0.3, metalness: 0.7 }),
   };
+  for (const [k, [, , color]] of Object.entries(EXTRA_RES)) {
+    if (!DROP_MATS[k]) DROP_MATS[k] = new THREE.MeshStandardMaterial({ color, flatShading: true, roughness: 0.7 });
+  }
   function makeDropMesh(resource) {
     switch (resource) {
       case 'bamboo': {
@@ -3557,6 +3741,7 @@
       jumpBtnEl.classList.add('show');
       rodBtnEl.classList.add('show');
       document.getElementById('invite-btn').classList.add('show');
+      bagBtnEl.classList.add('show');
       document.getElementById('save-btn').classList.add('show');
       refreshFastUI();
       setTimeout(() => toast('🔨 You have a hammer! Press the HAMMER button on the right to hold it', true), 900);
