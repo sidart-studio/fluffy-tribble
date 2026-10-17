@@ -175,6 +175,42 @@
     #store-btn.show { display: flex; }
     #store-btn:active { transform: translateY(50px) scale(.9); }
 
+    #invite-btn {
+      position: fixed; left: 18px; top: 50%; transform: translateY(-132px); z-index: 120;
+      width: 76px; height: 76px; border-radius: 50%;
+      background: radial-gradient(circle at 34% 26%, #78909C, #37474F 62%, #21272b);
+      border: 3px solid #FFD180;
+      font-size: 30px; display: none; flex-direction: column;
+      align-items: center; justify-content: center;
+      box-shadow: 0 6px 14px rgba(0,0,0,.4), inset 0 2px 4px rgba(255,255,255,.3), inset 0 -4px 6px rgba(0,0,0,.45);
+      cursor: pointer;
+    }
+    #invite-btn .lbl {
+      font-size: 9px; font-weight: 800; color: #fff; letter-spacing: .5px; margin-top: -2px;
+    }
+    #invite-btn.show { display: flex; }
+    #invite-btn:active { transform: translateY(-132px) scale(.9); }
+
+    #invite-panel {
+      position: fixed; inset: 0; z-index: 265; display: none;
+      align-items: center; justify-content: center; background: rgba(0,0,0,.45);
+    }
+    #invite-panel.show { display: flex; }
+    #invite-card {
+      background: #fff; color: #2d2d2d; border-radius: 18px; padding: 20px;
+      width: min(320px, 88vw); box-shadow: 0 12px 34px rgba(0,0,0,.4); text-align: center;
+    }
+    #invite-text { font-size: 16px; font-weight: 900; margin-bottom: 14px; line-height: 1.4; }
+    #invite-yes {
+      border-radius: 10px; padding: 12px; font-size: 14px; font-weight: 900; color: #fff;
+      background: linear-gradient(180deg,#66BB6A,#2E7D32); cursor: pointer; margin-bottom: 8px;
+    }
+    #invite-no {
+      border-radius: 10px; padding: 10px; font-size: 13px; font-weight: 700; color: #a33;
+      background: #f4f4f4; border: 1.5px solid #ddd; cursor: pointer;
+    }
+    #invite-yes:active, #invite-no:active { transform: scale(.97); }
+
     #back-btn {
       position: fixed; left: 18px; top: 50%; transform: translateY(-38px); z-index: 120;
       width: 76px; height: 76px; border-radius: 50%;
@@ -315,6 +351,7 @@
   <div id="store-btn" title="Open the store"><svg viewBox="0 0 48 48" width="36" height="36"><defs><linearGradient id="sbBag" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#A1887F"/><stop offset="1" stop-color="#4E342E"/></linearGradient><radialGradient id="sbCoin" cx=".35" cy=".3" r="1"><stop offset="0" stop-color="#FFF59D"/><stop offset=".6" stop-color="#FBC02D"/><stop offset="1" stop-color="#F57F17"/></radialGradient></defs><circle cx="36" cy="13" r="8.5" fill="url(#sbCoin)" stroke="#E65100" stroke-width="1"/><text x="36" y="17.2" font-size="11" font-weight="bold" text-anchor="middle" fill="#8D5A00">$</text><path d="M18 15 L27 15 L29 20 C37 25 39 33 37 38.5 C34 45 11 45 8 38.5 C6 33 8 25 16 20 Z" fill="url(#sbBag)"/><path d="M17.5 14.5 C19 10.5 26 10.5 27.5 14.5 L26.5 17.5 L18.5 17.5 Z" fill="#6D4C41"/><ellipse cx="16.5" cy="28" rx="4.5" ry="7.5" fill="#fff" opacity=".14"/><text x="22.5" y="37.5" font-size="14" font-weight="bold" text-anchor="middle" fill="#FFD54F">$</text></svg><span class="lbl">STORE</span></div>
   <div id="jump-btn" title="Jump (Space)"><svg viewBox="0 0 48 48" width="36" height="36"><defs><linearGradient id="jbArr" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#E8F5E9"/><stop offset=".5" stop-color="#66BB6A"/><stop offset="1" stop-color="#2E7D32"/></linearGradient></defs><path d="M24 4 L42 24 L32 24 L32 42 L16 42 L16 24 L6 24 Z" fill="url(#jbArr)" stroke="#1B5E20" stroke-width="1.4" stroke-linejoin="round"/><path d="M24 8.5 L35 20.5 L13 20.5 Z" fill="#fff" opacity=".28"/></svg><span class="lbl">JUMP</span></div>
   <div id="rod-btn" title="Take out / put away your fishing rod (R)"><svg viewBox="0 0 48 48" width="36" height="36"><defs><linearGradient id="rdP" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#A1887F"/><stop offset="1" stop-color="#4E342E"/></linearGradient></defs><path d="M6 42 L36 8" stroke="url(#rdP)" stroke-width="4" stroke-linecap="round"/><path d="M36 8 C 40 16 40 26 38 32" stroke="#ECEFF1" stroke-width="1.6" fill="none"/><circle cx="38" cy="34" r="2.6" fill="#EF5350" stroke="#B71C1C" stroke-width="1"/><circle cx="14" cy="32" r="3.4" fill="#455A64" stroke="#263238" stroke-width="1.2"/></svg><span class="lbl">ROD</span></div>
+  <div id="invite-btn" title="Invite a friend who's playing to help you">🤝<span class="lbl">INVITE</span></div>
   <div id="back-btn" title="Go back to where you were (B)"><svg viewBox="0 0 48 48" width="36" height="36"><defs><linearGradient id="bbArr" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFCDD2"/><stop offset=".45" stop-color="#EF5350"/><stop offset="1" stop-color="#B71C1C"/></linearGradient></defs><path d="M6 19 L22 5 L22 13 C33 13 42 20 42 31 C42 38 37 42.5 32 44 C35.5 39 35 32.5 30.5 28.5 C28 26.3 25 25.5 22 25.5 L22 33 Z" fill="url(#bbArr)" stroke="#8E0000" stroke-width="1.2" stroke-linejoin="round"/><path d="M9.5 19 L21 9 L21 12.5 C21 12.5 13 16.5 9.5 19 Z" fill="#fff" opacity=".3"/></svg><span class="lbl">BACK</span></div>
 
   <div id="store-panel">
@@ -347,9 +384,17 @@
     <div id="speech-buttons">
       <div class="speech-btn" data-action="all">All my inventory</div>
       <div class="speech-btn" data-action="hand">This thing on your hand</div>
-      <div class="speech-btn" data-action="house">Buy worker house · 3 ⛏️ + 3 🧊</div>
+      <div class="speech-btn" data-action="house">Hire a worker · 3 ⛏️ + 3 🧊</div>
       <div class="speech-btn" data-action="workers" id="workers-btn" hidden>⏸ Send workers home</div>
       <div class="speech-btn cancel" data-action="cancel">Cancel</div>
+    </div>
+  </div>
+
+  <div id="invite-panel">
+    <div id="invite-card">
+      <div id="invite-text">🤝 A friend invites you to help!</div>
+      <div id="invite-yes">🙌 YES, I'll help!</div>
+      <div id="invite-no">No thanks</div>
     </div>
   </div>
 
@@ -1552,37 +1597,14 @@
     }
   }
 
-  // ── Worker houses — bought at the shop with iron and ice. A worker lives in
-  // each: they walk out, pick up things LYING ON THE GROUND (eggs, milk,
-  // wool — up to three per trip), carry them home, and add them to YOUR
-  // inventory. They never chop or harvest plants — those are all yours.
-  // The shopkeeper can send them all home if you want them to stop.
-  const villagers = []; // { group, home, state, t0, target, carried, stops }
+  // ── Workers — hired at the shop with iron and ice. No houses, no breaks:
+  // a worker roams the island nonstop, picking up loose items, harvesting
+  // plants, smashing hard nodes with their hammer, and fishing at the red
+  // circles when there's nothing left on land. Everything they collect goes
+  // straight into YOUR inventory the moment they grab it.
+  const villagers = []; // { group, state, target, tripT0, workT0, nextThinkAt }
   const VILLAGER_SPEED = 1.8;
   let workersPaused = false;
-
-  function makeHouse() {
-    const g = new THREE.Group();
-    const cols = [0x90CAF9, 0xFFCC80, 0xCE93D8, 0xA5D6A7];
-    const wallMat = new THREE.MeshStandardMaterial({
-      color: cols[Math.floor(Math.random() * cols.length)], flatShading: true, roughness: 0.85,
-    });
-    const roofMat = new THREE.MeshStandardMaterial({ color: 0x8D6E63, flatShading: true, roughness: 0.9 });
-    const body = new THREE.Mesh(new THREE.BoxGeometry(1.5, 1.2, 1.5), wallMat);
-    body.position.y = 0.6;
-    body.castShadow = true; body.receiveShadow = true;
-    const roof = new THREE.Mesh(new THREE.ConeGeometry(1.35, 0.85, 4), roofMat);
-    roof.position.y = 1.62;
-    roof.rotation.y = Math.PI / 4;
-    roof.castShadow = true;
-    const door = new THREE.Mesh(
-      new THREE.BoxGeometry(0.5, 0.75, 0.06),
-      new THREE.MeshStandardMaterial({ color: 0x5D4037, flatShading: true })
-    );
-    door.position.set(0, 0.38, 0.78);
-    g.add(body, roof, door);
-    return g;
-  }
 
   function makeVillager() { // each worker is their own little person
     const shirts = [0xEF9A9A, 0x80CBC4, 0xFFE082, 0x9FA8DA, 0xA5D6A7];
@@ -1610,55 +1632,48 @@
     wh.visible = false;
     g.userData.armPivots[1].add(wh);
     g.userData.workerHammer = wh;
+    // ...and a little fishing rod for the red circles
+    const wr = new THREE.Group();
+    const wrPole = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.018, 0.028, 0.9, 6),
+      new THREE.MeshStandardMaterial({ color: 0x6D4C41, roughness: 0.7 })
+    );
+    wrPole.position.y = 0.45;
+    wr.add(wrPole);
+    wr.position.y = -0.52;
+    wr.rotation.x = Math.PI / 2.6; // tipped out over the water
+    wr.visible = false;
+    g.userData.armPivots[1].add(wr);
+    g.userData.workerRod = wr;
     return g;
   }
 
-  function buildHouse() {
-    const spotOk = (x, z) =>
-      isLand(x, z) &&
-      Math.hypot(x - shopPos.x, z - shopPos.z) >= 5 &&
-      Math.hypot(x - player.position.x, z - player.position.z) >= 3 &&
-      !harvestables.some(h => Math.hypot(h.x - x, h.z - z) < 2) &&
-      !villagers.some(v => Math.hypot(v.home.x - x, v.home.z - z) < 3.5) &&
-      !placedBarns.some(b => Math.hypot(b.x - x, b.z - z) < 3);
-
-    // Worker homes go up in the bee section — clustered near the island's
-    // hives — so the workers get their own little village by the apiary.
-    const hives = harvestables.filter(h => h.kind === 'hive');
-    for (let tries = 0; tries < 140 && hives.length; tries++) {
-      const hv = hives[Math.floor(Math.random() * hives.length)];
-      const a = Math.random() * Math.PI * 2;
-      const r = 3 + Math.random() * 3.5;
-      const x = hv.x + Math.cos(a) * r, z = hv.z + Math.sin(a) * r;
-      if (!spotOk(x, z)) continue;
-      placeHouseAt(x, z);
-      return true;
-    }
-    // no hives yet (or no room there) — anywhere with space will do
-    const cells = [...landSet];
-    for (let tries = 0; tries < 80; tries++) {
-      const [gx, gz] = cells[Math.floor(Math.random() * cells.length)].split(',').map(Number);
-      const { x, z } = cellWorld(gx, gz);
-      if (!spotOk(x, z)) continue;
-      placeHouseAt(x, z);
-      return true;
-    }
-    return false;
-  }
-
-  function placeHouseAt(x, z) { // used for new purchases and for rebuilding a saved game
-    const house = makeHouse();
-    house.position.set(x, LAND_Y, z);
-    house.rotation.y = Math.random() * Math.PI * 2;
-    scene.add(house);
+  function spawnWorkerAt(x, z) {
     const g = makeVillager();
     g.position.set(x, LAND_Y, z);
-    g.visible = false; // starts indoors
     scene.add(g);
-    villagers.push({
-      group: g, home: { x, z }, state: 'rest', t0: performance.now(),
-      target: null, carried: {}, stops: 0,
-    });
+    villagers.push({ group: g, state: 'idle', target: null, tripT0: 0, workT0: 0, nextThinkAt: 0 });
+  }
+
+  function spawnWorker() { // near the hives if there are any, else by the shop
+    const hives = harvestables.filter(h => h.kind === 'hive');
+    for (let tries = 0; tries < 60; tries++) {
+      let x, z;
+      if (hives.length) {
+        const hv = hives[Math.floor(Math.random() * hives.length)];
+        const a = Math.random() * Math.PI * 2;
+        x = hv.x + Math.cos(a) * 2.5;
+        z = hv.z + Math.sin(a) * 2.5;
+      } else {
+        x = shopPos.x + (Math.random() - 0.5) * 7;
+        z = shopPos.z + (Math.random() - 0.5) * 7;
+      }
+      if (!isLand(x, z)) continue;
+      spawnWorkerAt(x, z);
+      return true;
+    }
+    spawnWorkerAt(shopPos.x + 3, shopPos.z + 3);
+    return true;
   }
 
   // What workers may harvest: punchable plants, hammer-only nodes, and hives
@@ -1669,7 +1684,7 @@
     let best = null, bd = Infinity;
     const now = performance.now();
     for (const it of groundItems) { // loose items first
-      if (it.unreachableUntil && it.unreachableUntil > now) continue; // gave up on this one recently
+      if (it.unreachableUntil && it.unreachableUntil > now) continue;
       const d = Math.hypot(it.x - px, it.z - pz);
       if (d < bd) { bd = d; best = { item: it }; }
     }
@@ -1677,7 +1692,7 @@
     for (const h of harvestables) {
       if (!h.ready || !WORKER_NODES.includes(h.kind)) continue;
       if (h.workerSkipUntil && h.workerSkipUntil > now) continue;
-      if (h.kind === 'hive') { // a hive is only worth visiting once the bees filled it
+      if (h.kind === 'hive') {
         const hv = beeHives.find(b => b.group === h.group);
         if (!hv || hv.honeyPct < HIVE_COLLECT_PCT) continue;
       }
@@ -1687,37 +1702,51 @@
     return best;
   }
 
+  function workerNear(x, z) { // only play worker sounds the player can "hear"
+    return Math.hypot(player.position.x - x, player.position.z - z) < 18;
+  }
+
   function updateVillagers(delta, t) {
     const now = performance.now();
     for (const v of villagers) {
       const g = v.group;
-      if (workersPaused && (v.state === 'gather' || v.state === 'work')) { // head home with what they have
-        g.userData.workerHammer.visible = false;
-        v.state = 'return';
-      }
-      if (v.state === 'rest') {
-        if (!workersPaused && now > (v.restUntil || 0)) {
-          v.target = villagerFindTarget(v);
-          if (v.target) { v.state = 'gather'; g.visible = true; v.tripT0 = now; }
-          else v.restUntil = now + 2500; // nothing to do — check again in a bit
+
+      if (workersPaused) { // taking a break — they stop right where they are
+        if (v.state !== 'break') {
+          v.state = 'break';
+          v.target = null;
+          g.userData.workerHammer.visible = false;
+          g.userData.workerRod.visible = false;
+          animateWalk(g, 0);
         }
+        continue;
+      }
+      if (v.state === 'break') v.state = 'idle';
+
+      if (v.state === 'idle') {
+        if (now < v.nextThinkAt) continue;
+        v.nextThinkAt = now + 900;
+        v.target = villagerFindTarget(v);
+        if (!v.target && fishSpots.length) { // nothing on land — gone fishing
+          const sp = fishSpots[Math.floor(Math.random() * fishSpots.length)];
+          const len = Math.hypot(sp.x, sp.z) || 1;
+          v.target = { fish: sp, x: sp.x - (sp.x / len) * 2.7, z: sp.z - (sp.z / len) * 2.7 };
+        }
+        if (v.target) { v.state = 'gather'; v.tripT0 = now; }
         continue;
       }
 
       if (v.state === 'work') { // smashing or picking a node, tool in hand
         const h = v.target && v.target.node;
-        if (!h || !h.ready) { // somebody beat them to it
+        if (!h || !h.ready) {
           g.userData.workerHammer.visible = false;
-          v.target = villagerFindTarget(v);
-          v.state = v.target ? 'gather' : 'return';
-          if (v.target) v.tripT0 = now;
+          v.state = 'idle';
           continue;
         }
         g.rotation.y = Math.atan2(h.x - g.position.x, h.z - g.position.z);
-        // big overhead swings — with the hammer out for rocks, ice, and iron
         g.userData.armPivots[1].rotation.x = -1.4 + Math.sin((now - v.workT0) / 85) * 0.85;
         if (now - v.workT0 > 1500) {
-          if (h.kind === 'hive') { // scoop the honey without harming the hive
+          if (h.kind === 'hive') {
             const hv = beeHives.find(b => b.group === h.group);
             if (hv && hv.honeyPct >= HIVE_COLLECT_PCT) {
               const gained = hv.honeyPct >= 100 ? 2 : 1;
@@ -1725,9 +1754,8 @@
               updateHiveSprite(hv);
               punch(h.group);
               burst(h.x, LAND_Y + 1.1, h.z, DROP_MATS.honey.color);
-              if (Math.hypot(player.position.x - h.x, player.position.z - h.z) < 18) sfx('pickup');
-              v.carried.honey = (v.carried.honey || 0) + gained;
-              v.stops++;
+              if (workerNear(h.x, h.z)) sfx('pickup');
+              inv.honey += gained;
             }
           } else {
             const def = HARVEST_DEFS[h.kind];
@@ -1737,37 +1765,58 @@
             if (h.coconutMeshes) h.coconutMeshes.forEach(m => (m.visible = false));
             punch(h.group);
             burst(h.x, LAND_Y + 0.8, h.z, DROP_MATS[def.resource].color);
-            if (Math.hypot(player.position.x - h.x, player.position.z - h.z) < 18) sfx('hit');
-            v.carried[def.resource] = (v.carried[def.resource] || 0) + def.yield;
-            v.stops++;
+            if (workerNear(h.x, h.z)) sfx('hit');
+            inv[def.resource] += def.yield;
           }
+          refreshInventory();
           g.userData.armPivots[1].rotation.x = 0;
           g.userData.workerHammer.visible = false;
-          if (v.stops >= 3) { v.state = 'return'; continue; }
-          v.target = villagerFindTarget(v);
-          if (!v.target) v.state = 'return';
-          else { v.state = 'gather'; v.tripT0 = now; }
+          v.state = 'idle';
         }
         continue;
       }
 
-      const dest = v.state === 'return' ? v.home : (v.target.item || v.target.node);
+      if (v.state === 'fishwork') { // rod out at a red circle
+        const sp = v.target && v.target.fish;
+        if (!sp || !fishSpots.includes(sp)) { // the fish moved on
+          g.userData.workerRod.visible = false;
+          v.state = 'idle';
+          continue;
+        }
+        g.rotation.y = Math.atan2(sp.x - g.position.x, sp.z - g.position.z);
+        g.userData.armPivots[1].rotation.x = -1.1 + Math.sin(t * 2) * 0.08;
+        if (now - v.workT0 > 6000) {
+          const c = rollCatch();
+          inv[c.key] += 1;
+          refreshInventory();
+          burst(sp.x, 1.1, sp.z, 0x4FC3F7);
+          if (workerNear(sp.x, sp.z)) sfx('splash');
+          g.userData.armPivots[1].rotation.x = 0;
+          g.userData.workerRod.visible = false;
+          v.state = 'idle';
+          v.nextThinkAt = now + 600;
+        }
+        continue;
+      }
+
+      // gather: walk to whatever was chosen
+      const dest = v.target.item || v.target.node || v.target;
       const dx = dest.x - g.position.x, dz = dest.z - g.position.z;
       const dist = Math.hypot(dx, dz);
-      const reach = v.state === 'return' || v.target.item
-        ? 0.35
-        : (OBSTACLE_R[v.target.node.kind] || 0.4) + 0.55; // stop at arm's length from solid nodes
+      const reach = v.target.item ? 0.4
+        : v.target.node ? (OBSTACLE_R[v.target.node.kind] || 0.4) + 0.55
+        : 0.6;
       if (dist > reach) {
-        if (v.state === 'gather' && now - v.tripT0 > 12000) { // unreachable — give up and remember
-          if (v.target && v.target.item) v.target.item.unreachableUntil = now + 60000;
-          else if (v.target && v.target.node) v.target.node.workerSkipUntil = now + 60000;
-          v.state = 'return';
+        if (now - v.tripT0 > 14000) { // unreachable — remember and move on
+          if (v.target.item) v.target.item.unreachableUntil = now + 60000;
+          else if (v.target.node) v.target.node.workerSkipUntil = now + 60000;
+          v.state = 'idle';
           continue;
         }
         const step = Math.min(VILLAGER_SPEED * delta, dist);
         g.position.x += (dx / dist) * step;
         g.position.z += (dz / dist) * step;
-        const solidV = resolveCollisions(g.position.x, g.position.z, 0.3, v.home);
+        const solidV = resolveCollisions(g.position.x, g.position.z, 0.3);
         g.position.x = solidV.x;
         g.position.z = solidV.z;
         g.rotation.y = Math.atan2(dx, dz);
@@ -1776,43 +1825,30 @@
         continue;
       }
 
-      if (v.state === 'return') { // home — hand everything over
-        const parts = Object.entries(v.carried)
-          .map(([k, n]) => { inv[k] += n; return `${n} ${RESOURCES[k].emoji}`; });
-        if (parts.length) {
-          refreshInventory();
-          toast(`🏠 Your worker brought home ${parts.join(' + ')}`, true);
-          sfx('pickup');
-        }
-        v.carried = {}; v.stops = 0;
-        v.trips = (v.trips || 0) + 1;
-        // a breather between trips, and a proper long break every fourth one
-        v.restUntil = now + (v.trips % 4 === 0 ? 20000 : 6000);
-        v.state = 'rest'; v.t0 = now;
-        g.visible = false;
-        animateWalk(g, 0);
+      // arrived
+      animateWalk(g, 0);
+      if (v.target.fish) {
+        v.state = 'fishwork';
+        v.workT0 = now;
+        g.userData.workerRod.visible = true;
         continue;
       }
-
-      if (v.target.node) { // arrived at a node — roll up sleeves and get to work
+      if (v.target.node) {
         v.state = 'work';
         v.workT0 = now;
-        animateWalk(g, 0);
-        g.userData.workerHammer.visible = !!HARVEST_DEFS[v.target.node.kind].tool; // hammer out for the hard stuff
+        g.userData.workerHammer.visible = !!HARVEST_DEFS[v.target.node.kind].tool;
         continue;
       }
-      // arrived at the item — grab it if it's still there
-      const idx = groundItems.indexOf(v.target.item);
+      const idx = groundItems.indexOf(v.target.item); // straight into your pockets
       if (idx !== -1) {
         scene.remove(v.target.item.mesh);
         groundItems.splice(idx, 1);
-        v.carried[v.target.item.resource] = (v.carried[v.target.item.resource] || 0) + 1;
-        v.stops++;
+        inv[v.target.item.resource] += 1;
+        refreshInventory();
+        if (workerNear(g.position.x, g.position.z)) sfx('pickup');
       }
-      if (v.stops >= 3) { v.state = 'return'; continue; }
-      v.target = villagerFindTarget(v);
-      if (!v.target) v.state = 'return'; // nothing left — bring back what they have
-      else v.tripT0 = now;
+      v.state = 'idle';
+      v.nextThinkAt = now + 400;
     }
   }
 
@@ -1836,7 +1872,7 @@
     tree: 9, bamboo: 9, corn: 1.1, berry: 0.8, pumpkin: 0.5,
     hive: 1.5, rock: 0.65, ice: 0.6, iron: 0.65,
   };
-  function resolveCollisions(x, z, pr, exemptHome, feetY = 0) {
+  function resolveCollisions(x, z, pr, feetY = 0) {
     const push = (ox, oz, or, oh = 9) => {
       if (feetY > oh) return; // airborne above it — sails right over
       let dx = x - ox, dz = z - oz;
@@ -1854,10 +1890,6 @@
       const r = OBSTACLE_R[h.kind];
       if (!r || !h.group.visible) continue; // harvested-away nodes don't block
       push(h.x, h.z, r, OBSTACLE_H[h.kind]);
-    }
-    for (const v of villagers) {
-      if (exemptHome === v.home) continue; // a worker can always reach their own door
-      push(v.home.x, v.home.z, 1.0);
     }
     for (const b of placedBarns) push(b.x, b.z, 1.15);
     return { x, z };
@@ -2710,11 +2742,23 @@
   }
   backBtnEl.addEventListener('pointerdown', e => { e.preventDefault(); goBack(); });
 
+  document.getElementById('invite-btn').addEventListener('pointerdown', e => {
+    e.preventDefault();
+    if (phase !== 'fps') return;
+    if (!mp || mp.others() === 0) {
+      toast('🤝 No one else is playing right now — there is no one to invite', false);
+      sfx('deny');
+      return;
+    }
+    mp.invite();
+  });
+
   // ── The store & Fast Mode. Fast Mode makes everything grow twice as fast.
   // For other players it would be a real purchase; the game's creator gets it
   // free in the store, but everyone starts without it.
   let fastMode = false;
-  function growMs(ms) { return fastMode ? ms * 0.5 : ms; }
+  let coopBoost = false; // true while you and a friend are helping each other
+  function growMs(ms) { return (fastMode ? ms * 0.5 : ms) * (coopBoost ? 0.8 : 1); }
 
   const storeBtnEl = document.getElementById('store-btn');
   const storePanelEl = document.getElementById('store-panel');
@@ -3060,16 +3104,16 @@
 
   function buyHouse() {
     if (!canAfford(HOUSE_COST)) {
-      showMessage(`Sorry, a worker house costs ${costText(HOUSE_COST)}.`);
+      showMessage(`Sorry, hiring a worker costs ${costText(HOUSE_COST)}.`);
       sfx('deny');
       return;
     }
-    if (!buildHouse()) { showMessage('No room for a house — buy more land first!'); sfx('deny'); return; }
+    spawnWorker();
     payCost(HOUSE_COST);
     refreshInventory();
     refreshWorkersBtn();
     sfx('buy');
-    showMessage('A worker house was built! Your worker picks things up, harvests plants, and smashes rocks with their own little hammer.');
+    showMessage('A worker joined your island! They collect, chop, smash — and even fish — nonstop, straight into your pockets.');
   }
 
   speechButtonsEl.addEventListener('pointerdown', e => {
@@ -3084,14 +3128,14 @@
   const workersBtnEl = document.getElementById('workers-btn');
   function refreshWorkersBtn() { // only shown once you actually have workers
     workersBtnEl.hidden = villagers.length === 0;
-    workersBtnEl.textContent = workersPaused ? '▶ Wake the workers up' : '⏸ Send workers home';
+    workersBtnEl.textContent = workersPaused ? '▶ Workers: back to work!' : '⏸ Workers: take a break';
   }
   function toggleWorkers() {
     workersPaused = !workersPaused;
     refreshWorkersBtn();
     showMessage(workersPaused
-      ? 'Okay — your workers are going home to rest. They will stay inside until you wake them.'
-      : 'Your workers are back to work, picking things up for you!');
+      ? 'Okay — your workers stop right where they are until you say so.'
+      : 'Your workers are back at it, nonstop!');
   }
 
   function worldToScreen(vec3) {
@@ -3198,6 +3242,7 @@
       storeBtnEl.classList.add('show');
       jumpBtnEl.classList.add('show');
       rodBtnEl.classList.add('show');
+      document.getElementById('invite-btn').classList.add('show');
       document.getElementById('save-btn').classList.add('show');
       refreshFastUI();
       setTimeout(() => toast('🔨 You have a hammer! Press the HAMMER button on the right to hold it', true), 900);
@@ -3453,7 +3498,7 @@
       const nz = player.position.z + dir.z * step;
       if (canStand(nx, player.position.z)) player.position.x = nx;
       if (canStand(player.position.x, nz)) player.position.z = nz;
-      const solid = resolveCollisions(player.position.x, player.position.z, 0.35, undefined, player.position.y - LAND_Y);
+      const solid = resolveCollisions(player.position.x, player.position.z, 0.35, player.position.y - LAND_Y);
       if (canStand(solid.x, solid.z)) { player.position.x = solid.x; player.position.z = solid.z; }
       playerMoving = true;
       walkCycle += delta * 9;
@@ -3586,6 +3631,8 @@
     }
   }
 
+  let mp = null; // set once the room connects: { others(), invite() }
+
   (async () => {
     try {
       if (typeof window.claude === 'undefined' || !window.claude.use) return;
@@ -3617,7 +3664,7 @@
         return m;
       };
       const setTag = (m, name) => {
-        const clean = String(name || 'Explorer').replace(/[^\w\s.-]/g, '').slice(0, 14) || 'Explorer';
+        const clean = String(name || 'Explorer').slice(0, 18) || 'Explorer';
         if (m.tagText === clean) return;
         m.tagText = clean;
         if (m.tag) {
@@ -3631,16 +3678,87 @@
         m.group.add(m.tag);
       };
 
+      // ── invites: all signalled through presence, which anyone here may set
+      let myPeer = null;
+      let othersCount = 0;
+      let iAmHelping = false;
+      let pendingInvite = null; // { peer, nick, key }
+      const seenInvites = new Set();
+      const seenAnswers = new Set();
+      const invitePanelEl = document.getElementById('invite-panel');
+      const inviteTextEl = document.getElementById('invite-text');
+      const cleanNick = n => String(n || 'A friend').replace(/[^\w\s.-]/g, '').slice(0, 14) || 'A friend';
+
+      function showInvitePanel(peer, nick, key) {
+        if (pendingInvite) return; // one at a time
+        pendingInvite = { peer, nick, key };
+        inviteTextEl.textContent = `🤝 ${nick} invites you to help on their island!`;
+        invitePanelEl.classList.add('show');
+        sfx('hatch');
+      }
+      document.getElementById('invite-yes').addEventListener('pointerdown', e => {
+        e.preventDefault();
+        if (!pendingInvite) return;
+        roomNs.presence({
+          helping: pendingInvite.peer,
+          inviteAnswer: { to: pendingInvite.peer, yes: true, t: Date.now() },
+        }).catch(() => {});
+        iAmHelping = true;
+        coopBoost = true;
+        toast(`⛑ You're helping ${pendingInvite.nick}! Everything grows faster for you both`, true);
+        sfx('buy');
+        invitePanelEl.classList.remove('show');
+        pendingInvite = null;
+      });
+      document.getElementById('invite-no').addEventListener('pointerdown', e => {
+        e.preventDefault();
+        if (!pendingInvite) return;
+        roomNs.presence({
+          inviteAnswer: { to: pendingInvite.peer, yes: false, t: Date.now() },
+        }).catch(() => {});
+        invitePanelEl.classList.remove('show');
+        pendingInvite = null;
+        sfx('click');
+      });
+
       roomNs.onPeers(change => {
+        const now = Date.now();
+        let someoneHelpsMe = false;
+        othersCount = 0;
         for (const p of change.peers) {
-          if (p.isMe || p.kind !== 'viewer') continue;
+          if (p.kind !== 'viewer') continue;
+          if (p.isMe) {
+            if (p.sameTab) myPeer = p.peer;
+            continue;
+          }
+          othersCount++;
           const pr = p.presence || {};
+          if (myPeer && pr.helping === myPeer) someoneHelpsMe = true;
+          // a fresh invite from them, not yet answered here
+          if (typeof pr.inviteAll === 'number' && now - pr.inviteAll < 25000) {
+            const key = `${p.peer}:${pr.inviteAll}`;
+            if (!seenInvites.has(key)) {
+              seenInvites.add(key);
+              showInvitePanel(p.peer, cleanNick(pr.nick), key);
+            }
+          }
+          // their answer to MY invite
+          const ans = pr.inviteAnswer;
+          if (ans && myPeer && ans.to === myPeer) {
+            const akey = `${p.peer}:${ans.t}`;
+            if (!seenAnswers.has(akey)) {
+              seenAnswers.add(akey);
+              if (ans.yes) { toast(`🙌 ${cleanNick(pr.nick)} is helping you! Everything grows faster`, true); sfx('buy'); }
+              else { toast(`${cleanNick(pr.nick)} can't help right now`, false); }
+            }
+          }
           if (typeof pr.x !== 'number' || typeof pr.z !== 'number') continue;
           const m = ensurePeer(p, pr);
           m.tx = pr.x;
           m.tz = pr.z;
-          setTag(m, pr.nick);
+          setTag(m, cleanNick(pr.nick) + (myPeer && pr.helping === myPeer ? ' ⛑' : ''));
         }
+        coopBoost = someoneHelpsMe || iAmHelping;
         for (const p of change.left) {
           const m = remotePlayers.get(p.peer);
           if (m) { scene.remove(m.group); remotePlayers.delete(p.peer); }
@@ -3649,6 +3767,15 @@
           if (!p.isMe && p.kind === 'viewer') toast('🧑 A friend is exploring with you!', true);
         }
       });
+
+      mp = {
+        others: () => othersCount,
+        invite: () => {
+          roomNs.presence({ inviteAll: Date.now(), nick: myName }).catch(() => {});
+          toast(`📨 Invited ${othersCount} player${othersCount > 1 ? 's' : ''} to come help you!`, true);
+          sfx('click');
+        },
+      };
 
       setInterval(() => {
         if (phase !== 'fps') return;
@@ -3681,7 +3808,7 @@
         harv: harvestables.map(h => ({ k: h.kind, x: +h.x.toFixed(2), z: +h.z.toFixed(2) })),
         hives: beeHives.map(hv => hv.honeyPct),
         animals: animals.map(a => ({ t: a.type, x: +a.group.position.x.toFixed(2), z: +a.group.position.z.toFixed(2) })),
-        homes: villagers.map(v => ({ x: +v.home.x.toFixed(2), z: +v.home.z.toFixed(2) })),
+        homes: villagers.map(v => ({ x: +v.group.position.x.toFixed(2), z: +v.group.position.z.toFixed(2) })),
         barns: placedBarns.map(b => ({ x: +b.x.toFixed(2), z: +b.z.toFixed(2) })),
         paidLedgers: Object.fromEntries(Object.entries(buyButtons).map(([dir, b]) => [dir, b.paid || {}])),
         player: { x: +player.position.x.toFixed(2), z: +player.position.z.toFixed(2) },
@@ -3721,7 +3848,7 @@
         if (beeHives[i]) { beeHives[i].honeyPct = pct; updateHiveSprite(beeHives[i]); }
       });
       d.animals.forEach(a => addAnimal(a.t, a.x, a.z));
-      d.homes.forEach(hm => placeHouseAt(hm.x, hm.z));
+      d.homes.forEach(hm => spawnWorkerAt(hm.x, hm.z));
       d.barns.forEach(b => placeBarnAt(b.x, b.z));
       resumeSpot = d.player;
 
