@@ -510,7 +510,7 @@
   ];
   const PATCH_DEPTH = 3;       // how many cells deep each purchased patch extends outward
   const PATCH_HALFW = 2;       // patches are (2*PATCH_HALFW + 1) cells wide
-  const MAX_EXPANSIONS_PER_DIR = 24; // ~a hundred patches — the island can grow for a very long time
+  const MAX_RING_PURCHASES = 40; // the island can grow outward this many times — a very long game
   const BUTTON_RANGE = 1.4;    // how close CUBEY must get to a red button to buy its land
 
   function cellWorld(gx, gz) { return { x: gx * CELL, z: gz * CELL }; }
@@ -2157,6 +2157,11 @@
     return g;
   }
 
+  function keepAsSea(gx, gz) { // the pier's fishing water is never built over
+    const { x, z } = cellWorld(gx, gz);
+    return x >= 5 && x <= 11.5 && z >= 8 && z <= 21;
+  }
+
   function buttonCell(dir) {
     const d = DIR_DEFS[dir];
     return { gx: extents[dir] * d.dx, gz: extents[dir] * d.dz };
@@ -2248,29 +2253,37 @@
     }
     btn.paid = {};
     totalLandPurchases++;
-    expansions[dir]++;
 
-    const d = DIR_DEFS[dir];
-    const e = extents[dir];
+    // Every purchase grows the WHOLE island evenly: one new ring of land all
+    // the way around, whichever button you pressed — so the island keeps its
+    // shape and all four buttons always behave exactly the same.
     const newCells = [];
-    for (let depth = 1; depth <= PATCH_DEPTH; depth++) {
-      for (let w = -PATCH_HALFW; w <= PATCH_HALFW; w++) {
-        const gx = d.dx !== 0 ? (e + depth) * d.dx : w;
-        const gz = d.dz !== 0 ? (e + depth) * d.dz : w;
-        if (!landSet.has(cellKey(gx, gz))) {
-          landSet.add(cellKey(gx, gz));
-          newCells.push({ gx, gz });
+    const added = new Set();
+    for (const key of [...landSet]) {
+      const [gx, gz] = key.split(',').map(Number);
+      for (let dx = -1; dx <= 1; dx++) {
+        for (let dz = -1; dz <= 1; dz++) {
+          const nx = gx + dx, nz = gz + dz;
+          const k2 = cellKey(nx, nz);
+          if (landSet.has(k2) || added.has(k2)) continue;
+          if (keepAsSea(nx, nz)) continue; // the fishing bay by the pier stays water forever
+          added.add(k2);
+          newCells.push({ gx: nx, gz: nz });
         }
       }
     }
-    extents[dir] += PATCH_DEPTH;
-    fitSunToIsland(Math.max(extents.px, extents.nx, extents.pz, extents.nz) + PATCH_DEPTH);
+    for (const c of newCells) landSet.add(cellKey(c.gx, c.gz));
+    for (const dd of Object.keys(extents)) extents[dd] += 1; // every side edge moves out together
+    fitSunToIsland(Math.max(extents.px, extents.nx, extents.pz, extents.nz) + 2);
 
     rebuildIslandMeshes();
     spawnPatchProps(newCells);
 
-    if (expansions[dir] >= MAX_EXPANSIONS_PER_DIR) removeBuyButton(dir);
-    else placeBuyButton(dir);
+    if (totalLandPurchases >= MAX_RING_PURCHASES) {
+      for (const dd of Object.keys(DIR_DEFS)) removeBuyButton(dd);
+    } else {
+      for (const dd of Object.keys(DIR_DEFS)) placeBuyButton(dd); // all four step outward
+    }
     refreshButtonSprites();
     refreshInventory();
     sfx('buy');
@@ -3841,7 +3854,7 @@
         shopMarkerGroup.visible = false;
         shopGlowPad.visible = false;
         for (const dir of Object.keys(DIR_DEFS)) {
-          if (expansions[dir] >= MAX_EXPANSIONS_PER_DIR) removeBuyButton(dir);
+          if (totalLandPurchases >= MAX_RING_PURCHASES) removeBuyButton(dir);
           else placeBuyButton(dir);
         }
         if (d.paidLedgers) {
