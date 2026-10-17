@@ -333,7 +333,9 @@
     sheep:   { product: 'wool', minMs: 25000, maxMs: 45000, speed: 0.75 },
   };
   const EGG_HATCH_MS = 5 * 60 * 1000; // an uncollected egg hatches after 5 minutes
-  const MAX_GROUND_ITEMS = 14; // products lying around at once, island-wide
+  const MAX_GROUND_ITEMS = 30; // things lying around at once, island-wide
+  const MAX_PER_PRODUCT  = 8;  // per type, so piles of eggs can't crowd out milk or wool
+  const MAX_ANIMALS      = 40; // eggs pause hatching once the island is this full
 
   // Bees carry nectar from flowers back to their hive: each round trip fills
   // the hive a little, and it can be harvested once full enough.
@@ -1303,6 +1305,10 @@
         toast(`${RESOURCES[it.resource].emoji} Picked up ${it.resource === 'egg' ? 'an egg' : it.resource}!`, true);
         sfx('pickup');
       } else if (it.hatchAt && now > it.hatchAt) {
+        if (animals.length >= MAX_ANIMALS) { // island is full — the egg just waits to be collected
+          it.hatchAt = now + growMs(EGG_HATCH_MS);
+          continue;
+        }
         scene.remove(it.mesh);
         groundItems.splice(i, 1);
         addAnimal('chicken', it.x, it.z); // eggs are chicken eggs — they hatch into chicks
@@ -1348,7 +1354,10 @@
 
       if (now > c.nextProductAt) {
         c.nextProductAt = now + growMs(def.minMs + Math.random() * (def.maxMs - def.minMs));
-        if (groundItems.length < MAX_GROUND_ITEMS) dropGroundItem(def.product, g.position.x, g.position.z);
+        const sameKind = groundItems.reduce((n, i) => n + (i.resource === def.product), 0);
+        if (groundItems.length < MAX_GROUND_ITEMS && sameKind < MAX_PER_PRODUCT) {
+          dropGroundItem(def.product, g.position.x, g.position.z);
+        }
       }
     }
   }
