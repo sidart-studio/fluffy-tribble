@@ -1630,9 +1630,9 @@
     });
   }
 
-  // What workers may harvest: punchable plants and hammer-only nodes. Never
-  // flowers (the bees need those) and never hives (honey is the player's).
-  const WORKER_NODES = ['tree', 'bamboo', 'corn', 'berry', 'pumpkin', 'rock', 'ice', 'iron'];
+  // What workers may harvest: punchable plants, hammer-only nodes, and hives
+  // that are full enough to give honey. Never flowers — the bees need those.
+  const WORKER_NODES = ['tree', 'bamboo', 'corn', 'berry', 'pumpkin', 'rock', 'ice', 'iron', 'hive'];
   function villagerFindTarget(v) {
     const px = v.group.position.x, pz = v.group.position.z;
     let best = null, bd = Infinity;
@@ -1646,6 +1646,10 @@
     for (const h of harvestables) {
       if (!h.ready || !WORKER_NODES.includes(h.kind)) continue;
       if (h.workerSkipUntil && h.workerSkipUntil > now) continue;
+      if (h.kind === 'hive') { // a hive is only worth visiting once the bees filled it
+        const hv = beeHives.find(b => b.group === h.group);
+        if (!hv || hv.honeyPct < HIVE_COLLECT_PCT) continue;
+      }
       const d = Math.hypot(h.x - px, h.z - pz);
       if (d < bd) { bd = d; best = { node: h }; }
     }
@@ -1682,16 +1686,30 @@
         // big overhead swings — with the hammer out for rocks, ice, and iron
         g.userData.armPivots[1].rotation.x = -1.4 + Math.sin((now - v.workT0) / 85) * 0.85;
         if (now - v.workT0 > 1500) {
-          const def = HARVEST_DEFS[h.kind];
-          h.ready = false;
-          h.regrowAt = now + growMs(def.regrowMs);
-          if (def.hide) h.group.visible = false;
-          if (h.coconutMeshes) h.coconutMeshes.forEach(m => (m.visible = false));
-          punch(h.group);
-          burst(h.x, LAND_Y + 0.8, h.z, DROP_MATS[def.resource].color);
-          if (Math.hypot(player.position.x - h.x, player.position.z - h.z) < 18) sfx('hit');
-          v.carried[def.resource] = (v.carried[def.resource] || 0) + def.yield;
-          v.stops++;
+          if (h.kind === 'hive') { // scoop the honey without harming the hive
+            const hv = beeHives.find(b => b.group === h.group);
+            if (hv && hv.honeyPct >= HIVE_COLLECT_PCT) {
+              const gained = hv.honeyPct >= 100 ? 2 : 1;
+              hv.honeyPct = 0;
+              updateHiveSprite(hv);
+              punch(h.group);
+              burst(h.x, LAND_Y + 1.1, h.z, DROP_MATS.honey.color);
+              if (Math.hypot(player.position.x - h.x, player.position.z - h.z) < 18) sfx('pickup');
+              v.carried.honey = (v.carried.honey || 0) + gained;
+              v.stops++;
+            }
+          } else {
+            const def = HARVEST_DEFS[h.kind];
+            h.ready = false;
+            h.regrowAt = now + growMs(def.regrowMs);
+            if (def.hide) h.group.visible = false;
+            if (h.coconutMeshes) h.coconutMeshes.forEach(m => (m.visible = false));
+            punch(h.group);
+            burst(h.x, LAND_Y + 0.8, h.z, DROP_MATS[def.resource].color);
+            if (Math.hypot(player.position.x - h.x, player.position.z - h.z) < 18) sfx('hit');
+            v.carried[def.resource] = (v.carried[def.resource] || 0) + def.yield;
+            v.stops++;
+          }
           g.userData.armPivots[1].rotation.x = 0;
           g.userData.workerHammer.visible = false;
           if (v.stops >= 3) { v.state = 'return'; continue; }
