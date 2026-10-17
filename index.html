@@ -447,6 +447,22 @@
     rock:    { emoji: '🪨', price: 6,  plural: 'rocks' },
     ice:     { emoji: '🧊', price: 12, plural: 'ice' },
     iron:    { emoji: '⛏️', price: 25, plural: 'iron' },
+    apple:   { emoji: '🍎', price: 12, plural: 'apples' },
+    peach:   { emoji: '🍑', price: 13, plural: 'peaches' },
+    lemon:   { emoji: '🍋', price: 9,  plural: 'lemons' },
+    banana:  { emoji: '🍌', price: 10, plural: 'bananas' },
+    melon:   { emoji: '🍉', price: 11, plural: 'melons' },
+    grape:   { emoji: '🍇', price: 12, plural: 'grapes' },
+    carrot:  { emoji: '🥕', price: 7,  plural: 'carrots' },
+    potato:  { emoji: '🥔', price: 6,  plural: 'potatoes' },
+    strawberry: { emoji: '🍓', price: 10, plural: 'strawberries' },
+    wheat:   { emoji: '🌾', price: 6,  plural: 'wheat' },
+    cactus:  { emoji: '🌵', price: 9,  plural: 'cactus' },
+    mushroom:{ emoji: '🍄', price: 13, plural: 'mushrooms' },
+    feather: { emoji: '🪶', price: 8,  plural: 'feathers' },
+    coal:    { emoji: '⚫', price: 8,  plural: 'coal' },
+    crystal: { emoji: '💎', price: 35, plural: 'crystals' },
+    gold:    { emoji: '🥇', price: 40, plural: 'gold' },
   };
   const inv = Object.fromEntries(Object.keys(RESOURCES).map(k => [k, 0]));
 
@@ -464,6 +480,29 @@
     rock:    { resource: 'rock',    yield: 2, regrowMs: 18000, hide: true,  dropHeight: 0.7, tool: 'hammer' },
     ice:     { resource: 'ice',     yield: 2, regrowMs: 18000, hide: true,  dropHeight: 0.7, tool: 'hammer' },
     iron:    { resource: 'iron',    yield: 1, regrowMs: 25000, hide: true,  dropHeight: 0.7, tool: 'hammer' },
+    sunflower: { resource: 'flower', yield: 2, regrowMs: 10000, hide: true, dropHeight: 0.7 },
+    rose:      { resource: 'flower', yield: 2, regrowMs: 10000, hide: true, dropHeight: 0.5 },
+    lavender:  { resource: 'flower', yield: 2, regrowMs: 10000, hide: true, dropHeight: 0.5 },
+    clover:    { resource: 'flower', yield: 2, regrowMs: 9000,  hide: true, dropHeight: 0.4 },
+    pine:    { resource: 'wood',    yield: 2, regrowMs: 12000, hide: true,  dropHeight: 1.6 },
+    jungle:  { resource: 'bamboo',  yield: 2, regrowMs: 12000, hide: true,  dropHeight: 1.6 },
+    apple:   { resource: 'apple',   yield: 2, regrowMs: 13000, hide: true,  dropHeight: 1.8 },
+    peach:   { resource: 'peach',   yield: 2, regrowMs: 13000, hide: true,  dropHeight: 1.8 },
+    lemon:   { resource: 'lemon',   yield: 2, regrowMs: 12000, hide: true,  dropHeight: 1.8 },
+    banana:  { resource: 'banana',  yield: 2, regrowMs: 12000, hide: true,  dropHeight: 1.8 },
+    melon:   { resource: 'melon',   yield: 1, regrowMs: 16000, hide: true,  dropHeight: 0.6 },
+    grape:   { resource: 'grape',   yield: 2, regrowMs: 14000, hide: true,  dropHeight: 0.9 },
+    carrot:  { resource: 'carrot',  yield: 2, regrowMs: 10000, hide: true,  dropHeight: 0.5 },
+    potato:  { resource: 'potato',  yield: 2, regrowMs: 10000, hide: true,  dropHeight: 0.5 },
+    strawberry: { resource: 'strawberry', yield: 2, regrowMs: 12000, hide: true, dropHeight: 0.5 },
+    wheat:   { resource: 'wheat',   yield: 2, regrowMs: 10000, hide: true,  dropHeight: 0.8 },
+    cactus:  { resource: 'cactus',  yield: 2, regrowMs: 14000, hide: true,  dropHeight: 1.0 },
+    mushroom:{ resource: 'mushroom', yield: 2, regrowMs: 12000, hide: true, dropHeight: 0.6 },
+    boulder: { resource: 'rock',    yield: 3, regrowMs: 20000, hide: true,  dropHeight: 0.9, tool: 'hammer' },
+    iceberg: { resource: 'ice',     yield: 3, regrowMs: 20000, hide: true,  dropHeight: 0.9, tool: 'hammer' },
+    coal:    { resource: 'coal',    yield: 2, regrowMs: 16000, hide: true,  dropHeight: 0.7, tool: 'hammer' },
+    crystal: { resource: 'crystal', yield: 1, regrowMs: 30000, hide: true,  dropHeight: 0.8, tool: 'hammer' },
+    gold:    { resource: 'gold',    yield: 1, regrowMs: 30000, hide: true,  dropHeight: 0.7, tool: 'hammer' },
   };
   // Chopping a tree with the hammer out fells the whole tree for wood instead
   // of shaking coconuts loose.
@@ -473,9 +512,13 @@
   // Uncollected eggs hatch into an extra chicken after a while; cows and
   // sheep come from their own pasture lands.
   const ANIMAL_DEFS = {
-    chicken: { product: 'egg',  minMs: 15000, maxMs: 30000, speed: 0.9 },
-    cow:     { product: 'milk', minMs: 25000, maxMs: 45000, speed: 0.65 },
-    sheep:   { product: 'wool', minMs: 25000, maxMs: 45000, speed: 0.75 },
+    chicken: { product: 'egg',     minMs: 15000, maxMs: 30000, speed: 0.9 },
+    cow:     { product: 'milk',    minMs: 25000, maxMs: 45000, speed: 0.65 },
+    sheep:   { product: 'wool',    minMs: 25000, maxMs: 45000, speed: 0.75 },
+    duck:    { product: 'feather', minMs: 18000, maxMs: 36000, speed: 0.95 },
+    turkey:  { product: 'egg',     minMs: 18000, maxMs: 36000, speed: 0.8 },
+    goat:    { product: 'milk',    minMs: 25000, maxMs: 45000, speed: 0.85 },
+    bunny:   { product: 'wool',    minMs: 25000, maxMs: 45000, speed: 1.15 },
   };
   const EGG_HATCH_MS = 5 * 60 * 1000; // an uncollected egg hatches after 5 minutes
   const MAX_GROUND_ITEMS = 30; // things lying around at once, island-wide
@@ -1014,6 +1057,29 @@
     rock:    () => makeRockPile(),
     ice:     () => makeIceBlock(),
     iron:    () => makeIronOre(),
+    sunflower: () => makeFlowerPatch([0xFFC107], 1.8, 0.14),
+    rose:      () => makeFlowerPatch([0xE53935]),
+    lavender:  () => makeFlowerPatch([0x9575CD]),
+    clover:    () => makeFlowerPatch([0xFFFFFF, 0xA5D6A7], 0.7, 0.06),
+    pine:    () => makePine(),
+    jungle:  () => makeBamboo(),
+    apple:   () => makeFruitTree(0xE53935),
+    peach:   () => makeFruitTree(0xFFAB91),
+    lemon:   () => makeFruitTree(0xFFEB3B),
+    banana:  () => makeFruitTree(0xFFF176),
+    melon:      () => makeFarmRow('melon'),
+    grape:      () => makeFarmRow('grape'),
+    carrot:     () => makeFarmRow('carrot'),
+    potato:     () => makeFarmRow('potato'),
+    strawberry: () => makeFarmRow('strawberry'),
+    wheat:      () => makeFarmRow('wheat'),
+    cactus:   () => makeCactusPatch(),
+    mushroom: () => makeMushroomPatch(),
+    boulder: () => { const g = makeRockPile(); g.scale.setScalar(1.6); return g; },
+    iceberg: () => { const g = makeIceBlock(); g.scale.setScalar(1.5); return g; },
+    coal:    () => makeOreVariant('coal'),
+    crystal: () => makeOreVariant('crystal'),
+    gold:    () => makeOreVariant('gold'),
   };
   function addHarvestable(kind, x, z, randomYaw = true) {
     const group = HARVEST_MAKERS[kind]();
@@ -1158,13 +1224,12 @@
     return g;
   }
 
-  function makeFlowerPatch() {
+  function makeFlowerPatch(petalCols = [0xF48FB1, 0xFFF176, 0xBA68C8, 0xFF8A65, 0x90CAF9], hMul = 1, bloomR = 0.09) {
     const g = new THREE.Group();
     const stemMat = new THREE.MeshStandardMaterial({ color: 0x66BB6A, flatShading: true, roughness: 0.85 });
-    const petalCols = [0xF48FB1, 0xFFF176, 0xBA68C8, 0xFF8A65, 0x90CAF9];
     const count = 4 + Math.floor(Math.random() * 3);
     for (let i = 0; i < count; i++) {
-      const h = 0.35 + Math.random() * 0.25;
+      const h = (0.35 + Math.random() * 0.25) * hMul;
       const px = (Math.random() - 0.5) * 1.1, pz = (Math.random() - 0.5) * 1.1;
       const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.025, h, 5), stemMat);
       stem.position.set(px, h / 2, pz);
@@ -1173,7 +1238,7 @@
         color: petalCols[Math.floor(Math.random() * petalCols.length)],
         flatShading: true, roughness: 0.7,
       });
-      const bloom = new THREE.Mesh(new THREE.DodecahedronGeometry(0.09, 0), petalMat);
+      const bloom = new THREE.Mesh(new THREE.DodecahedronGeometry(bloomR, 0), petalMat);
       bloom.position.set(px, h + 0.06, pz);
       bloom.castShadow = true;
       g.add(bloom);
@@ -1215,6 +1280,170 @@
       const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.045, 0.12, 5), stemMat);
       stem.position.set(px, s * 1.35, pz);
       g.add(stem);
+    }
+    return g;
+  }
+
+  function makeFruitTree(fruitColor) { // apple, peach, lemon, banana trees
+    const g = new THREE.Group();
+    const trunk = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.1, 0.14, 1.2, 6),
+      new THREE.MeshStandardMaterial({ color: 0x6D4C41, flatShading: true, roughness: 0.9 })
+    );
+    trunk.position.y = 0.6; trunk.castShadow = true;
+    const crown = new THREE.Mesh(
+      new THREE.DodecahedronGeometry(0.75, 0),
+      new THREE.MeshStandardMaterial({ color: 0x43A047, flatShading: true, roughness: 0.9 })
+    );
+    crown.position.y = 1.55; crown.scale.y = 0.85; crown.castShadow = true;
+    g.add(trunk, crown);
+    const fruitMat = new THREE.MeshStandardMaterial({ color: fruitColor, flatShading: true, roughness: 0.5 });
+    for (let i = 0; i < 5; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const fruit = new THREE.Mesh(new THREE.SphereGeometry(0.09, 7, 6), fruitMat);
+      fruit.position.set(Math.cos(a) * 0.55, 1.3 + Math.random() * 0.5, Math.sin(a) * 0.55);
+      g.add(fruit);
+    }
+    return g;
+  }
+
+  function makePine() {
+    const g = new THREE.Group();
+    const trunk = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.09, 0.13, 0.9, 6),
+      new THREE.MeshStandardMaterial({ color: 0x5D4037, flatShading: true, roughness: 0.9 })
+    );
+    trunk.position.y = 0.45; trunk.castShadow = true;
+    g.add(trunk);
+    const needleMat = new THREE.MeshStandardMaterial({ color: 0x1B5E20, flatShading: true, roughness: 0.9 });
+    [[1.0, 0.9], [0.75, 1.5], [0.5, 2.0]].forEach(([r, y]) => {
+      const cone = new THREE.Mesh(new THREE.ConeGeometry(r, 0.9, 7), needleMat);
+      cone.position.y = y; cone.castShadow = true;
+      g.add(cone);
+    });
+    return g;
+  }
+
+  function makeCactusPatch() {
+    const g = new THREE.Group();
+    const mat = new THREE.MeshStandardMaterial({ color: 0x43A047, flatShading: true, roughness: 0.85 });
+    for (let i = 0; i < 2; i++) {
+      const px = (Math.random() - 0.5) * 0.9, pz = (Math.random() - 0.5) * 0.9;
+      const h = 0.9 + Math.random() * 0.5;
+      const body = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.16, h, 7), mat);
+      body.position.set(px, h / 2, pz); body.castShadow = true;
+      const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.09, 0.4, 6), mat);
+      arm.position.set(px + 0.22, h * 0.6, pz);
+      arm.rotation.z = -0.5;
+      g.add(body, arm);
+    }
+    return g;
+  }
+
+  function makeMushroomPatch() {
+    const g = new THREE.Group();
+    const stemMat = new THREE.MeshStandardMaterial({ color: 0xF5F0E8, flatShading: true, roughness: 0.8 });
+    const capMat = new THREE.MeshStandardMaterial({ color: 0xE53935, flatShading: true, roughness: 0.6 });
+    for (let i = 0; i < 3; i++) {
+      const px = (Math.random() - 0.5) * 0.9, pz = (Math.random() - 0.5) * 0.9;
+      const h = 0.3 + Math.random() * 0.25;
+      const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.08, h, 6), stemMat);
+      stem.position.set(px, h / 2, pz);
+      const cap = new THREE.Mesh(new THREE.SphereGeometry(0.17, 8, 5, 0, Math.PI * 2, 0, Math.PI / 2), capMat);
+      cap.position.set(px, h, pz); cap.castShadow = true;
+      g.add(stem, cap);
+    }
+    return g;
+  }
+
+  function makeFarmRow(kind) { // melon, grape, carrot, potato, strawberry, wheat
+    const g = new THREE.Group();
+    const green = new THREE.MeshStandardMaterial({ color: 0x558B2F, flatShading: true, roughness: 0.85 });
+    if (kind === 'melon') {
+      const mat = new THREE.MeshStandardMaterial({ color: 0x2E7D32, flatShading: true, roughness: 0.6 });
+      for (let i = 0; i < 2; i++) {
+        const m = new THREE.Mesh(new THREE.SphereGeometry(0.26, 8, 6), mat);
+        m.position.set((Math.random() - 0.5) * 0.8, 0.2, (Math.random() - 0.5) * 0.8);
+        m.scale.y = 0.8; m.castShadow = true;
+        g.add(m);
+      }
+    } else if (kind === 'grape') {
+      const postMat = new THREE.MeshStandardMaterial({ color: 0x6D4C41, flatShading: true });
+      const grapeMat = new THREE.MeshStandardMaterial({ color: 0x7E57C2, flatShading: true, roughness: 0.5 });
+      [-0.4, 0.4].forEach(px => {
+        const post = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.05, 1.0, 5), postMat);
+        post.position.set(px, 0.5, 0);
+        g.add(post);
+      });
+      const bar = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.05, 0.05), postMat);
+      bar.position.y = 0.95;
+      g.add(bar);
+      for (let i = 0; i < 4; i++) {
+        const c = new THREE.Mesh(new THREE.DodecahedronGeometry(0.1, 0), grapeMat);
+        c.position.set(-0.35 + i * 0.23, 0.72 - Math.random() * 0.1, 0);
+        g.add(c);
+      }
+    } else if (kind === 'wheat') {
+      const mat = new THREE.MeshStandardMaterial({ color: 0xFBC02D, flatShading: true, roughness: 0.9 });
+      for (let i = 0; i < 9; i++) {
+        const h = 0.6 + Math.random() * 0.3;
+        const stalk = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.035, h, 4), mat);
+        stalk.position.set((Math.random() - 0.5) * 1.1, h / 2, (Math.random() - 0.5) * 1.1);
+        stalk.rotation.z = (Math.random() - 0.5) * 0.2;
+        g.add(stalk);
+      }
+    } else { // carrot, potato, strawberry — low rows with colored bits
+      const cols = { carrot: 0xFB8C00, potato: 0xA1887F, strawberry: 0xE91E63 };
+      const mat = new THREE.MeshStandardMaterial({ color: cols[kind], flatShading: true, roughness: 0.6 });
+      for (let i = 0; i < 4; i++) {
+        const px = (Math.random() - 0.5) * 1.0, pz = (Math.random() - 0.5) * 1.0;
+        const tuft = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.25, 5), green);
+        tuft.position.set(px, 0.14, pz);
+        const bit = new THREE.Mesh(
+          kind === 'carrot' ? new THREE.ConeGeometry(0.07, 0.2, 5) : new THREE.SphereGeometry(0.08, 6, 5),
+          mat
+        );
+        bit.position.set(px + 0.1, kind === 'carrot' ? 0.1 : 0.08, pz);
+        if (kind === 'carrot') bit.rotation.x = Math.PI;
+        g.add(tuft, bit);
+      }
+    }
+    return g;
+  }
+
+  function makeOreVariant(kind) { // gold, crystal, coal
+    const g = new THREE.Group();
+    if (kind === 'crystal') {
+      const mat = new THREE.MeshStandardMaterial({
+        color: 0xBA68C8, roughness: 0.15, metalness: 0.3, transparent: true, opacity: 0.85, flatShading: true,
+      });
+      for (let i = 0; i < 3; i++) {
+        const c = new THREE.Mesh(new THREE.OctahedronGeometry(0.22 + Math.random() * 0.12, 0), mat);
+        c.position.set((Math.random() - 0.5) * 0.7, 0.25, (Math.random() - 0.5) * 0.7);
+        c.scale.y = 1.8;
+        c.rotation.y = Math.random() * 3;
+        c.castShadow = true;
+        g.add(c);
+      }
+    } else {
+      const base = new THREE.MeshStandardMaterial({
+        color: kind === 'gold' ? 0x8D6E63 : 0x37474F, flatShading: true, roughness: 0.9,
+      });
+      const fleck = new THREE.MeshStandardMaterial({
+        color: kind === 'gold' ? 0xFFD54F : 0x121212, metalness: kind === 'gold' ? 0.9 : 0.2,
+        roughness: kind === 'gold' ? 0.25 : 0.6, flatShading: true,
+      });
+      const rockM = new THREE.Mesh(new THREE.DodecahedronGeometry(0.45, 0), base);
+      rockM.position.y = 0.32; rockM.castShadow = true;
+      rockM.rotation.set(Math.random() * 3, Math.random() * 3, 0);
+      g.add(rockM);
+      for (let i = 0; i < 5; i++) {
+        const f = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.1), fleck);
+        const a = Math.random() * Math.PI * 2;
+        f.position.set(Math.cos(a) * 0.38, 0.22 + Math.random() * 0.32, Math.sin(a) * 0.38);
+        f.rotation.set(Math.random() * 3, Math.random() * 3, 0);
+        g.add(f);
+      }
     }
     return g;
   }
@@ -1389,9 +1618,9 @@
     return g;
   }
 
-  function makeSheep() {
+  function makeSheep(fluffColor = 0xF5F5F5) {
     const g = new THREE.Group();
-    const fluffMat = new THREE.MeshStandardMaterial({ color: 0xF5F5F5, flatShading: true, roughness: 1 });
+    const fluffMat = new THREE.MeshStandardMaterial({ color: fluffColor, flatShading: true, roughness: 1 });
     const skinMat  = new THREE.MeshStandardMaterial({ color: 0x4E342E, flatShading: true, roughness: 0.8 });
     const body = new THREE.Mesh(new THREE.DodecahedronGeometry(0.42, 0), fluffMat);
     body.scale.set(1, 0.85, 1.25);
@@ -1415,9 +1644,10 @@
   }
 
   const animals = []; // { type, group, tx, tz, pauseUntil, phase, nextProductAt }
-  function makeChicken() {
+  function makeChicken(bodyColor = 0xFAFAFA, scl = 1) {
     const g = new THREE.Group();
-    const bodyMat = new THREE.MeshStandardMaterial({ color: 0xFAFAFA, flatShading: true, roughness: 0.8 });
+    const bodyMat = new THREE.MeshStandardMaterial({ color: bodyColor, flatShading: true, roughness: 0.8 });
+    g.scale.setScalar(scl);
     const body = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.34, 0.5), bodyMat);
     body.position.y = 0.34; body.castShadow = true;
     const head = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.24, 0.22), bodyMat);
@@ -1448,7 +1678,39 @@
     return g;
   }
 
-  const ANIMAL_MAKERS = { chicken: makeChicken, cow: makeCow, sheep: makeSheep };
+  function makeBunny() {
+    const g = new THREE.Group();
+    const furMat = new THREE.MeshStandardMaterial({ color: 0xFAFAFA, flatShading: true, roughness: 0.95 });
+    const body = new THREE.Mesh(new THREE.SphereGeometry(0.2, 8, 6), furMat);
+    body.scale.set(1, 0.85, 1.25);
+    body.position.y = 0.2; body.castShadow = true;
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.13, 8, 6), furMat);
+    head.position.set(0, 0.36, 0.2);
+    [-0.05, 0.05].forEach(ex => {
+      const ear = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.22, 0.03), furMat);
+      ear.position.set(ex, 0.55, 0.17);
+      ear.rotation.x = -0.15;
+      g.add(ear);
+      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.02, 6, 6),
+        new THREE.MeshStandardMaterial({ color: 0x2d2d2d }));
+      eye.position.set(ex * 1.4, 0.38, 0.31);
+      g.add(eye);
+    });
+    const tail = new THREE.Mesh(new THREE.SphereGeometry(0.06, 6, 6), furMat);
+    tail.position.set(0, 0.22, -0.26);
+    g.add(body, head, tail);
+    return g;
+  }
+
+  const ANIMAL_MAKERS = {
+    chicken: () => makeChicken(),
+    cow: makeCow,
+    sheep: () => makeSheep(),
+    duck: () => makeChicken(0xFFF59D, 0.85),    // little yellow ducks
+    turkey: () => makeChicken(0x795548, 1.25),  // big brown turkeys
+    goat: () => makeSheep(0xBDBDBD),            // grey goats
+    bunny: makeBunny,
+  };
   function addAnimal(type, x, z) {
     const def = ANIMAL_DEFS[type];
     const group = ANIMAL_MAKERS[type]();
@@ -1543,10 +1805,11 @@
     }
   }
 
+  const FLOWER_KINDS = ['flower', 'sunflower', 'rose', 'lavender', 'clover'];
   function nearestFlower(x, z) {
     let best = null, bd = Infinity;
     for (const h of harvestables) {
-      if (h.kind !== 'flower' || !h.group.visible) continue;
+      if (!FLOWER_KINDS.includes(h.kind) || !h.group.visible) continue;
       const d = Math.hypot(h.x - x, h.z - z);
       if (d < bd) { bd = d; best = h; }
     }
@@ -1678,7 +1941,10 @@
 
   // What workers may harvest: punchable plants, hammer-only nodes, and hives
   // that are full enough to give honey. Never flowers — the bees need those.
-  const WORKER_NODES = ['tree', 'bamboo', 'corn', 'berry', 'pumpkin', 'rock', 'ice', 'iron', 'hive'];
+  const WORKER_NODES = ['tree', 'bamboo', 'corn', 'berry', 'pumpkin', 'rock', 'ice', 'iron', 'hive',
+    'pine', 'jungle', 'apple', 'peach', 'lemon', 'banana',
+    'melon', 'grape', 'carrot', 'potato', 'strawberry', 'wheat',
+    'cactus', 'mushroom', 'boulder', 'iceberg', 'coal', 'crystal', 'gold'];
   function villagerFindTarget(v) {
     const px = v.group.position.x, pz = v.group.position.z;
     let best = null, bd = Infinity;
@@ -1866,10 +2132,19 @@
   const OBSTACLE_R = {
     tree: 0.4, bamboo: 0.55, corn: 0.45, berry: 0.6, pumpkin: 0.4,
     hive: 0.4, rock: 0.6, ice: 0.55, iron: 0.55, flower: 0,
+    sunflower: 0, rose: 0, lavender: 0, clover: 0,
+    pine: 0.4, jungle: 0.55, apple: 0.4, peach: 0.4, lemon: 0.4, banana: 0.4,
+    melon: 0.45, grape: 0.45, carrot: 0.45, potato: 0.45, strawberry: 0.45, wheat: 0.45,
+    cactus: 0.45, mushroom: 0.35, boulder: 0.7, iceberg: 0.65,
+    coal: 0.55, crystal: 0.55, gold: 0.55,
   };
   const OBSTACLE_H = { // how tall each solid is — a good jump clears the low ones
     tree: 9, bamboo: 9, corn: 1.1, berry: 0.8, pumpkin: 0.5,
     hive: 1.5, rock: 0.65, ice: 0.6, iron: 0.65,
+    pine: 9, jungle: 9, apple: 9, peach: 9, lemon: 9, banana: 9,
+    melon: 0.45, grape: 0.9, carrot: 0.4, potato: 0.4, strawberry: 0.4, wheat: 0.7,
+    cactus: 1.4, mushroom: 0.8, boulder: 0.9, iceberg: 0.85,
+    coal: 0.75, crystal: 0.75, gold: 0.75,
   };
   function resolveCollisions(x, z, pr, feetY = 0) {
     const push = (ox, oz, or, oh = 9) => {
@@ -1898,13 +2173,29 @@
   // The first patches follow a set progression — sequenced so that whatever a
   // later land cost asks for, an earlier patch already produces — and after
   // that, themes repeat at random.
-  const PATCH_THEMES = ['chicken', 'bamboo', 'rock', 'corn', 'flower', 'ice', 'hive', 'iron', 'berry', 'pumpkin', 'cow', 'sheep', 'tree'];
+  const PATCH_THEMES = [
+    // the set progression (matched to the land costs)…
+    'chicken', 'bamboo', 'rock', 'corn', 'flower', 'ice', 'hive', 'iron', 'berry', 'pumpkin', 'cow', 'sheep', 'tree',
+    // …then 27 more, so all 40 possible purchases are a different land — no repeats, ever
+    'sunflower', 'apple', 'duck', 'melon', 'pine', 'carrot', 'goat', 'rose', 'peach', 'wheat',
+    'bunny', 'grape', 'mushroom', 'lemon', 'strawberry', 'turkey', 'cactus', 'lavender', 'banana',
+    'potato', 'boulder', 'jungle', 'clover', 'coal', 'iceberg', 'crystal', 'gold',
+  ];
   const THEME_NAMES = {
     chicken: '🐔 A chicken farm', bamboo: '🎍 A bamboo grove', rock: '🪨 A rocky field',
     corn: '🌽 A corn field', flower: '🌸 A flower meadow', ice: '🧊 An ice field',
     hive: '🍯 An apiary', iron: '⛏️ An iron deposit', berry: '🫐 Berry bushes',
     pumpkin: '🎃 A pumpkin patch', cow: '🐄 A cow pasture', sheep: '🐑 A sheep pasture',
     tree: '🥥 A coconut grove',
+    sunflower: '🌻 A sunflower field', rose: '🌹 A rose garden', lavender: '💜 A lavender field',
+    clover: '🍀 A clover meadow', pine: '🌲 A pine forest', jungle: '🎋 A jungle thicket',
+    apple: '🍎 An apple orchard', peach: '🍑 A peach orchard', lemon: '🍋 A lemon orchard',
+    banana: '🍌 A banana grove', melon: '🍉 A melon farm', grape: '🍇 A vineyard',
+    carrot: '🥕 A carrot farm', potato: '🥔 A potato farm', strawberry: '🍓 A strawberry farm',
+    wheat: '🌾 A wheat field', cactus: '🌵 A cactus desert', mushroom: '🍄 A mushroom glen',
+    boulder: '🗿 A boulder field', iceberg: '❄️ An iceberg shelf', coal: '⚫ A coal seam',
+    crystal: '💎 A crystal cavern', gold: '🥇 A gold mine',
+    duck: '🦆 A duck pond', goat: '🐐 A goat pen', bunny: '🐰 A bunny meadow', turkey: '🦃 A turkey farm',
   };
   let patchCounter = 0;
   function spawnPatchProps(newCells) {
@@ -1934,7 +2225,12 @@
       return { x: x + (Math.random() - 0.5) * 0.5, z: z + (Math.random() - 0.5) * 0.5 };
     };
 
-    const counts = { hive: 2, tree: 3, chicken: 3, cow: 2, sheep: 2 };
+    const counts = {
+      hive: 2, tree: 3, chicken: 3, cow: 2, sheep: 2,
+      duck: 3, goat: 2, bunny: 3, turkey: 2,
+      pine: 3, apple: 2, peach: 2, lemon: 2, banana: 2,
+      boulder: 3, iceberg: 3,
+    };
     const count = counts[theme] ?? 4;
     for (let n = 0; n < count; n++) {
       const spot = takeSpot();
@@ -2858,6 +3154,22 @@
     rock:    new THREE.MeshStandardMaterial({ color: 0x9E9E9E, flatShading: true, roughness: 0.95 }),
     ice:     new THREE.MeshStandardMaterial({ color: 0xB3E5FC, flatShading: true, roughness: 0.25, transparent: true, opacity: 0.85 }),
     iron:    new THREE.MeshStandardMaterial({ color: 0x757575, flatShading: true, roughness: 0.5, metalness: 0.4 }),
+    apple:   new THREE.MeshStandardMaterial({ color: 0xE53935, flatShading: true, roughness: 0.6 }),
+    peach:   new THREE.MeshStandardMaterial({ color: 0xFFAB91, flatShading: true, roughness: 0.6 }),
+    lemon:   new THREE.MeshStandardMaterial({ color: 0xFFEB3B, flatShading: true, roughness: 0.6 }),
+    banana:  new THREE.MeshStandardMaterial({ color: 0xFFF176, flatShading: true, roughness: 0.6 }),
+    melon:   new THREE.MeshStandardMaterial({ color: 0x66BB6A, flatShading: true, roughness: 0.7 }),
+    grape:   new THREE.MeshStandardMaterial({ color: 0x7B1FA2, flatShading: true, roughness: 0.6 }),
+    carrot:  new THREE.MeshStandardMaterial({ color: 0xFB8C00, flatShading: true, roughness: 0.7 }),
+    potato:  new THREE.MeshStandardMaterial({ color: 0xBCAAA4, flatShading: true, roughness: 0.9 }),
+    strawberry: new THREE.MeshStandardMaterial({ color: 0xE91E63, flatShading: true, roughness: 0.6 }),
+    wheat:   new THREE.MeshStandardMaterial({ color: 0xD4A017, flatShading: true, roughness: 0.8 }),
+    cactus:  new THREE.MeshStandardMaterial({ color: 0x43A047, flatShading: true, roughness: 0.8 }),
+    mushroom: new THREE.MeshStandardMaterial({ color: 0xEF5350, flatShading: true, roughness: 0.7 }),
+    feather: new THREE.MeshStandardMaterial({ color: 0xFFF9C4, flatShading: true, roughness: 0.9 }),
+    coal:    new THREE.MeshStandardMaterial({ color: 0x37474F, flatShading: true, roughness: 0.95 }),
+    crystal: new THREE.MeshStandardMaterial({ color: 0x80DEEA, flatShading: true, roughness: 0.2, metalness: 0.3 }),
+    gold:    new THREE.MeshStandardMaterial({ color: 0xFFD54F, flatShading: true, roughness: 0.3, metalness: 0.7 }),
   };
   function makeDropMesh(resource) {
     switch (resource) {
@@ -2897,7 +3209,7 @@
       case 'rock':  return new THREE.Mesh(new THREE.DodecahedronGeometry(0.15, 0), DROP_MATS.rock);
       case 'ice':   return new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.22, 0.22), DROP_MATS.ice);
       case 'iron':  return new THREE.Mesh(new THREE.DodecahedronGeometry(0.16, 0), DROP_MATS.iron);
-      default:      return new THREE.Mesh(new THREE.SphereGeometry(0.13, 8, 8), DROP_MATS.coconut);
+      default:      return new THREE.Mesh(new THREE.SphereGeometry(0.13, 8, 8), DROP_MATS[resource] || DROP_MATS.coconut);
     }
   }
 
