@@ -3048,8 +3048,8 @@
     applyPlayerName(clean);
     namePanelEl.classList.remove('show');
     clearTitleCast();
-    startPromptEl.classList.add('show');
     sfx('click');
+    beginFirstPerson(); // START means start — straight into the game
   }
   nameOkEl.addEventListener('pointerdown', e => { e.preventDefault(); confirmName(); });
   nameInputEl.addEventListener('keydown', e => {
