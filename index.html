@@ -42,6 +42,16 @@
       pointer-events: none;
     }
     #hit-prompt.show { display: flex; opacity: 1; transform: translateX(-50%) scale(1); }
+
+    #throw-btn {
+      position: fixed; left: 50%; bottom: 150px; transform: translateX(-50%); z-index: 130;
+      background: linear-gradient(180deg,#4DD0E1,#00838F); color: #fff;
+      padding: 13px 26px; border-radius: 30px; border: 3px solid #fff;
+      font-size: 16px; font-weight: 900; letter-spacing: 1px;
+      box-shadow: 0 6px 16px rgba(0,0,0,.35); cursor: pointer; display: none;
+    }
+    #throw-btn.show { display: block; }
+    #throw-btn:active { transform: translateX(-50%) scale(.94); }
     #hit-prompt .k { background: #FFD54F; color: #3e2200; border-radius: 6px; padding: 2px 8px; font-size: 12px; }
 
     #joy-zone {
@@ -298,6 +308,7 @@
   <div id="hit-prompt"><span class="k">E</span> Hit</div>
   <div id="joy-zone"><div id="joy-knob"></div></div>
   <div id="hit-btn">🥊</div>
+  <div id="throw-btn">🎣 THROW ROD</div>
   <div id="save-btn" title="Save the game"><svg viewBox="0 0 48 48" width="34" height="34"><defs><linearGradient id="svD" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#64B5F6"/><stop offset="1" stop-color="#1565C0"/></linearGradient></defs><path d="M8 8 L34 8 L40 14 L40 40 L8 40 Z" fill="url(#svD)" stroke="#0D47A1" stroke-width="1.4" stroke-linejoin="round"/><rect x="14" y="8" width="14" height="10" rx="1" fill="#E3F2FD"/><rect x="23" y="10" width="4" height="6" rx="0.8" fill="#1565C0"/><rect x="13" y="24" width="22" height="14" rx="1.5" fill="#fff"/><rect x="16" y="28" width="16" height="2" fill="#90A4AE"/><rect x="16" y="32" width="12" height="2" fill="#90A4AE"/></svg><span class="lbl">SAVE</span></div>
   <div id="hammer-btn" title="Hold / put away your hammer (Q)"><svg viewBox="0 0 48 48" width="36" height="36"><defs><linearGradient id="hmHead" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ECEFF1"/><stop offset=".5" stop-color="#90A4AE"/><stop offset="1" stop-color="#455A64"/></linearGradient><linearGradient id="hmWood" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#A1887F"/><stop offset="1" stop-color="#4E342E"/></linearGradient></defs><g transform="rotate(40 24 24)"><rect x="9" y="7" width="30" height="13" rx="3.5" fill="url(#hmHead)"/><rect x="11" y="8.5" width="26" height="4" rx="2" fill="#fff" opacity=".4"/><rect x="20.5" y="19" width="7" height="24" rx="3" fill="url(#hmWood)"/><rect x="22" y="20" width="1.8" height="21" rx="0.9" fill="#fff" opacity=".22"/></g></svg><span class="lbl">HAMMER</span></div>
   <div id="home-btn" title="Go back to the shop (H)"><svg viewBox="0 0 48 48" width="36" height="36"><defs><linearGradient id="hbRoof" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#EF5350"/><stop offset="1" stop-color="#B71C1C"/></linearGradient><linearGradient id="hbWall" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFF8E1"/><stop offset="1" stop-color="#D7CCC8"/></linearGradient></defs><rect x="31" y="9" width="5" height="10" rx="1" fill="#8D6E63"/><rect x="10" y="24" width="28" height="18" rx="1" fill="url(#hbWall)"/><polygon points="24,5 45,25 41,25 24,9.5 7,25 3,25" fill="url(#hbRoof)"/><rect x="20" y="30" width="8" height="12" rx="1.2" fill="#6D4C41"/><circle cx="26.3" cy="36.4" r="1" fill="#FFD54F"/><rect x="12.5" y="28.5" width="6.5" height="6.5" rx="0.8" fill="#81D4FA" stroke="#fff" stroke-width="1.2"/><rect x="29.5" y="28.5" width="6.5" height="6.5" rx="0.8" fill="#81D4FA" stroke="#fff" stroke-width="1.2"/><rect x="12.5" y="28.5" width="6.5" height="2.6" fill="#fff" opacity=".35"/><rect x="29.5" y="28.5" width="6.5" height="2.6" fill="#fff" opacity=".35"/></svg><span class="lbl">HOME</span></div>
@@ -378,6 +389,9 @@
     egg:     { emoji: '🥚', price: 15, plural: 'eggs' },
     wood:    { emoji: '🪵', price: 7,  plural: 'wood' },
     fish:    { emoji: '🐟', price: 14, plural: 'fish' },
+    tropical:{ emoji: '🐠', price: 18, plural: 'tropical fish' },
+    crab:    { emoji: '🦀', price: 22, plural: 'crabs' },
+    shrimp:  { emoji: '🦐', price: 10, plural: 'shrimp' },
     corn:    { emoji: '🌽', price: 8,  plural: 'corn' },
     flower:  { emoji: '🌸', price: 4,  plural: 'flowers' },
     berry:   { emoji: '🫐', price: 9,  plural: 'berries' },
@@ -437,14 +451,14 @@
   const LAND_COSTS = [
     { coins: 100 },
     { coins: 100, egg: 2 },
-    { egg: 3, bamboo: 4 },
+    { egg: 3, fish: 3 },
     { coins: 150, rock: 3, bamboo: 2 },
     { corn: 4, rock: 2 },
     { coins: 200, flower: 5, corn: 3 },
-    { ice: 3, wood: 4, flower: 2 },
+    { ice: 3, wood: 4, shrimp: 4 },
     { coins: 250, honey: 1, ice: 2 },
     { iron: 2, honey: 1 },
-    { coins: 300, berry: 4, egg: 3 },
+    { coins: 300, berry: 4, crab: 2 },
     { pumpkin: 2, iron: 1, wood: 5 },
     { coins: 350, milk: 2, berry: 3 },
     { wool: 2, milk: 2, pumpkin: 2 },
@@ -2029,6 +2043,7 @@
     const late = [ // past the set list, rotate pricier 2-3 part bundles
       { coins: 300 + 50 * extra, iron: 2, wood: 5 },
       { iron: 2, rock: 4, egg: 4 },
+      { fish: 6, crab: 3, shrimp: 6 },
       { coins: 350 + 50 * extra, honey: 3 },
     ];
     return late[extra % late.length];
@@ -2416,8 +2431,6 @@
   // onto the pier), stay still, and CUBEY sits down and fishes.
   let rodHeld = false;
   let sitting = false;
-  let fishingBiteAt = 0;
-  let fishingIntroShown = false;
   const rodBtnEl = document.getElementById('rod-btn');
 
   const rod = new THREE.Group();
@@ -2465,47 +2478,183 @@
       hammer.visible = false;
       hammerBtnEl.classList.remove('held');
     }
-    toast(rodHeld ? '🎣 Rod out — stand at the water or on the pier and hold still to fish'
+    toast(rodHeld ? '🎣 Rod out — find a RED CIRCLE in the water, get close, and press THROW ROD'
                   : 'Rod put away', true);
   }
   rodBtnEl.addEventListener('pointerdown', e => { e.preventDefault(); toggleRod(); });
 
-  function waterAheadPoint() { // a cast landing spot just off the shore / pier end
-    const fx = -Math.sin(yaw), fz = -Math.cos(yaw);
-    for (const dist of [1.6, 2.3, 3.0]) {
-      const x = player.position.x + fx * dist;
-      const z = player.position.z + fz * dist;
-      if (!isLand(x, z) && !onPier(x, z)) return { x, z };
-    }
-    return null;
+  // ── Fishing spots: glowing red circles in the water. You can only fish
+  // inside one — walk close with the rod out and press THROW ROD. The catch
+  // comes reeling back to you on the line: fish, tropical fish, crabs, shrimp.
+  const fishSpots = []; // { x, z, group }
+  function makeSpotRing() {
+    const g = new THREE.Group();
+    const ring = new THREE.Mesh(
+      new THREE.TorusGeometry(1.1, 0.09, 8, 28),
+      new THREE.MeshBasicMaterial({ color: 0xFF5252, transparent: true, opacity: 0.85 })
+    );
+    ring.rotation.x = -Math.PI / 2;
+    const glow = new THREE.Mesh(
+      new THREE.CircleGeometry(1.0, 24),
+      new THREE.MeshBasicMaterial({ color: 0xFF8A80, transparent: true, opacity: 0.22, depthWrite: false })
+    );
+    glow.rotation.x = -Math.PI / 2;
+    glow.position.y = -0.02;
+    g.add(ring, glow);
+    return g;
   }
+  function placeFishSpots() {
+    for (const sp of fishSpots) scene.remove(sp.group);
+    fishSpots.length = 0;
+    const candidates = [{ x: PIER.x, z: PIER.z1 + 2.2 }]; // one always waits at the pier's end
+    const cells = [...landSet];
+    for (let tries = 0; tries < 60 && candidates.length < 3; tries++) {
+      const [gx, gz] = cells[Math.floor(Math.random() * cells.length)].split(',').map(Number);
+      if (!isCoast(gx, gz)) continue;
+      const { x, z } = cellWorld(gx, gz);
+      const len = Math.hypot(x, z) || 1;
+      const sx = x + (x / len) * 2.6, sz = z + (z / len) * 2.6;
+      if (isLand(sx, sz) || onPier(sx, sz)) continue;
+      if (candidates.some(c => Math.hypot(c.x - sx, c.z - sz) < 8)) continue;
+      candidates.push({ x: sx, z: sz });
+    }
+    for (const c of candidates) {
+      const group = makeSpotRing();
+      group.position.set(c.x, 0.86, c.z);
+      scene.add(group);
+      fishSpots.push({ x: c.x, z: c.z, group });
+    }
+  }
+  placeFishSpots();
+  setInterval(placeFishSpots, 120000); // the fish move to new spots every two minutes
+
+  function nearestFishSpot() {
+    let best = null, bd = 3.4;
+    for (const sp of fishSpots) {
+      const d = Math.hypot(player.position.x - sp.x, player.position.z - sp.z);
+      if (d < bd) { bd = d; best = sp; }
+    }
+    return best;
+  }
+
+  const CATCH_TABLE = [ // weighted: common shrimp up to prized crabs
+    { key: 'shrimp', name: 'shrimp', w: 0.3 },
+    { key: 'fish', name: 'fish', w: 0.35 },
+    { key: 'tropical', name: 'tropical fish', w: 0.2 },
+    { key: 'crab', name: 'crab', w: 0.15 },
+  ];
+  function rollCatch() {
+    let r = Math.random();
+    for (const c of CATCH_TABLE) { r -= c.w; if (r <= 0) return c; }
+    return CATCH_TABLE[1];
+  }
+  function makeCatchMesh(key) {
+    const g = new THREE.Group();
+    if (key === 'crab') {
+      const mat = new THREE.MeshStandardMaterial({ color: 0xE53935, flatShading: true, roughness: 0.5 });
+      const body = new THREE.Mesh(new THREE.SphereGeometry(0.16, 8, 6), mat);
+      body.scale.set(1.3, 0.55, 1);
+      const clawL = new THREE.Mesh(new THREE.SphereGeometry(0.07, 6, 6), mat);
+      clawL.position.set(-0.22, 0.02, 0.1);
+      const clawR = clawL.clone();
+      clawR.position.x = 0.22;
+      g.add(body, clawL, clawR);
+    } else {
+      const colors = { fish: 0x64B5F6, tropical: 0xFF9800, shrimp: 0xF48FB1 };
+      const mat = new THREE.MeshStandardMaterial({ color: colors[key], flatShading: true, roughness: 0.45 });
+      const body = new THREE.Mesh(new THREE.SphereGeometry(0.15, 8, 6), mat);
+      body.scale.set(1, 0.65, 0.45);
+      const tail = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.14, 4), mat);
+      tail.rotation.z = Math.PI / 2;
+      tail.position.x = 0.2;
+      g.add(body, tail);
+      if (key === 'tropical') {
+        const stripe = new THREE.Mesh(
+          new THREE.BoxGeometry(0.05, 0.17, 0.16),
+          new THREE.MeshStandardMaterial({ color: 0xFFFFFF, flatShading: true })
+        );
+        g.add(stripe);
+      }
+    }
+    return g;
+  }
+
+  // the cast itself: throw -> wait for a bite -> the line reels the catch in
+  let castState = 'off'; // 'off' | 'waiting' | 'reeling'
+  let biteAt = 0, reelT0 = 0;
+  let catchMesh = null, catchInfo = null, castSpot = null;
+  const throwBtnEl = document.getElementById('throw-btn');
+
+  function cancelCast() {
+    castState = 'off';
+    bobber.visible = false;
+    sitting = false;
+    if (catchMesh) { scene.remove(catchMesh); catchMesh = null; }
+  }
+
+  function startCast() {
+    if (phase !== 'fps' || !rodHeld || castState !== 'off') return;
+    const sp = nearestFishSpot();
+    if (!sp) return;
+    castSpot = sp;
+    castState = 'waiting';
+    sitting = true;
+    biteAt = performance.now() + growMs(2000 + Math.random() * 5000);
+    bobber.position.set(sp.x, 0.86, sp.z);
+    bobber.visible = true;
+    sfx('click');
+    toast('🎣 Line\'s in the red circle — wait for a bite!', true);
+  }
+  throwBtnEl.addEventListener('pointerdown', e => { e.preventDefault(); startCast(); });
 
   function updateFishing(t) {
     const now = performance.now();
-    const spot = (rodHeld && phase === 'fps' && !playerMoving && player.position.y <= LAND_Y + 0.001)
-      ? waterAheadPoint() : null;
-    if (!spot) {
-      if (sitting) { sitting = false; bobber.visible = false; }
-      return;
+    for (const sp of fishSpots) { // the red circles pulse so they're easy to spot
+      sp.group.children[0].material.opacity = 0.55 + Math.sin(t * 3) * 0.3;
+      sp.group.rotation.y += 0.01;
     }
-    if (!sitting) { // sit down at the edge and cast
-      sitting = true;
-      fishingBiteAt = now + growMs(2500 + Math.random() * 4500);
-      bobber.position.set(spot.x, 0.8, spot.z);
-      bobber.visible = true;
-      if (!fishingIntroShown) {
-        fishingIntroShown = true;
-        toast('🎣 Sitting and fishing — stay still and wait for a bite!', true);
+
+    const canThrow = phase === 'fps' && rodHeld && castState === 'off'
+      && !playerMoving && player.position.y <= LAND_Y + 0.001 && !!nearestFishSpot();
+    throwBtnEl.classList.toggle('show', canThrow);
+
+    if (castState === 'off') return;
+    if (!rodHeld || playerMoving) { cancelCast(); return; } // walking away reels in empty
+
+    if (castState === 'waiting') {
+      bobber.position.y = 0.86 + Math.sin(t * 2.6) * 0.05;
+      if (now > biteAt) { // a bite! the catch flies back to you on the line
+        castState = 'reeling';
+        reelT0 = now;
+        catchInfo = rollCatch();
+        catchMesh = makeCatchMesh(catchInfo.key);
+        catchMesh.position.copy(bobber.position);
+        scene.add(catchMesh);
+        bobber.visible = false;
+        sfx('splash');
+        burst(castSpot.x, 1.1, castSpot.z, 0x4FC3F7);
       }
-    }
-    bobber.position.y = 0.8 + Math.sin(t * 2.6) * 0.05; // bobbing on the waves
-    if (now > fishingBiteAt) {
-      fishingBiteAt = now + growMs(2500 + Math.random() * 4500);
-      inv.fish += 1;
-      refreshInventory();
-      sfx('splash');
-      burst(bobber.position.x, 1.1, bobber.position.z, 0x4FC3F7);
-      toast('🐟 You caught a fish!', true);
+    } else if (castState === 'reeling' && catchMesh) {
+      const k = Math.min((now - reelT0) / 700, 1);
+      const ease = k * k * (3 - 2 * k);
+      catchMesh.position.set(
+        castSpot.x + (player.position.x - castSpot.x) * ease,
+        0.86 + (player.position.y + 0.9 - 0.86) * ease + Math.sin(k * Math.PI) * 1.3,
+        castSpot.z + (player.position.z - castSpot.z) * ease
+      );
+      catchMesh.rotation.y += 0.25;
+      catchMesh.rotation.z = Math.sin(k * 14) * 0.4; // wriggling on the hook
+      rod.rotation.x = -0.95 - Math.sin(k * Math.PI) * 0.35; // the rod bends with the pull
+      if (k >= 1) {
+        scene.remove(catchMesh);
+        catchMesh = null;
+        rod.rotation.x = -0.95;
+        inv[catchInfo.key] += 1;
+        refreshInventory();
+        sfx('pickup');
+        toast(`${RESOURCES[catchInfo.key].emoji} You caught a ${catchInfo.name}!`, true);
+        castState = 'off'; // still sitting — press THROW ROD to cast again
+      }
     }
   }
 
@@ -3177,6 +3326,7 @@
     if (e.key.toLowerCase() === 'e') hitTree();
     if (e.key.toLowerCase() === 'q') toggleHammer();
     if (e.key.toLowerCase() === 'r') toggleRod();
+    if (e.key.toLowerCase() === 'f') startCast();
     if (e.key.toLowerCase() === 'h') goHome();
     if (e.key.toLowerCase() === 'b') goBack();
   });
