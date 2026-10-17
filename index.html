@@ -2335,9 +2335,12 @@
     sfx('click');
     fadeEl.classList.add('show');
     setTimeout(() => {
-      backSpot = { x: player.position.x, z: player.position.z, yaw, pitch };
-      backBtnEl.classList.add('show');
       const spot = new THREE.Vector3(shopPos.x, LAND_Y, shopPos.z).addScaledVector(shopDoorDir, 3.2);
+      backSpot = {
+        x: player.position.x, z: player.position.z, yaw, pitch,
+        setAt: performance.now(), arrivalX: spot.x, arrivalZ: spot.z,
+      };
+      backBtnEl.classList.add('show');
       player.position.set(spot.x, LAND_Y, spot.z);
       yaw = Math.atan2(-(shopPos.x - spot.x), -(shopPos.z - spot.z)); // face the shop
       pitch = -0.15;
@@ -2346,6 +2349,15 @@
     }, 380);
   }
   homeBtnEl.addEventListener('pointerdown', e => { e.preventDefault(); goHome(); });
+
+  function updateBackButton() { // BACK retires by itself: after 25s, or once you walk off
+    if (!backSpot) return;
+    const wandered = Math.hypot(player.position.x - backSpot.arrivalX, player.position.z - backSpot.arrivalZ) > 6;
+    if (wandered || performance.now() - backSpot.setAt > 25000) {
+      backSpot = null;
+      backBtnEl.classList.remove('show');
+    }
+  }
 
   function goBack() {
     if (phase !== 'fps' || !backSpot) return;
@@ -3080,6 +3092,7 @@
       updateShopkeeper(delta);
       updateFishing(t);
       updateRemotePlayers(delta);
+      updateBackButton();
 
       const now = performance.now();
       for (const h of harvestables) {
