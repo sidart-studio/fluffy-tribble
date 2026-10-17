@@ -183,9 +183,16 @@
 
     #name-panel {
       position: fixed; inset: 0; z-index: 270; display: none;
-      align-items: center; justify-content: center; background: rgba(0,0,0,.45);
+      align-items: center; justify-content: center; flex-direction: column;
+      background: linear-gradient(180deg, #4E9BD6 0%, #9CD3EE 45%, #CFE9F7 62%, #7CC576 63%, #5BA85C 100%);
     }
     #name-panel.show { display: flex; }
+    #name-logo {
+      font-size: clamp(34px, 9vw, 52px); font-weight: 900; color: #fff;
+      letter-spacing: 3px; margin-bottom: 20px;
+      text-shadow: 0 5px 0 rgba(0,0,0,.18), 0 0 24px rgba(255,255,255,.35);
+    }
+    #name-logo .cube { display: inline-block; transform: rotate(-8deg); }
     #name-card {
       background: #fff; color: #2d2d2d; border-radius: 18px; padding: 20px;
       width: min(320px, 88vw); box-shadow: 0 12px 34px rgba(0,0,0,.4); text-align: center;
@@ -328,6 +335,7 @@
   </div>
 
   <div id="name-panel">
+    <div id="name-logo"><span class="cube">🧊</span> CUBEWORLD</div>
     <div id="name-card">
       <div id="name-title">🪪 Create your explorer address</div>
       <div id="name-sub">It floats over your head, so friends know it's you!</div>
@@ -2974,6 +2982,8 @@
       if (!treeIntroduced) { // tutorial markers only for a brand-new island
         glowPad.visible = true;
         markerGroup.visible = true;
+      } else {
+        Object.values(buyButtons).forEach(b => (b.group.visible = true));
       }
 
       phase = 'fps';
@@ -3482,7 +3492,7 @@
           else placeBuyButton(dir);
         }
         refreshButtonSprites();
-        Object.values(buyButtons).forEach(b => (b.group.visible = true));
+        // the buttons appear once first-person begins, so the intro stays tidy
       }
       updateShopStars();
       refreshShopUpgradeUI();
