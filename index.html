@@ -1460,14 +1460,32 @@
   }
 
   function buildHouse() {
+    const spotOk = (x, z) =>
+      isLand(x, z) &&
+      Math.hypot(x - shopPos.x, z - shopPos.z) >= 5 &&
+      Math.hypot(x - player.position.x, z - player.position.z) >= 3 &&
+      !harvestables.some(h => Math.hypot(h.x - x, h.z - z) < 2) &&
+      !villagers.some(v => Math.hypot(v.home.x - x, v.home.z - z) < 3.5) &&
+      !placedBarns.some(b => Math.hypot(b.x - x, b.z - z) < 3);
+
+    // Worker homes go up in the bee section — clustered near the island's
+    // hives — so the workers get their own little village by the apiary.
+    const hives = harvestables.filter(h => h.kind === 'hive');
+    for (let tries = 0; tries < 140 && hives.length; tries++) {
+      const hv = hives[Math.floor(Math.random() * hives.length)];
+      const a = Math.random() * Math.PI * 2;
+      const r = 3 + Math.random() * 3.5;
+      const x = hv.x + Math.cos(a) * r, z = hv.z + Math.sin(a) * r;
+      if (!spotOk(x, z)) continue;
+      placeHouseAt(x, z);
+      return true;
+    }
+    // no hives yet (or no room there) — anywhere with space will do
     const cells = [...landSet];
     for (let tries = 0; tries < 80; tries++) {
       const [gx, gz] = cells[Math.floor(Math.random() * cells.length)].split(',').map(Number);
       const { x, z } = cellWorld(gx, gz);
-      if (Math.hypot(x - shopPos.x, z - shopPos.z) < 5) continue;
-      if (Math.hypot(x - player.position.x, z - player.position.z) < 3) continue;
-      if (harvestables.some(h => Math.hypot(h.x - x, h.z - z) < 2)) continue;
-      if (villagers.some(v => Math.hypot(v.home.x - x, v.home.z - z) < 3.5)) continue;
+      if (!spotOk(x, z)) continue;
       placeHouseAt(x, z);
       return true;
     }
@@ -1492,7 +1510,9 @@
   function villagerFindTarget(v) {
     const px = v.group.position.x, pz = v.group.position.z;
     let best = null, bd = Infinity;
+    const now = performance.now();
     for (const it of groundItems) { // only loose items — never plants or trees
+      if (it.unreachableUntil && it.unreachableUntil > now) continue; // gave up on this one recently
       const d = Math.hypot(it.x - px, it.z - pz);
       if (d < bd) { bd = d; best = { item: it }; }
     }
@@ -1505,10 +1525,10 @@
       const g = v.group;
       if (workersPaused && v.state === 'gather') v.state = 'return'; // head home with what they have
       if (v.state === 'rest') {
-        if (!workersPaused && now - v.t0 > 2500) {
+        if (!workersPaused && now > (v.restUntil || 0)) {
           v.target = villagerFindTarget(v);
           if (v.target) { v.state = 'gather'; g.visible = true; v.tripT0 = now; }
-          else v.t0 = now; // nothing to do — check again in a bit
+          else v.restUntil = now + 2500; // nothing to do — check again in a bit
         }
         continue;
       }
@@ -1517,7 +1537,11 @@
       const dx = dest.x - g.position.x, dz = dest.z - g.position.z;
       const dist = Math.hypot(dx, dz);
       if (dist > 0.35) {
-        if (v.state === 'gather' && now - v.tripT0 > 12000) { v.state = 'return'; continue; } // unreachable — give up
+        if (v.state === 'gather' && now - v.tripT0 > 12000) { // unreachable — give up and remember
+          if (v.target && v.target.item) v.target.item.unreachableUntil = now + 60000;
+          v.state = 'return';
+          continue;
+        }
         const step = Math.min(VILLAGER_SPEED * delta, dist);
         g.position.x += (dx / dist) * step;
         g.position.z += (dz / dist) * step;
@@ -1539,6 +1563,9 @@
           sfx('pickup');
         }
         v.carried = {}; v.stops = 0;
+        v.trips = (v.trips || 0) + 1;
+        // a breather between trips, and a proper long break every fourth one
+        v.restUntil = now + (v.trips % 4 === 0 ? 20000 : 6000);
         v.state = 'rest'; v.t0 = now;
         g.visible = false;
         animateWalk(g, 0);
