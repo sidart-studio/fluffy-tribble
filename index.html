@@ -294,6 +294,16 @@
       cursor: pointer; letter-spacing: .5px;
     }
     #name-ok:active { transform: scale(.97); }
+    #name-err {
+      display: none; font-size: 12px; font-weight: 800; color: #D32F2F; margin: -6px 0 10px;
+    }
+    #name-err.show { display: block; }
+    #name-input.empty { border-color: #E53935; background: #FFEBEE; }
+    #name-card.shake { animation: cardshake .4s ease; }
+    @keyframes cardshake {
+      20% { transform: translateX(-8px); } 40% { transform: translateX(7px); }
+      60% { transform: translateX(-5px); } 80% { transform: translateX(3px); }
+    }
 
     #store-panel {
       position: fixed; inset: 0; z-index: 260; display: none;
@@ -436,6 +446,7 @@
       <div id="name-title">🪪 Create your explorer address</div>
       <div id="name-sub">It floats over your head, so friends know it's you!</div>
       <input id="name-input" maxlength="14" placeholder="CUBEY" autocomplete="off" spellcheck="false" />
+      <div id="name-err">✏️ You need an address to play — type one first!</div>
       <div id="name-ok">START ▶</div>
     </div>
   </div>
@@ -3778,8 +3789,21 @@
     cubey.userData.nameTag = tag;
   }
 
+  const nameErrEl = document.getElementById('name-err');
+  const nameCardEl = document.getElementById('name-card');
   function confirmName() {
-    const clean = String(nameInputEl.value || '').replace(/[^\w\s.-]/g, '').trim().slice(0, 14) || 'CUBEY';
+    const clean = String(nameInputEl.value || '').replace(/[^\w\s.-]/g, '').trim().slice(0, 14);
+    if (!clean) { // an empty address can't start the game
+      nameErrEl.classList.add('show');
+      nameInputEl.classList.add('empty');
+      nameCardEl.classList.remove('shake');
+      void nameCardEl.offsetWidth; // restart the shake even on repeat presses
+      nameCardEl.classList.add('shake');
+      sfx('deny');
+      return;
+    }
+    nameErrEl.classList.remove('show');
+    nameInputEl.classList.remove('empty');
     try { localStorage.setItem(NAME_KEY, clean); } catch (e) {}
     applyPlayerName(clean);
     namePanelEl.classList.remove('show');
@@ -3791,6 +3815,12 @@
   nameInputEl.addEventListener('keydown', e => {
     e.stopPropagation(); // typing must not steer the game or start it on Enter
     if (e.key === 'Enter') confirmName();
+  });
+  nameInputEl.addEventListener('input', () => {
+    if (nameInputEl.value.trim()) {
+      nameErrEl.classList.remove('show');
+      nameInputEl.classList.remove('empty');
+    }
   });
   // The 3D title tableau behind the address card: the cast poses in the
   // world itself while the camera gently sways.
