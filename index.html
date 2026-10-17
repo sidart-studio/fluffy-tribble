@@ -181,6 +181,30 @@
     #back-btn.show { display: flex; }
     #back-btn:active { transform: translateY(-38px) scale(.9); }
 
+    #name-panel {
+      position: fixed; inset: 0; z-index: 270; display: none;
+      align-items: center; justify-content: center; background: rgba(0,0,0,.45);
+    }
+    #name-panel.show { display: flex; }
+    #name-card {
+      background: #fff; color: #2d2d2d; border-radius: 18px; padding: 20px;
+      width: min(320px, 88vw); box-shadow: 0 12px 34px rgba(0,0,0,.4); text-align: center;
+    }
+    #name-title { font-size: 17px; font-weight: 900; margin-bottom: 6px; }
+    #name-sub { font-size: 12px; color: #777; margin-bottom: 14px; }
+    #name-input {
+      width: 100%; box-sizing: border-box; border: 2px solid #90CAF9; border-radius: 10px;
+      padding: 10px 12px; font-size: 16px; font-weight: 800; text-align: center;
+      color: #2d2d2d; outline: none; margin-bottom: 12px;
+    }
+    #name-input:focus { border-color: #42A5F5; }
+    #name-ok {
+      border-radius: 10px; padding: 11px 12px; font-size: 14px; font-weight: 900;
+      background: linear-gradient(180deg,#66BB6A,#2E7D32); color: #fff;
+      cursor: pointer; letter-spacing: .5px;
+    }
+    #name-ok:active { transform: scale(.97); }
+
     #store-panel {
       position: fixed; inset: 0; z-index: 260; display: none;
       align-items: center; justify-content: center; background: rgba(0,0,0,.45);
@@ -300,6 +324,15 @@
       <div class="speech-btn" data-action="house">Buy worker house · 3 ⛏️ + 3 🧊</div>
       <div class="speech-btn" data-action="workers" id="workers-btn" hidden>⏸ Send workers home</div>
       <div class="speech-btn cancel" data-action="cancel">Cancel</div>
+    </div>
+  </div>
+
+  <div id="name-panel">
+    <div id="name-card">
+      <div id="name-title">🪪 Create your explorer address</div>
+      <div id="name-sub">It floats over your head, so friends know it's you!</div>
+      <input id="name-input" maxlength="14" placeholder="CUBEY" autocomplete="off" spellcheck="false" />
+      <div id="name-ok">START ▶</div>
     </div>
   </div>
 
@@ -2827,7 +2860,7 @@
 
   let phase = 'intro'; // 'intro' -> 'fps'
 
-  setTimeout(() => startPromptEl.classList.add('show'), 1500);
+  setTimeout(() => { if (!namePanelEl.classList.contains('show')) startPromptEl.classList.add('show'); }, 1500);
 
   function beginFirstPerson() {
     if (phase !== 'intro') return;
@@ -2869,8 +2902,56 @@
     }, 380);
   }
 
-  startPromptEl.addEventListener('click', beginFirstPerson);
-  window.addEventListener('keydown', e => { if (phase === 'intro' && e.key === 'Enter') beginFirstPerson(); });
+  startPromptEl.addEventListener('click', () => {
+    if (!namePanelEl.classList.contains('show')) beginFirstPerson();
+  });
+
+  // ── Your explorer address — chosen on first start, floating over your head.
+  // Friends see it in multiplayer; you see it on yourself in the intro.
+  const NAME_KEY = 'cubeworld_name';
+  let playerName = '';
+  try { playerName = String(localStorage.getItem(NAME_KEY) || '').slice(0, 14); } catch (e) {}
+  const namePanelEl = document.getElementById('name-panel');
+  const nameInputEl = document.getElementById('name-input');
+  const nameOkEl = document.getElementById('name-ok');
+
+  function applyPlayerName(n) {
+    playerName = n;
+    const body = cubey.userData.body;
+    if (cubey.userData.nameTag) {
+      body.remove(cubey.userData.nameTag);
+      cubey.userData.nameTag.material.map.dispose();
+      cubey.userData.nameTag.material.dispose();
+    }
+    const tag = makeTextSprite(n, { color: '#FFE082' });
+    tag.scale.multiplyScalar(0.8);
+    tag.position.y = 2.2;
+    body.add(tag);
+    cubey.userData.nameTag = tag;
+  }
+
+  function confirmName() {
+    const clean = String(nameInputEl.value || '').replace(/[^\w\s.-]/g, '').trim().slice(0, 14) || 'CUBEY';
+    try { localStorage.setItem(NAME_KEY, clean); } catch (e) {}
+    applyPlayerName(clean);
+    namePanelEl.classList.remove('show');
+    startPromptEl.classList.add('show');
+    sfx('click');
+  }
+  nameOkEl.addEventListener('pointerdown', e => { e.preventDefault(); confirmName(); });
+  nameInputEl.addEventListener('keydown', e => {
+    e.stopPropagation(); // typing must not steer the game or start it on Enter
+    if (e.key === 'Enter') confirmName();
+  });
+  if (playerName) {
+    applyPlayerName(playerName);
+  } else {
+    namePanelEl.classList.add('show');
+    setTimeout(() => nameInputEl.focus(), 400);
+  }
+  window.addEventListener('keydown', e => {
+    if (phase === 'intro' && e.key === 'Enter' && !namePanelEl.classList.contains('show')) beginFirstPerson();
+  });
 
   // ═══════════════════════════════════════════════
   //  LOOK — click-and-drag mouse (no Pointer Lock API, so it works even in
@@ -3164,14 +3245,16 @@
       if (typeof window.claude === 'undefined' || !window.claude.use) return;
       const roomNs = await window.claude.use('room');
       if (!roomNs) return;
-      let myName = 'Explorer';
-      try {
-        const userNs = await window.claude.use('user');
-        if (userNs && userNs.me) {
-          const me = await userNs.me();
-          if (me && me.name) myName = String(me.name).split(' ')[0].slice(0, 14);
-        }
-      } catch (e) { /* names are optional */ }
+      let myName = playerName || 'Explorer';
+      if (!playerName) {
+        try {
+          const userNs = await window.claude.use('user');
+          if (userNs && userNs.me) {
+            const me = await userNs.me();
+            if (me && me.name) myName = String(me.name).split(' ')[0].slice(0, 14);
+          }
+        } catch (e) { /* names are optional */ }
+      }
 
       const SHIRT_POOL = [0xEF5350, 0xAB47BC, 0x5C6BC0, 0x26A69A, 0xFFCA28, 0x8D6E63];
       const hash = str => { let h = 0; for (const ch of str) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return h; };
