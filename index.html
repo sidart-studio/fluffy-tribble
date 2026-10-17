@@ -3094,7 +3094,8 @@
   } else {
     namePanelEl.classList.add('show');
     spawnTitleCast();
-    setTimeout(() => nameInputEl.focus(), 400);
+    // prefilled so START always works right away — tap the box only to change it
+    nameInputEl.value = 'CUBEY';
   }
   window.addEventListener('keydown', e => {
     if (phase === 'intro' && e.key === 'Enter' && !namePanelEl.classList.contains('show')) beginFirstPerson();
