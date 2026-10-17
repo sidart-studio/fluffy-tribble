@@ -1727,10 +1727,9 @@
         if (now < v.nextThinkAt) continue;
         v.nextThinkAt = now + 900;
         v.target = villagerFindTarget(v);
-        if (!v.target && fishSpots.length) { // nothing on land — gone fishing
-          const sp = fishSpots[Math.floor(Math.random() * fishSpots.length)];
-          const len = Math.hypot(sp.x, sp.z) || 1;
-          v.target = { fish: sp, x: sp.x - (sp.x / len) * 2.7, z: sp.z - (sp.z / len) * 2.7 };
+        if (!v.target && fishSpots.length) { // nothing on land — off to the pier to fish
+          const sp = fishSpots[0];
+          v.target = { fish: sp, x: PIER.x, z: PIER.z1 - 0.9 };
         }
         if (v.target) { v.state = 'gather'; v.tripT0 = now; }
         continue;
@@ -2510,7 +2509,7 @@
       hammer.visible = false;
       hammerBtnEl.classList.remove('held');
     }
-    toast(rodHeld ? '🎣 Rod out — find a RED CIRCLE in the water, get close, and press THROW ROD'
+    toast(rodHeld ? '🎣 Rod out — walk to the END OF THE PIER, to the red circle, and press THROW ROD'
                   : 'Rod put away', true);
   }
   rodBtnEl.addEventListener('pointerdown', e => { e.preventDefault(); toggleRod(); });
@@ -2535,30 +2534,13 @@
     g.add(ring, glow);
     return g;
   }
-  function placeFishSpots() {
-    for (const sp of fishSpots) scene.remove(sp.group);
-    fishSpots.length = 0;
-    const candidates = [{ x: PIER.x, z: PIER.z1 + 2.2 }]; // one always waits at the pier's end
-    const cells = [...landSet];
-    for (let tries = 0; tries < 60 && candidates.length < 3; tries++) {
-      const [gx, gz] = cells[Math.floor(Math.random() * cells.length)].split(',').map(Number);
-      if (!isCoast(gx, gz)) continue;
-      const { x, z } = cellWorld(gx, gz);
-      const len = Math.hypot(x, z) || 1;
-      const sx = x + (x / len) * 2.6, sz = z + (z / len) * 2.6;
-      if (isLand(sx, sz) || onPier(sx, sz)) continue;
-      if (candidates.some(c => Math.hypot(c.x - sx, c.z - sz) < 8)) continue;
-      candidates.push({ x: sx, z: sz });
-    }
-    for (const c of candidates) {
-      const group = makeSpotRing();
-      group.position.set(c.x, 0.86, c.z);
-      scene.add(group);
-      fishSpots.push({ x: c.x, z: c.z, group });
-    }
+  { // fishing happens at the bridge and nowhere else: one circle off the pier's end
+    const group = makeSpotRing();
+    const x = PIER.x, z = PIER.z1 + 2.2;
+    group.position.set(x, 0.86, z);
+    scene.add(group);
+    fishSpots.push({ x, z, group });
   }
-  placeFishSpots();
-  setInterval(placeFishSpots, 120000); // the fish move to new spots every two minutes
 
   function nearestFishSpot() {
     let best = null, bd = 3.4;
