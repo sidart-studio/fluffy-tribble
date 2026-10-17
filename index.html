@@ -1561,6 +1561,24 @@
     const pick = a => a[Math.floor(Math.random() * a.length)];
     const g = makePerson({ shirt: pick(shirts), pants: pick(pantsCols), hair: pick(hairs), skin: pick(skins) });
     g.scale.setScalar(0.5);
+    // their own little hammer, held in the right hand — shown while smashing
+    const wh = new THREE.Group();
+    const whHandle = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.035, 0.045, 0.5, 6),
+      new THREE.MeshStandardMaterial({ color: 0x8D6E63, roughness: 0.85 })
+    );
+    whHandle.position.y = 0.25;
+    const whHead = new THREE.Mesh(
+      new THREE.BoxGeometry(0.22, 0.12, 0.12),
+      new THREE.MeshStandardMaterial({ color: 0x90A4AE, metalness: 0.6, roughness: 0.35 })
+    );
+    whHead.position.y = 0.5;
+    wh.add(whHandle, whHead);
+    wh.position.y = -0.52; // at the hand
+    wh.rotation.x = Math.PI / 2; // pointing forward, ready to swing
+    wh.visible = false;
+    g.userData.armPivots[1].add(wh);
+    g.userData.workerHammer = wh;
     return g;
   }
 
@@ -1612,14 +1630,24 @@
     });
   }
 
+  // What workers may harvest: punchable plants and hammer-only nodes. Never
+  // flowers (the bees need those) and never hives (honey is the player's).
+  const WORKER_NODES = ['tree', 'bamboo', 'corn', 'berry', 'pumpkin', 'rock', 'ice', 'iron'];
   function villagerFindTarget(v) {
     const px = v.group.position.x, pz = v.group.position.z;
     let best = null, bd = Infinity;
     const now = performance.now();
-    for (const it of groundItems) { // only loose items — never plants or trees
+    for (const it of groundItems) { // loose items first
       if (it.unreachableUntil && it.unreachableUntil > now) continue; // gave up on this one recently
       const d = Math.hypot(it.x - px, it.z - pz);
       if (d < bd) { bd = d; best = { item: it }; }
+    }
+    if (best) return best;
+    for (const h of harvestables) {
+      if (!h.ready || !WORKER_NODES.includes(h.kind)) continue;
+      if (h.workerSkipUntil && h.workerSkipUntil > now) continue;
+      const d = Math.hypot(h.x - px, h.z - pz);
+      if (d < bd) { bd = d; best = { node: h }; }
     }
     return best;
   }
@@ -1628,7 +1656,10 @@
     const now = performance.now();
     for (const v of villagers) {
       const g = v.group;
-      if (workersPaused && v.state === 'gather') v.state = 'return'; // head home with what they have
+      if (workersPaused && (v.state === 'gather' || v.state === 'work')) { // head home with what they have
+        g.userData.workerHammer.visible = false;
+        v.state = 'return';
+      }
       if (v.state === 'rest') {
         if (!workersPaused && now > (v.restUntil || 0)) {
           v.target = villagerFindTarget(v);
@@ -1638,12 +1669,49 @@
         continue;
       }
 
-      const dest = v.state === 'return' ? v.home : v.target.item;
+      if (v.state === 'work') { // smashing or picking a node, tool in hand
+        const h = v.target && v.target.node;
+        if (!h || !h.ready) { // somebody beat them to it
+          g.userData.workerHammer.visible = false;
+          v.target = villagerFindTarget(v);
+          v.state = v.target ? 'gather' : 'return';
+          if (v.target) v.tripT0 = now;
+          continue;
+        }
+        g.rotation.y = Math.atan2(h.x - g.position.x, h.z - g.position.z);
+        // big overhead swings — with the hammer out for rocks, ice, and iron
+        g.userData.armPivots[1].rotation.x = -1.4 + Math.sin((now - v.workT0) / 85) * 0.85;
+        if (now - v.workT0 > 1500) {
+          const def = HARVEST_DEFS[h.kind];
+          h.ready = false;
+          h.regrowAt = now + growMs(def.regrowMs);
+          if (def.hide) h.group.visible = false;
+          if (h.coconutMeshes) h.coconutMeshes.forEach(m => (m.visible = false));
+          punch(h.group);
+          burst(h.x, LAND_Y + 0.8, h.z, DROP_MATS[def.resource].color);
+          if (Math.hypot(player.position.x - h.x, player.position.z - h.z) < 18) sfx('hit');
+          v.carried[def.resource] = (v.carried[def.resource] || 0) + def.yield;
+          v.stops++;
+          g.userData.armPivots[1].rotation.x = 0;
+          g.userData.workerHammer.visible = false;
+          if (v.stops >= 3) { v.state = 'return'; continue; }
+          v.target = villagerFindTarget(v);
+          if (!v.target) v.state = 'return';
+          else { v.state = 'gather'; v.tripT0 = now; }
+        }
+        continue;
+      }
+
+      const dest = v.state === 'return' ? v.home : (v.target.item || v.target.node);
       const dx = dest.x - g.position.x, dz = dest.z - g.position.z;
       const dist = Math.hypot(dx, dz);
-      if (dist > 0.35) {
+      const reach = v.state === 'return' || v.target.item
+        ? 0.35
+        : (OBSTACLE_R[v.target.node.kind] || 0.4) + 0.55; // stop at arm's length from solid nodes
+      if (dist > reach) {
         if (v.state === 'gather' && now - v.tripT0 > 12000) { // unreachable — give up and remember
           if (v.target && v.target.item) v.target.item.unreachableUntil = now + 60000;
+          else if (v.target && v.target.node) v.target.node.workerSkipUntil = now + 60000;
           v.state = 'return';
           continue;
         }
@@ -1677,6 +1745,13 @@
         continue;
       }
 
+      if (v.target.node) { // arrived at a node — roll up sleeves and get to work
+        v.state = 'work';
+        v.workT0 = now;
+        animateWalk(g, 0);
+        g.userData.workerHammer.visible = !!HARVEST_DEFS[v.target.node.kind].tool; // hammer out for the hard stuff
+        continue;
+      }
       // arrived at the item — grab it if it's still there
       const idx = groundItems.indexOf(v.target.item);
       if (idx !== -1) {
@@ -2767,7 +2842,7 @@
     refreshInventory();
     refreshWorkersBtn();
     sfx('buy');
-    showMessage('A worker house was built! Your worker will pick up eggs, milk, and wool and bring them home to you.');
+    showMessage('A worker house was built! Your worker picks things up, harvests plants, and smashes rocks with their own little hammer.');
   }
 
   speechButtonsEl.addEventListener('pointerdown', e => {
