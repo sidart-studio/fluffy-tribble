@@ -2364,9 +2364,9 @@
   const extents = { px: ISLAND_R, nx: ISLAND_R, pz: ISLAND_R, nz: ISLAND_R };
   const expansions = { px: 0, nx: 0, pz: 0, nz: 0 };
   let totalLandPurchases = 0;
-  function landCost() {
-    if (totalLandPurchases < LAND_COSTS.length) return LAND_COSTS[totalLandPurchases];
-    const extra = totalLandPurchases - LAND_COSTS.length;
+  function landCostFor(idx) {
+    if (idx < LAND_COSTS.length) return LAND_COSTS[idx];
+    const extra = idx - LAND_COSTS.length;
     const late = [ // past the set list, rotate pricier 2-3 part bundles
       { coins: 300 + 50 * extra, iron: 2, wood: 5 },
       { iron: 2, rock: 4, egg: 4 },
@@ -2374,6 +2374,12 @@
       { coins: 350 + 50 * extra, honey: 3 },
     ];
     return late[extra % late.length];
+  }
+  // Every button has its OWN price, dealt from the cost list in turns — and it
+  // only moves on when you buy at THAT button, never because of another side.
+  const DIR_SLOT = { px: 0, nx: 1, pz: 2, nz: 3 };
+  function landCost(dir) {
+    return landCostFor(DIR_SLOT[dir] + expansions[dir] * 4);
   }
   function costText(cost) {
     return Object.entries(cost)
@@ -2466,7 +2472,7 @@
   function placeBuyButton(dir) {
     let btn = buyButtons[dir];
     if (!btn) {
-      btn = buyButtons[dir] = { group: makeBuyButtonGroup(), sprite: null, x: 0, z: 0, wasNear: false, paid: {} };
+      btn = buyButtons[dir] = { group: makeBuyButtonGroup(), sprite: null, dir, x: 0, z: 0, wasNear: false, paid: {} };
       scene.add(btn.group);
     }
     const { gx, gz } = buttonCell(dir);
@@ -2494,7 +2500,7 @@
       const rem = remainingCost(btn);
       const label = Object.keys(btn.paid || {}).length && Object.keys(rem).length
         ? `Buy land · still needs ${costText(rem)}`
-        : `Buy land · ${costText(landCost())}`;
+        : `Buy land · ${costText(landCost(dir))}`;
       btn.sprite = makeTextSprite(label, { color: '#FF8A80' });
       btn.sprite.position.y = 1.5;
       btn.group.add(btn.sprite);
@@ -2509,7 +2515,7 @@
   function remainingCost(btn) {
     const rem = {};
     const paid = btn.paid || {};
-    for (const [k, n] of Object.entries(landCost())) {
+    for (const [k, n] of Object.entries(landCost(btn.dir))) {
       const r = n - (paid[k] || 0);
       if (r > 0) rem[k] = r;
     }
@@ -2549,6 +2555,7 @@
     }
     btn.paid = {};
     totalLandPurchases++;
+    expansions[dir]++; // only THIS button's price moves to its next tier
 
     // Every purchase grows the WHOLE island evenly: one new ring of land all
     // the way around, whichever button you pressed — so the island keeps its
@@ -4139,6 +4146,14 @@
       patchCounter = d.patchCounter;
       Object.assign(extents, d.extents);
       Object.assign(expansions, d.expansions);
+      {
+        const dealt = expansions.px + expansions.nx + expansions.pz + expansions.nz;
+        if (dealt !== totalLandPurchases) { // save from the shared-price days
+          const dirs = ['px', 'nx', 'pz', 'nz'];
+          dirs.forEach(dd => (expansions[dd] = 0));
+          for (let i = 0; i < totalLandPurchases; i++) expansions[dirs[i % 4]]++;
+        }
+      }
 
       landSet.clear();
       d.land.forEach(k => landSet.add(k));
