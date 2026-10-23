@@ -713,7 +713,8 @@
   // ═══════════════════════════════════════════════
   //  LIGHTS
   // ═══════════════════════════════════════════════
-  scene.add(new THREE.HemisphereLight(0xBFE3F5, 0x6b8f5a, 0.65));
+  const hemiLight = new THREE.HemisphereLight(0xBFE3F5, 0x6b8f5a, 0.65);
+  scene.add(hemiLight);
   scene.add(new THREE.AmbientLight(0xffffff, 0.25));
 
   const sun = new THREE.DirectionalLight(0xFFF6DF, 1.3);
@@ -767,6 +768,273 @@
       pos.array[i * 3 + 1] = Math.sin(x * 0.18 + t * 1.4) * 0.28 + Math.cos(z * 0.22 + t * 1.1) * 0.22;
     }
     pos.needsUpdate = true;
+  }
+
+  // ═══════════════════════════════════════════════
+  //  HOLIDAY LOOKS — the island dresses up for whatever this month brings:
+  //  sky, light and water take the month's colors, the title banner changes,
+  //  and big holidays (Halloween, Christmas) get real decorations too.
+  // ═══════════════════════════════════════════════
+  const MONTH_LOOKS = [ // one look per month, January first
+    { banner: '❄️ NEW YEAR ISLAND',   top: 0x7BA7D9, bot: 0xDCE9F5, sun: 0xEAF2FF, sunI: 1.15, hemi: 0xD6E8F7, ground: 0x7D9A8A, shallow: 0x7FD4E0, deep: 0x1E6FA8, greet: '🎆 Happy New Year!' },
+    { banner: '💘 VALENTINE ISLAND',  top: 0x6FA3E0, bot: 0xF2D8E6, sun: 0xFFF0F2, sunI: 1.25, hemi: 0xF2D9E6, ground: 0x6B8F5A, shallow: 0x74CADE, deep: 0x1264A4, greet: "💘 Happy Valentine's Day!" },
+    { banner: '🍀 LUCKY ISLAND',      top: 0x4E9BD6, bot: 0xD1EDD6, sun: 0xF2FFEA, sunI: 1.25, hemi: 0xC9E8CF, ground: 0x4E8A48, shallow: 0x5FD4C0, deep: 0x0F7A6E, greet: "🍀 Happy St. Patrick's Day!" },
+    { banner: '🐰 EASTER ISLAND',     top: 0x8FB8E8, bot: 0xF4E8D8, sun: 0xFFF8E8, sunI: 1.3,  hemi: 0xEADFF2, ground: 0x7FA55E, shallow: 0x7FD9D4, deep: 0x1B6FAE, greet: '🐰 Happy Easter!' },
+    { banner: '🌸 SPRING ISLAND',     top: 0x4E9BD6, bot: 0xCFE9F7, sun: 0xFFF6DF, sunI: 1.3,  hemi: 0xBFE3F5, ground: 0x6B8F5A, shallow: 0x5FCBDB, deep: 0x0F5FA0, greet: '🌸 Happy spring!' },
+    { banner: '☀️ SUMMER ISLAND',     top: 0x2E86D6, bot: 0xBFE8F7, sun: 0xFFFBE8, sunI: 1.45, hemi: 0xBFE8F7, ground: 0x6B8F5A, shallow: 0x4FD4E8, deep: 0x0A5AA8, greet: '☀️ Happy summer!' },
+    { banner: '🎆 FIREWORKS ISLAND',  top: 0x2E6ED6, bot: 0xCFE2F7, sun: 0xFFF6DF, sunI: 1.4,  hemi: 0xCFE2F7, ground: 0x6B8F5A, shallow: 0x55CFE4, deep: 0x0C5CA6, greet: '🎆 Fireworks season!' },
+    { banner: '🏖️ BEACH ISLAND',      top: 0x2E86D6, bot: 0xCDEBF5, sun: 0xFFFBE8, sunI: 1.45, hemi: 0xCDEBF5, ground: 0x78945A, shallow: 0x55E0E8, deep: 0x0F6AB0, greet: '🏖️ Beach days!' },
+    { banner: '🍂 AUTUMN ISLAND',     top: 0x5B8FC9, bot: 0xEFD9B8, sun: 0xFFE8C2, sunI: 1.2,  hemi: 0xE8D4B8, ground: 0x8A7A4A, shallow: 0x58BFCC, deep: 0x115A92, greet: '🍂 Happy autumn!' },
+    { banner: '🎃 HALLOWEEN ISLAND',  top: 0x241543, bot: 0x6E4F86, sun: 0xB7A6E8, sunI: 0.85, hemi: 0x8E7BB8, ground: 0x3A2E52, shallow: 0x4A6FA8, deep: 0x101E48, props: 'halloween', moon: true, greet: '🎃 Happy Halloween! The island stays spooky all October long!' },
+    { banner: '🦃 HARVEST ISLAND',    top: 0x5B86C2, bot: 0xF0DFC2, sun: 0xFFE9C8, sunI: 1.2,  hemi: 0xEADCC2, ground: 0x8F7A42, shallow: 0x55B8C8, deep: 0x11568E, greet: '🦃 Happy harvest season!' },
+    { banner: '🎄 CHRISTMAS ISLAND',  top: 0x7FA6CE, bot: 0xE8F0F7, sun: 0xF2F7FF, sunI: 1.15, hemi: 0xE0ECF7, ground: 0x8FA69A, shallow: 0x8AD4E0, deep: 0x1E6FA8, props: 'christmas', greet: '🎄 Merry Christmas!' },
+  ];
+  const HOLIDAY = MONTH_LOOKS[new Date().getMonth()];
+  {
+    const u = sky.material.uniforms;
+    u.topColor.value.set(HOLIDAY.top);
+    u.bottomColor.value.set(HOLIDAY.bot);
+    scene.fog.color.set(HOLIDAY.bot);
+    sun.color.set(HOLIDAY.sun);
+    sun.intensity = HOLIDAY.sunI;
+    hemiLight.color.set(HOLIDAY.hemi);
+    hemiLight.groundColor.set(HOLIDAY.ground);
+    const sc = new THREE.Color(HOLIDAY.shallow), dc = new THREE.Color(HOLIDAY.deep);
+    for (let i = 0; i < oceanGeo.attributes.position.count; i++) {
+      const x = oceanBase[i * 3], z = oceanBase[i * 3 + 2];
+      const tt = THREE.MathUtils.clamp((Math.hypot(x, z) - 10) / 40, 0, 1);
+      const c = sc.clone().lerp(dc, tt);
+      oceanColors[i * 3] = c.r; oceanColors[i * 3 + 1] = c.g; oceanColors[i * 3 + 2] = c.b;
+    }
+    oceanGeo.attributes.color.needsUpdate = true;
+    if (HOLIDAY.moon) { // a big glowing full moon hangs in the spooky sky
+      const moon = new THREE.Mesh(
+        new THREE.SphereGeometry(7, 18, 14),
+        new THREE.MeshBasicMaterial({ color: 0xF4EFD9, fog: false })
+      );
+      moon.position.set(-62, 58, -78);
+      scene.add(moon);
+    }
+  }
+
+  // ── Decorations for the big holidays. They are pure decoration: not saved,
+  // never harvestable, and re-grown fresh each time the game opens.
+  const holidayGlowMats = [];
+  const holidayGhosts = [];
+  const holidayBats = [];
+  const holidayProps = [];
+
+  function makeJackOLantern() {
+    const g = new THREE.Group();
+    const body = new THREE.Mesh(
+      new THREE.SphereGeometry(0.34, 10, 8),
+      new THREE.MeshStandardMaterial({ color: 0xE65100, flatShading: true, roughness: 0.55 })
+    );
+    body.scale.y = 0.78;
+    body.position.y = 0.27;
+    body.castShadow = true;
+    g.add(body);
+    const stem = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.045, 0.06, 0.14, 5),
+      new THREE.MeshStandardMaterial({ color: 0x5D4037, flatShading: true })
+    );
+    stem.position.y = 0.56;
+    g.add(stem);
+    const glow = new THREE.MeshStandardMaterial({
+      color: 0xFFB300, emissive: 0xFF9800, emissiveIntensity: 1.5, flatShading: true,
+    });
+    holidayGlowMats.push(glow);
+    for (const ex of [-0.11, 0.11]) { // triangle eyes, lit from inside
+      const eye = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.09, 3), glow);
+      eye.position.set(ex, 0.33, 0.29);
+      eye.rotation.x = Math.PI / 2.4;
+      g.add(eye);
+    }
+    for (let i = 0; i < 3; i++) { // jagged grin
+      const tooth = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.05, 0.04), glow);
+      tooth.position.set(-0.09 + i * 0.09, 0.17 + (i % 2) * 0.035, 0.3);
+      g.add(tooth);
+    }
+    return g;
+  }
+
+  function makeGhost() {
+    const g = new THREE.Group();
+    const mat = new THREE.MeshStandardMaterial({
+      color: 0xF5F5F5, transparent: true, opacity: 0.72,
+      emissive: 0xBBDEFB, emissiveIntensity: 0.3, flatShading: true,
+    });
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.28, 9, 8), mat);
+    head.position.y = 0.55;
+    g.add(head);
+    const skirt = new THREE.Mesh(new THREE.ConeGeometry(0.3, 0.75, 9), mat);
+    skirt.position.y = 0.3;
+    g.add(skirt);
+    const eyeMat = new THREE.MeshBasicMaterial({ color: 0x1A1A2E });
+    for (const ex of [-0.1, 0.1]) {
+      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.045, 6, 6), eyeMat);
+      eye.position.set(ex, 0.6, 0.24);
+      g.add(eye);
+    }
+    return g;
+  }
+
+  function makeBat() {
+    const g = new THREE.Group();
+    const mat = new THREE.MeshStandardMaterial({ color: 0x1A1226, flatShading: true, roughness: 0.8 });
+    const body = new THREE.Mesh(new THREE.SphereGeometry(0.09, 7, 6), mat);
+    g.add(body);
+    const mkWing = side => {
+      const w = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.015, 0.14), mat);
+      w.position.x = side * 0.19;
+      const pivot = new THREE.Group();
+      pivot.add(w);
+      g.add(pivot);
+      return pivot;
+    };
+    g.userData.wingL = mkWing(-1);
+    g.userData.wingR = mkWing(1);
+    return g;
+  }
+
+  function makeDeadTree() {
+    const g = new THREE.Group();
+    const mat = new THREE.MeshStandardMaterial({ color: 0x2E2230, flatShading: true, roughness: 0.95 });
+    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.13, 1.5, 6), mat);
+    trunk.position.y = 0.75;
+    trunk.rotation.z = (Math.random() - 0.5) * 0.18;
+    trunk.castShadow = true;
+    g.add(trunk);
+    for (let i = 0; i < 3; i++) { // crooked bare branches
+      const br = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.045, 0.7, 5), mat);
+      const a = i * 2.1 + Math.random();
+      br.position.set(Math.cos(a) * 0.22, 0.95 + i * 0.22, Math.sin(a) * 0.22);
+      br.rotation.set((Math.random() - 0.5) * 0.6, a, 0.9 + Math.random() * 0.4);
+      g.add(br);
+    }
+    return g;
+  }
+
+  function makeGravestone() {
+    const g = new THREE.Group();
+    const mat = new THREE.MeshStandardMaterial({ color: 0x8A94A6, flatShading: true, roughness: 0.9 });
+    const slab = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.5, 0.1), mat);
+    slab.position.y = 0.25;
+    slab.castShadow = true;
+    g.add(slab);
+    const top = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 0.1, 10, 1, false, 0, Math.PI), mat);
+    top.rotation.set(Math.PI / 2, 0, Math.PI / 2);
+    top.position.y = 0.5;
+    g.add(top);
+    g.rotation.z = (Math.random() - 0.5) * 0.16; // old stones lean a little
+    return g;
+  }
+
+  function makeSnowman() {
+    const g = new THREE.Group();
+    const snow = new THREE.MeshStandardMaterial({ color: 0xFAFAFA, flatShading: true, roughness: 0.85 });
+    [[0.3, 0.3], [0.21, 0.72], [0.14, 1.0]].forEach(([r, y]) => {
+      const ball = new THREE.Mesh(new THREE.SphereGeometry(r, 9, 8), snow);
+      ball.position.y = y;
+      ball.castShadow = true;
+      g.add(ball);
+    });
+    const coal = new THREE.MeshBasicMaterial({ color: 0x212121 });
+    for (const ex of [-0.05, 0.05]) {
+      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.02, 5, 5), coal);
+      eye.position.set(ex, 1.04, 0.12);
+      g.add(eye);
+    }
+    const nose = new THREE.Mesh(
+      new THREE.ConeGeometry(0.03, 0.14, 6),
+      new THREE.MeshStandardMaterial({ color: 0xFB8C00, flatShading: true })
+    );
+    nose.position.set(0, 1.0, 0.18);
+    nose.rotation.x = Math.PI / 2;
+    g.add(nose);
+    return g;
+  }
+
+  function makeGiftBox() {
+    const g = new THREE.Group();
+    const boxCols = [0xE53935, 0x1E88E5, 0x43A047, 0x8E24AA];
+    const col = boxCols[Math.floor(Math.random() * boxCols.length)];
+    const box = new THREE.Mesh(
+      new THREE.BoxGeometry(0.34, 0.3, 0.34),
+      new THREE.MeshStandardMaterial({ color: col, flatShading: true, roughness: 0.6 })
+    );
+    box.position.y = 0.15;
+    box.castShadow = true;
+    g.add(box);
+    const ribbonMat = new THREE.MeshStandardMaterial({ color: 0xFFD54F, flatShading: true, roughness: 0.4 });
+    const r1 = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.32, 0.08), ribbonMat);
+    r1.position.y = 0.15;
+    g.add(r1);
+    const r2 = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.32, 0.36), ribbonMat);
+    r2.position.y = 0.15;
+    g.add(r2);
+    return g;
+  }
+
+  function spawnHolidayProps() { // called once the island (and any save) exists
+    if (!HOLIDAY.props) return;
+    const cells = [...landSet].map(k => k.split(',').map(Number));
+    const placeOne = make => {
+      for (let tries = 0; tries < 16; tries++) {
+        const [gx, gz] = cells[Math.floor(Math.random() * cells.length)];
+        const { x, z } = cellWorld(gx, gz);
+        if (Math.hypot(x - shopPos.x, z - shopPos.z) < 3.2) continue; // keep the shop door clear
+        const m = make();
+        m.position.set(x + (Math.random() - 0.5) * 0.6, LAND_Y, z + (Math.random() - 0.5) * 0.6);
+        m.rotation.y = Math.random() * Math.PI * 2;
+        scene.add(m);
+        holidayProps.push(m);
+        return m;
+      }
+      return null;
+    };
+    if (HOLIDAY.props === 'halloween') {
+      for (let i = 0; i < 5; i++) placeOne(makeJackOLantern);
+      for (let i = 0; i < 4; i++) placeOne(makeGravestone);
+      for (let i = 0; i < 4; i++) placeOne(makeDeadTree);
+      for (let i = 0; i < 3; i++) {
+        const gh = placeOne(makeGhost);
+        if (gh) holidayGhosts.push({ g: gh, x0: gh.position.x, z0: gh.position.z, seed: Math.random() * 10 });
+      }
+      for (let i = 0; i < 5; i++) {
+        const bat = makeBat();
+        scene.add(bat);
+        holidayProps.push(bat);
+        holidayBats.push({
+          g: bat, r: 5 + Math.random() * 6, h: 4.5 + Math.random() * 2.5,
+          speed: 0.35 + Math.random() * 0.3, phase: Math.random() * Math.PI * 2,
+        });
+      }
+    } else if (HOLIDAY.props === 'christmas') {
+      for (let i = 0; i < 3; i++) placeOne(makeSnowman);
+      for (let i = 0; i < 6; i++) placeOne(makeGiftBox);
+    }
+  }
+
+  function updateHoliday(delta, t) {
+    if (!HOLIDAY.props) return;
+    for (const m of holidayGlowMats) { // candlelight flicker inside the pumpkins
+      m.emissiveIntensity = 1.4 + Math.sin(t * 7 + m.id) * 0.3 + Math.sin(t * 13.7) * 0.15;
+    }
+    for (const gh of holidayGhosts) { // ghosts drift and bob, slowly spinning
+      gh.g.position.x = gh.x0 + Math.sin(t * 0.37 + gh.seed) * 1.3;
+      gh.g.position.z = gh.z0 + Math.cos(t * 0.29 + gh.seed) * 1.3;
+      gh.g.position.y = LAND_Y + 0.55 + Math.sin(t * 1.3 + gh.seed) * 0.22;
+      gh.g.rotation.y += delta * 0.4;
+    }
+    for (const b of holidayBats) { // bats circle the island, wings flapping
+      const a = t * b.speed + b.phase;
+      b.g.position.set(Math.cos(a) * b.r, b.h + Math.sin(t * 2.2 + b.phase) * 0.5, Math.sin(a) * b.r);
+      b.g.rotation.y = -a;
+      const flap = Math.sin(t * 13 + b.phase) * 0.65;
+      b.g.userData.wingL.rotation.z = flap;
+      b.g.userData.wingR.rotation.z = -flap;
+    }
   }
 
   // ═══════════════════════════════════════════════
@@ -3764,6 +4032,7 @@
       document.getElementById('save-btn').classList.add('show');
       refreshFastUI();
       setTimeout(() => toast('🔨 You have a hammer! Press the HAMMER button on the right to hold it', true), 900);
+      if (HOLIDAY.greet) setTimeout(() => toast(HOLIDAY.greet, true), 3800);
 
       fadeEl.classList.remove('show');
     }, 380);
@@ -3864,6 +4133,7 @@
     introCamera.lookAt(0, 1, 0);
   }
 
+  document.getElementById('title-ribbon').textContent = HOLIDAY.banner;
   if (playerName) {
     applyPlayerName(playerName);
   } else {
@@ -4086,6 +4356,7 @@
     const t = clock.getElapsedTime();
 
     updateOcean(t);
+    updateHoliday(delta, t);
 
     if (phase === 'intro' || phase === 'transitioning') {
       armPivot.rotation.z = 2.75 + Math.sin(t * 5) * 0.35;
@@ -4428,6 +4699,7 @@
     }
   }
   loadGame();
+  spawnHolidayProps();
   document.getElementById('save-btn').addEventListener('pointerdown', e => {
     e.preventDefault();
     if (saveGame()) { sfx('pickup'); toast('💾 Game saved!', true); }
