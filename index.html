@@ -3235,6 +3235,7 @@
       rodHeld = false;
       rod.visible = false;
       rodBtnEl.classList.remove('held');
+      cancelCast(); // taking the hammer stands you up from fishing too
     }
     toast(hammerHeld ? '🔨 Hammer out — you can break rocks, ice, and iron, or chop trees for wood'
                      : 'Hammer put away', true);
@@ -3287,6 +3288,7 @@
     rodHeld = !rodHeld;
     rod.visible = rodHeld;
     rodBtnEl.classList.toggle('held', rodHeld);
+    if (!rodHeld) cancelCast(); // rod away = reel in and stand back up
     if (rodHeld && hammerHeld) { // one tool at a time
       hammerHeld = false;
       hammer.visible = false;
@@ -3415,7 +3417,10 @@
       && !playerMoving && player.position.y <= LAND_Y + 0.001 && !!nearestFishSpot();
     throwBtnEl.classList.toggle('show', canThrow);
 
-    if (castState === 'off') return;
+    if (castState === 'off') {
+      if (sitting && playerMoving) sitting = false; // walking away stands you up
+      return;
+    }
     if (!rodHeld || playerMoving) { cancelCast(); return; } // walking away reels in empty
 
     if (castState === 'waiting') {
