@@ -1437,7 +1437,9 @@ export class Game {
     $('shop-list').addEventListener('click', (e) => { const b = e.target.closest('.u-buy'); if (b) this.buy(b.dataset.id); });
     document.querySelectorAll('[data-view]').forEach((b) => b.addEventListener('click', () => this.viewPreset(b.dataset.view)));
     $('summary').addEventListener('click', () => { $('summary').hidden = true; });
-    this.canvas.addEventListener('pointerdown', () => { this.camTween = null; }, { capture: true });
+    this.canvas.addEventListener('pointerdown', () => { this.camTween = null; this.orbiting = true; }, { capture: true });
+    addEventListener('pointerup', () => { this.orbiting = false; });
+    addEventListener('pointercancel', () => { this.orbiting = false; });
     addEventListener('keydown', (e) => {
       if (!this.running) return;
       if (e.code === 'Space') { e.preventDefault(); this.collect(true); }
@@ -1904,7 +1906,7 @@ export class Game {
     if (moving) {
       // relative to where the camera looks
       const fwd = new THREE.Vector3(); this.camera.getWorldDirection(fwd); fwd.y = 0; fwd.normalize();
-      const right = new THREE.Vector3(fwd.z, 0, -fwd.x);
+      const right = new THREE.Vector3(-fwd.z, 0, fwd.x); // screen-right = forward x up
       const mag = Math.min(1, Math.hypot(fx, fz));
       const dir = fwd.multiplyScalar(fz).add(right.multiplyScalar(fx)).normalize();
       const speed = (k.has('ShiftLeft') || k.has('ShiftRight') ? 6.5 : 3.6) * real * mag;
@@ -1924,6 +1926,13 @@ export class Game {
       this.controls.target.lerp(target, Math.min(1, real * 6));
       const off = this.camera.position.clone().sub(this.controls.target); off.y = 0;
       if (off.lengthSq() < 0.01) off.set(0, 0, 1);
+      if (moving && !this.orbiting) {
+        // like a third-person game: turn right and the camera swings round behind you
+        const cur = Math.atan2(off.x, off.z);
+        const behind = m.obj.rotation.y + Math.PI;
+        const a = lerpAngle(cur, behind, Math.min(1, real * 3.2));
+        off.set(Math.sin(a), 0, Math.cos(a));
+      }
       off.setLength(6.5); off.y = 3.4;
       this.camera.position.lerp(target.clone().add(off), Math.min(1, real * 5));
     }
